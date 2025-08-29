@@ -1,0 +1,621 @@
+import { useState } from "react";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { createInsertSchema } from "drizzle-zod";
+import { serviceTickets, type ServiceTicket, type Customer } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { isUnauthorizedError } from "@/lib/authUtils";
+
+const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
+  id: true,
+  ticketNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+type ServiceTicketStatus = "pending" | "in_progress" | "completed" | "delivered" | "cancelled";
+
+const statusColors = {
+  pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: Clock },
+  in_progress: { bg: "bg-blue-100", text: "text-blue-800", icon: AlertCircle },
+  completed: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
+  delivered: { bg: "bg-purple-100", text: "text-purple-800", icon: CheckCircle },
+  cancelled: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
+};
+
+const statusLabels = {
+  pending: "Menunggu",
+  in_progress: "Dalam Proses",
+  completed: "Selesai",
+  delivered: "Dikirim",
+  cancelled: "Dibatalkan",
+};
+
+
+export default function ServiceTickets() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ServiceTicketStatus | "all">("all");
+  const [showDialog, setShowDialog] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<ServiceTicket | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: tickets = [], isLoading } = useQuery({
+    queryKey: ["/api/service-tickets"],
+    retry: false,
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ["/api/customers"],
+    retry: false,
+  });
+
+  const form = useForm({
+    resolver: zodResolver(serviceTicketFormSchema),
+    defaultValues: {
+      customerId: "",
+      deviceType: "",
+      deviceBrand: "",
+      deviceModel: "",
+      problem: "",
+      diagnosis: "",
+      solution: "",
+      status: "pending" as const,
+      estimatedCost: "",
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const ticketData = {
+        ...data,
+        estimatedCost: data.estimatedCost ? parseFloat(data.estimatedCost) : null,
+      };
+      return apiRequest('POST', '/api/service-tickets', ticketData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+      setShowDialog(false);
+      setEditingTicket(null);
+      form.reset();
+      toast({ title: "Sukses", description: "Tiket servis berhasil dibuat" });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Error", description: "Gagal membuat tiket servis", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const ticketData = {
+        ...data,
+        estimatedCost: data.estimatedCost ? parseFloat(data.estimatedCost) : null,
+      };
+      return apiRequest('PUT', `/api/service-tickets/${id}`, ticketData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+      setShowDialog(false);
+      setEditingTicket(null);
+      form.reset();
+      toast({ title: "Sukses", description: "Tiket servis berhasil diperbarui" });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Error", description: "Gagal memperbarui tiket servis", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest('DELETE', `/api/service-tickets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+      toast({ title: "Sukses", description: "Tiket servis berhasil dihapus" });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Error", description: "Gagal menghapus tiket servis", variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (data: any) => {
+    if (editingTicket) {
+      updateMutation.mutate({ id: editingTicket.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
+  };
+
+  const handleEdit = (ticket: ServiceTicket) => {
+    setEditingTicket(ticket);
+    form.reset({
+      customerId: ticket.customerId,
+      deviceType: ticket.deviceType,
+      deviceBrand: ticket.deviceBrand || "",
+      deviceModel: ticket.deviceModel || "",
+      problem: ticket.problem,
+      diagnosis: ticket.diagnosis || "",
+      solution: ticket.solution || "",
+      status: ticket.status,
+      estimatedCost: ticket.estimatedCost ? ticket.estimatedCost.toString() : "",
+    });
+    setShowDialog(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm("Apakah Anda yakin ingin menghapus tiket servis ini?")) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  const handleNew = () => {
+    setEditingTicket(null);
+    form.reset();
+    setShowDialog(true);
+  };
+
+  const filteredTickets = (tickets as ServiceTicket[])
+    .filter((ticket) => {
+      const matchesSearch = 
+        ticket.deviceType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ticket.problem.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (ticket.deviceBrand && ticket.deviceBrand.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (ticket.deviceModel && ticket.deviceModel.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesStatus = statusFilter === "all" || ticket.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header 
+          title="Service Tickets" 
+          breadcrumb="Home / Service Tickets"
+          action={
+            <Button onClick={handleNew} data-testid="button-add-ticket">
+              <Plus className="w-4 h-4 mr-2" />
+              Tiket Baru
+            </Button>
+          }
+        />
+        <main className="flex-1 overflow-y-auto p-6">
+          {/* Search and Filter Bar */}
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input
+                    placeholder="Cari berdasarkan perangkat atau masalah..."
+                    className="pl-10"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    data-testid="input-ticket-search"
+                  />
+                </div>
+                <Select value={statusFilter} onValueChange={(value: ServiceTicketStatus | "all") => setStatusFilter(value)}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua Status</SelectItem>
+                    <SelectItem value="pending">Menunggu</SelectItem>
+                    <SelectItem value="in_progress">Dalam Proses</SelectItem>
+                    <SelectItem value="completed">Selesai</SelectItem>
+                    <SelectItem value="delivered">Dikirim</SelectItem>
+                    <SelectItem value="cancelled">Dibatalkan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Service Tickets Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Tiket Servis ({filteredTickets.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-16 bg-muted rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : filteredTickets.length === 0 ? (
+                <div className="text-center py-8">
+                  <Laptop className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    {searchQuery || statusFilter !== "all" ? "Tidak ada tiket yang cocok dengan pencarian" : "Belum ada tiket servis"}
+                  </p>
+                  <Button className="mt-4" onClick={handleNew}>
+                    Buat Tiket Pertama
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ticket ID</TableHead>
+                      <TableHead>Customer</TableHead>
+                      <TableHead>Perangkat</TableHead>
+                      <TableHead>Masalah</TableHead>
+                      <TableHead>Prioritas</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Estimasi Biaya</TableHead>
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead className="text-right">Aksi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTickets.map((ticket: ServiceTicket) => {
+                      const customer = (customers as Customer[]).find(c => c.id === ticket.customerId);
+                      const statusConfig = statusColors[ticket.status];
+                      const StatusIcon = statusConfig.icon;
+
+                      return (
+                        <TableRow key={ticket.id}>
+                          <TableCell>
+                            <span className="font-mono text-sm" data-testid={`ticket-id-${ticket.id}`}>
+                              #{ticket.id.slice(-8)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <span data-testid={`ticket-customer-${ticket.id}`}>
+                                {customer ? customer.name : "Unknown"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span data-testid={`ticket-device-${ticket.id}`}>
+                              {ticket.device}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm truncate max-w-xs" data-testid={`ticket-problem-${ticket.id}`}>
+                              {ticket.problem}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={ticket.priority === "high" || ticket.priority === "urgent" ? "destructive" : "secondary"}
+                              data-testid={`ticket-priority-${ticket.id}`}
+                            >
+                              {priorityLabels[ticket.priority]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${statusConfig.bg} w-fit`}>
+                              <StatusIcon className={`w-3 h-3 ${statusConfig.text}`} />
+                              <span className={`text-xs font-medium ${statusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
+                                {statusLabels[ticket.status]}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span data-testid={`ticket-cost-${ticket.id}`}>
+                              {ticket.estimatedCost 
+                                ? `Rp ${ticket.estimatedCost.toLocaleString("id-ID")}` 
+                                : "-"
+                              }
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center text-sm">
+                              <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                              <span data-testid={`ticket-date-${ticket.id}`}>
+                                {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('id-ID') : '-'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEdit(ticket)}
+                                data-testid={`button-edit-ticket-${ticket.id}`}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(ticket.id)}
+                                data-testid={`button-delete-ticket-${ticket.id}`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+
+      {/* Service Ticket Dialog */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTicket ? "Edit Tiket Servis" : "Buat Tiket Servis Baru"}
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="customerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Customer *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-customer">
+                            <SelectValue placeholder="Pilih customer" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {(customers as Customer[]).map((customer: Customer) => (
+                            <SelectItem key={customer.id} value={customer.id}>
+                              {customer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="deviceType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Jenis Perangkat *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Misal: Laptop, Tablet, HP" {...field} data-testid="input-device-type" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="deviceBrand"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Brand</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Misal: Dell, HP, Asus" {...field} data-testid="input-device-brand" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="deviceModel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Model</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Misal: Latitude 7520" {...field} data-testid="input-device-model" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="problem"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Masalah *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Deskripsikan masalah perangkat..." 
+                        {...field} 
+                        data-testid="textarea-problem" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="diagnosis"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Diagnosis</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Hasil diagnosis teknisi..." 
+                        {...field} 
+                        data-testid="textarea-diagnosis" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="solution"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Solusi</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Tindakan yang dilakukan..." 
+                        {...field} 
+                        data-testid="textarea-solution" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-status">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="pending">Menunggu</SelectItem>
+                          <SelectItem value="in_progress">Dalam Proses</SelectItem>
+                          <SelectItem value="completed">Selesai</SelectItem>
+                          <SelectItem value="delivered">Dikirim</SelectItem>
+                          <SelectItem value="cancelled">Dibatalkan</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="estimatedCost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estimasi Biaya</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="0" 
+                          {...field} 
+                          data-testid="input-estimated-cost" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-6">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowDialog(false)}
+                  data-testid="button-cancel-ticket"
+                >
+                  Batal
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                  data-testid="button-save-ticket"
+                >
+                  {editingTicket ? "Perbarui Tiket" : "Buat Tiket"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

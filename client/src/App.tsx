@@ -8,7 +8,7 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
 import POS from "@/pages/pos";
-import Service from "@/pages/service";
+import ServiceTickets from "@/pages/service-tickets";
 import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Suppliers from "@/pages/suppliers";
@@ -27,7 +27,7 @@ function Router() {
         <>
           <Route path="/" component={Dashboard} />
           <Route path="/pos" component={POS} />
-          <Route path="/service" component={Service} />
+          <Route path="/service" component={ServiceTickets} />
           <Route path="/inventory" component={Inventory} />
           <Route path="/customers" component={Customers} />
           <Route path="/suppliers" component={Suppliers} />

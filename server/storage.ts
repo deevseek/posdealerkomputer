@@ -407,7 +407,8 @@ export class DatabaseStorage implements IStorage {
 
   // Financial Records
   async getFinancialRecords(startDate?: Date, endDate?: Date): Promise<FinancialRecord[]> {
-    let query = db.select().from(financialRecords);
+    const baseQuery = db.select().from(financialRecords);
+    let query = baseQuery;
     
     if (startDate && endDate) {
       query = query.where(

@@ -5,7 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function ServiceStatus() {
   const { data: serviceTickets, isLoading } = useQuery({
-    queryKey: ["/api/service-tickets", { active: true }],
+    queryKey: ["/api/service-tickets"],
+    queryFn: async () => {
+      const response = await fetch('/api/service-tickets?active=true');
+      if (!response.ok) throw new Error('Failed to fetch service tickets');
+      return response.json();
+    },
     retry: false,
   });
 
