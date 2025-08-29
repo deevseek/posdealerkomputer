@@ -12,7 +12,8 @@ import {
   insertStockMovementSchema,
   insertFinancialRecordSchema,
   insertCategorySchema,
-  insertStoreConfigSchema
+  insertStoreConfigSchema,
+  insertRoleSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -400,6 +401,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating financial record:", error);
       res.status(500).json({ message: "Failed to create financial record" });
+    }
+  });
+
+  // User Management routes
+  app.get('/api/users', isAuthenticated, async (req, res) => {
+    try {
+      const users = await storage.getUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.put('/api/users/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userData = req.body;
+      const user = await storage.updateUser(id, userData);
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.delete('/api/users/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteUser(id);
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Role Management routes
+  app.get('/api/roles', isAuthenticated, async (req, res) => {
+    try {
+      const roles = await storage.getRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ message: "Failed to fetch roles" });
+    }
+  });
+
+  app.post('/api/roles', isAuthenticated, async (req, res) => {
+    try {
+      const roleData = insertRoleSchema.parse(req.body);
+      const role = await storage.createRole(roleData);
+      res.json(role);
+    } catch (error) {
+      console.error("Error creating role:", error);
+      res.status(500).json({ message: "Failed to create role" });
+    }
+  });
+
+  app.put('/api/roles/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const roleData = req.body;
+      const role = await storage.updateRole(id, roleData);
+      res.json(role);
+    } catch (error) {
+      console.error("Error updating role:", error);
+      res.status(500).json({ message: "Failed to update role" });
+    }
+  });
+
+  app.delete('/api/roles/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteRole(id);
+      res.json({ message: "Role deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting role:", error);
+      res.status(500).json({ message: "Failed to delete role" });
     }
   });
 

@@ -46,6 +46,18 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Roles table for role management
+export const roles = pgTable("roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").unique().notNull(),
+  displayName: varchar("display_name").notNull(),
+  description: text("description"),
+  permissions: text("permissions").array(), // JSON array of permissions
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Store configuration
 export const storeConfig = pgTable("store_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -327,6 +339,12 @@ export const insertFinancialRecordSchema = createInsertSchema(financialRecords).
   createdAt: true,
 });
 
+export const insertRoleSchema = createInsertSchema(roles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -350,3 +368,5 @@ export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
 export type FinancialRecord = typeof financialRecords.$inferSelect;
+export type InsertRole = z.infer<typeof insertRoleSchema>;
+export type Role = typeof roles.$inferSelect;

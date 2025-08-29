@@ -1,5 +1,6 @@
 import {
   users,
+  roles,
   storeConfig,
   categories,
   products,
@@ -12,6 +13,8 @@ import {
   financialRecords,
   type User,
   type UpsertUser,
+  type Role,
+  type InsertRole,
   type StoreConfig,
   type InsertStoreConfig,
   type Category,
@@ -40,6 +43,20 @@ export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  
+  // User management
+  getUsers(): Promise<User[]>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  updateUser(id: string, user: Partial<UpsertUser>): Promise<User>;
+  deleteUser(id: string): Promise<void>;
+  
+  // Role management
+  getRoles(): Promise<Role[]>;
+  getRoleById(id: string): Promise<Role | undefined>;
+  getRoleByName(name: string): Promise<Role | undefined>;
+  createRole(role: InsertRole): Promise<Role>;
+  updateRole(id: string, role: Partial<InsertRole>): Promise<Role>;
+  deleteRole(id: string): Promise<void>;
   
   // Store configuration
   getStoreConfig(): Promise<StoreConfig | undefined>;
@@ -126,6 +143,62 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  // User management
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Role management
+  async getRoles(): Promise<Role[]> {
+    return await db.select().from(roles).where(eq(roles.isActive, true)).orderBy(asc(roles.displayName));
+  }
+
+  async getRoleById(id: string): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.id, id));
+    return role;
+  }
+
+  async getRoleByName(name: string): Promise<Role | undefined> {
+    const [role] = await db.select().from(roles).where(eq(roles.name, name));
+    return role;
+  }
+
+  async createRole(roleData: InsertRole): Promise<Role> {
+    const [role] = await db.insert(roles).values(roleData).returning();
+    return role;
+  }
+
+  async updateRole(id: string, roleData: Partial<InsertRole>): Promise<Role> {
+    const [role] = await db
+      .update(roles)
+      .set({ ...roleData, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return role;
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    await db.update(roles).set({ isActive: false }).where(eq(roles.id, id));
   }
 
   // Store configuration
