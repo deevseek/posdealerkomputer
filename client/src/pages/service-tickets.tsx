@@ -99,7 +99,7 @@ export default function ServiceTickets() {
       problem: "",
       diagnosis: "",
       solution: "",
-      status: "pending" as const,
+      status: "pending",
       estimatedCost: "",
     },
   });
@@ -208,7 +208,7 @@ export default function ServiceTickets() {
       problem: ticket.problem,
       diagnosis: ticket.diagnosis || "",
       solution: ticket.solution || "",
-      status: ticket.status,
+      status: ticket.status || "pending",
       estimatedCost: ticket.estimatedCost ? ticket.estimatedCost.toString() : "",
     });
     setShowDialog(true);
@@ -313,7 +313,6 @@ export default function ServiceTickets() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Perangkat</TableHead>
                       <TableHead>Masalah</TableHead>
-                      <TableHead>Prioritas</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Estimasi Biaya</TableHead>
                       <TableHead>Tanggal</TableHead>
@@ -323,7 +322,7 @@ export default function ServiceTickets() {
                   <TableBody>
                     {filteredTickets.map((ticket: ServiceTicket) => {
                       const customer = (customers as Customer[]).find(c => c.id === ticket.customerId);
-                      const statusConfig = statusColors[ticket.status];
+                      const statusConfig = statusColors[ticket.status || 'pending'];
                       const StatusIcon = statusConfig.icon;
 
                       return (
@@ -342,9 +341,16 @@ export default function ServiceTickets() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <span data-testid={`ticket-device-${ticket.id}`}>
-                              {ticket.device}
-                            </span>
+                            <div className="space-y-1">
+                              <span className="font-medium" data-testid={`ticket-device-${ticket.id}`}>
+                                {ticket.deviceType}
+                              </span>
+                              {ticket.deviceBrand && (
+                                <p className="text-xs text-muted-foreground">
+                                  {ticket.deviceBrand} {ticket.deviceModel}
+                                </p>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm truncate max-w-xs" data-testid={`ticket-problem-${ticket.id}`}>
@@ -352,25 +358,17 @@ export default function ServiceTickets() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <Badge 
-                              variant={ticket.priority === "high" || ticket.priority === "urgent" ? "destructive" : "secondary"}
-                              data-testid={`ticket-priority-${ticket.id}`}
-                            >
-                              {priorityLabels[ticket.priority]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${statusConfig.bg} w-fit`}>
                               <StatusIcon className={`w-3 h-3 ${statusConfig.text}`} />
                               <span className={`text-xs font-medium ${statusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
-                                {statusLabels[ticket.status]}
+                                {statusLabels[ticket.status || 'pending']}
                               </span>
                             </div>
                           </TableCell>
                           <TableCell>
                             <span data-testid={`ticket-cost-${ticket.id}`}>
                               {ticket.estimatedCost 
-                                ? `Rp ${ticket.estimatedCost.toLocaleString("id-ID")}` 
+                                ? `Rp ${parseFloat(ticket.estimatedCost.toString()).toLocaleString("id-ID")}` 
                                 : "-"
                               }
                             </span>
