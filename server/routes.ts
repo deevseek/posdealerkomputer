@@ -662,9 +662,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
-      console.log('Raw request body:', JSON.stringify(req.body, null, 2));
-      console.log('User ID from auth:', req.user.claims.sub);
-      
       const { transaction: transactionData, items } = createTransactionSchema.parse(req.body);
       
       // Generate transaction number
@@ -678,9 +675,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
-      if (error.issues) {
-        console.error("Validation issues:", error.issues);
-      }
       res.status(500).json({ message: "Failed to create transaction" });
     }
   });

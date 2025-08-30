@@ -200,7 +200,6 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       })),
     };
 
-    console.log('Transaction data being sent:', JSON.stringify(transactionData, null, 2));
     createTransactionMutation.mutate(transactionData);
   };
 
