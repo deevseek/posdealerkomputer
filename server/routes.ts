@@ -533,11 +533,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add PATCH method for store config updates
   app.patch('/api/store-config', isAuthenticated, async (req, res) => {
     try {
-      console.log('PATCH store-config received:', req.body);
       const configData = insertStoreConfigSchema.parse(req.body);
-      console.log('Parsed config data:', configData);
       const config = await storage.upsertStoreConfig(configData);
-      console.log('Config updated successfully:', config);
       res.json(config);
     } catch (error: any) {
       console.error("Error updating store config:", error);

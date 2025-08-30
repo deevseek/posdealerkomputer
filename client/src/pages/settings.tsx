@@ -27,7 +27,6 @@ export default function Settings() {
   // Store settings mutation
   const updateStoreMutation = useMutation({
     mutationFn: async (data: any) => {
-      console.log('Sending store config data:', data);
       const response = await fetch('/api/store-config', {
         method: 'PATCH',
         headers: {
@@ -36,25 +35,9 @@ export default function Settings() {
         credentials: 'include',
         body: JSON.stringify(data),
       });
-      
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error text:', errorText);
-        throw new Error(`Failed to update store config: ${response.status}`);
+        throw new Error('Failed to update store config');
       }
-      
-      const contentType = response.headers.get('content-type');
-      console.log('Content-Type:', contentType);
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        const responseText = await response.text();
-        console.error('Non-JSON response received:', responseText);
-        throw new Error('Server returned non-JSON response');
-      }
-      
       return response.json();
     },
     onSuccess: () => {
@@ -66,8 +49,6 @@ export default function Settings() {
     },
     onError: (error: any) => {
       console.error('Store config update error:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
       toast({
         title: "Error", 
         description: error?.message || "Gagal mengupdate pengaturan",

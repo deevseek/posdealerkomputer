@@ -42,7 +42,11 @@ const navigation = [
 ];
 
 export default function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Use localStorage to persist sidebar state
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [location] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -78,6 +82,13 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     logoutMutation.mutate();
+  };
+
+  // Save sidebar state to localStorage when it changes
+  const toggleCollapsed = () => {
+    const newCollapsed = !isCollapsed;
+    setIsCollapsed(newCollapsed);
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(newCollapsed));
   };
 
   const filteredNavigation = navigation.filter(item => 
@@ -171,7 +182,7 @@ export default function Sidebar() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleCollapsed}
           className="w-full flex items-center justify-center"
           data-testid="button-collapse-sidebar"
         >
