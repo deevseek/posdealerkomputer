@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { MessageCircle, QrCode, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,9 +13,151 @@ interface WhatsAppSettingsProps {
 
 export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [testPhone, setTestPhone] = useState("");
   
   const whatsappEnabled = storeConfig?.whatsappEnabled || false;
+
+  // Query WhatsApp status
+  const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['/api/whatsapp/status'],
+    enabled: whatsappEnabled,
+    refetchInterval: whatsappEnabled ? 5000 : false, // Poll every 5 seconds when enabled
+    staleTime: 2000,
+  });
+
+  // Enable/disable WhatsApp mutation
+  const toggleWhatsAppMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const response = await fetch(`/api/whatsapp/${enabled ? 'enable' : 'disable'}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to toggle WhatsApp');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan WhatsApp berhasil diubah",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error", 
+        description: error?.message || "Gagal mengubah pengaturan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Connect WhatsApp mutation
+  const connectWhatsAppMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/whatsapp/connect', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to connect WhatsApp');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "Proses koneksi WhatsApp dimulai. Scan QR code untuk menghubungkan.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal menghubungkan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Disconnect WhatsApp mutation
+  const disconnectWhatsAppMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/whatsapp/disconnect', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to disconnect WhatsApp');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "WhatsApp berhasil diputuskan",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal memutuskan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Test message mutation
+  const testMessageMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const response = await fetch('/api/whatsapp/test-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ phoneNumber: phone }),
+      });
+      if (!response.ok) {
+        throw new Error('Failed to send test message');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Berhasil",
+        description: "Pesan test berhasil dikirim",
+      });
+      setTestPhone("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal mengirim pesan test",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTestMessage = () => {
+    if (!testPhone.trim()) {
+      toast({
+        title: "Error",
+        description: "Masukkan nomor telepon terlebih dahulu",
+        variant: "destructive",
+      });
+      return;
+    }
+    testMessageMutation.mutate(testPhone);
+  };
+
+  const whatsappConnected = whatsappStatus?.connected || false;
+  const connectionState = whatsappStatus?.state || 'close';
+  const qrCode = whatsappStatus?.qrCode;
 
   return (
     <Card>
@@ -38,15 +181,11 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
           </div>
           <Button
             variant={whatsappEnabled ? "destructive" : "default"}
-            onClick={() => {
-              toast({
-                title: "Info",
-                description: "Fitur toggle akan segera tersedia",
-              });
-            }}
+            onClick={() => toggleWhatsAppMutation.mutate(!whatsappEnabled)}
+            disabled={toggleWhatsAppMutation.isPending}
             data-testid={whatsappEnabled ? "button-disable-whatsapp" : "button-enable-whatsapp"}
           >
-            {whatsappEnabled ? "Nonaktifkan" : "Aktifkan"}
+            {toggleWhatsAppMutation.isPending ? "Loading..." : whatsappEnabled ? "Nonaktifkan" : "Aktifkan"}
           </Button>
         </div>
 
@@ -56,62 +195,106 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
             <div>
               <h4 className="font-medium">Status Koneksi</h4>
               <p className="text-sm text-muted-foreground">
-                <span className="text-red-600">❌ Tidak terhubung</span>
+                {whatsappConnected ? (
+                  <span className="text-green-600">✅ Terhubung</span>
+                ) : (
+                  <span className="text-red-600">❌ Tidak terhubung</span>
+                )}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                State: Disconnected
+                State: {connectionState}
+                {statusLoading && <RefreshCw className="w-3 h-3 ml-1 inline animate-spin" />}
               </p>
             </div>
             
             <div className="space-x-2">
-              <Button
-                onClick={() => {
-                  toast({
-                    title: "Info",
-                    description: "Fitur koneksi WhatsApp akan segera tersedia",
-                  });
-                }}
-                data-testid="button-connect-whatsapp"
-              >
-                Connect
-              </Button>
+              {!whatsappConnected ? (
+                <Button
+                  onClick={() => connectWhatsAppMutation.mutate()}
+                  disabled={connectWhatsAppMutation.isPending}
+                  data-testid="button-connect-whatsapp"
+                >
+                  {connectWhatsAppMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <QrCode className="w-4 h-4 mr-2" />
+                      Connect
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  onClick={() => disconnectWhatsAppMutation.mutate()}
+                  disabled={disconnectWhatsAppMutation.isPending}
+                  data-testid="button-disconnect-whatsapp"
+                >
+                  {disconnectWhatsAppMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Test Message */}
-        <div className="p-4 border rounded-lg">
-          <h4 className="font-medium mb-4">Test Pesan</h4>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="testPhone">Nomor Telepon (dengan kode negara)</Label>
-              <Input
-                id="testPhone"
-                placeholder="contoh: 628123456789"
-                value={testPhone}
-                onChange={(e) => setTestPhone(e.target.value)}
-                data-testid="input-test-phone"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Format: 628xxxxxxxxx (tanpa tanda + atau spasi)
+          {/* QR Code Display */}
+          {qrCode && !whatsappConnected && (
+            <div className="mt-4 p-4 border rounded-lg bg-gray-50 dark:bg-gray-800">
+              <h5 className="font-medium mb-2 flex items-center">
+                <QrCode className="w-4 h-4 mr-2" />
+                Scan QR Code
+              </h5>
+              <p className="text-sm text-muted-foreground mb-4">
+                Buka WhatsApp di ponsel → Settings → Linked Devices → Link a Device → Scan QR code di bawah
+              </p>
+              <div className="flex justify-center">
+                <img 
+                  src={qrCode} 
+                  alt="WhatsApp QR Code" 
+                  className="w-64 h-64 border rounded-lg"
+                  data-testid="img-qr-code"
+                />
+              </div>
+              <p className="text-xs text-center text-muted-foreground mt-2">
+                QR code akan diperbarui secara otomatis setiap beberapa detik
               </p>
             </div>
-            <Button
-              onClick={() => {
-                toast({
-                  title: "Info",
-                  description: "Fitur test message akan segera tersedia",
-                });
-              }}
-              data-testid="button-send-test"
-            >
-              Kirim Test Pesan
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Kirim pesan test untuk memastikan koneksi WhatsApp berfungsi dengan baik
-          </p>
+          )}
         </div>
+
+        {/* Test Message - Only show when connected */}
+        {whatsappConnected && (
+          <div className="p-4 border rounded-lg">
+            <h4 className="font-medium mb-4">Test Pesan</h4>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="testPhone">Nomor Telepon (dengan kode negara)</Label>
+                <Input
+                  id="testPhone"
+                  placeholder="contoh: 628123456789"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                  data-testid="input-test-phone"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Format: 628xxxxxxxxx (tanpa tanda + atau spasi)
+                </p>
+              </div>
+              <Button
+                onClick={handleTestMessage}
+                disabled={testMessageMutation.isPending || !testPhone.trim()}
+                data-testid="button-send-test"
+              >
+                {testMessageMutation.isPending ? "Mengirim..." : "Kirim Test Pesan"}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2">
+              Kirim pesan test untuk memastikan koneksi WhatsApp berfungsi dengan baik
+            </p>
+          </div>
+        )}
 
         {/* Feature Information */}
         <div className="space-y-4">

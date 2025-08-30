@@ -122,7 +122,7 @@ export default function Settings() {
                     <Input
                       id="storeName"
                       name="storeName"
-                      defaultValue={storeConfig?.storeName || ""}
+                      defaultValue={(storeConfig as any)?.storeName || ""}
                       placeholder="Masukkan nama toko"
                       data-testid="input-store-name"
                     />
@@ -132,7 +132,7 @@ export default function Settings() {
                     <Input
                       id="phone"
                       name="phone"
-                      defaultValue={storeConfig?.phone || ""}
+                      defaultValue={(storeConfig as any)?.phone || ""}
                       placeholder="Masukkan nomor telepon"
                       data-testid="input-phone"
                     />
@@ -143,7 +143,7 @@ export default function Settings() {
                   <Input
                     id="address"
                     name="address"
-                    defaultValue={storeConfig?.address || ""}
+                    defaultValue={(storeConfig as any)?.address || ""}
                     placeholder="Masukkan alamat lengkap toko"
                     data-testid="input-address"
                   />
@@ -154,7 +154,7 @@ export default function Settings() {
                     id="email"
                     name="email"
                     type="email"
-                    defaultValue={storeConfig?.email || ""}
+                    defaultValue={(storeConfig as any)?.email || ""}
                     placeholder="Masukkan email toko"
                     data-testid="input-email"
                   />
@@ -190,15 +190,7 @@ export default function Settings() {
 
         {/* WhatsApp Integration */}
         <TabsContent value="whatsapp" className="space-y-6">
-          {storeConfig ? (
-            <WhatsAppSettingsComponent storeConfig={storeConfig} />
-          ) : (
-            <Card>
-              <CardContent className="p-6">
-                <div>Memuat pengaturan WhatsApp...</div>
-              </CardContent>
-            </Card>
-          )}
+          <WhatsAppSettingsComponent storeConfig={storeConfig || {}} />
         </TabsContent>
 
         {/* Security Settings */}
