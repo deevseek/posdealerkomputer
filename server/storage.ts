@@ -731,104 +731,130 @@ export class DatabaseStorage implements IStorage {
     };
     tickets: any[];
   }> {
-    const [totalResult] = await db
-      .select({ count: count() })
-      .from(serviceTickets)
-      .where(
-        and(
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
-        )
-      );
+    // Use same method as financeManager for consistency
+    try {
+      const { financeManager } = await import('./financeManager');
+      const summary = await financeManager.getSummary(startDate, endDate);
+      
+      // Get service-specific financial data
+      const [serviceIncomeResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
+            or(
+              eq(financialRecords.referenceType, 'service_labor'),
+              eq(financialRecords.referenceType, 'service_parts_revenue')
+            ),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
 
-    // Get service financial data
-    const [serviceIncomeResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
-      .where(
-        and(
-          eq(financialRecords.type, 'income'),
-          or(
+      const [serviceCostResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'expense'),
+            eq(financialRecords.referenceType, 'service_parts_cost'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      // Get labor revenue
+      const [laborRevenueResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
             eq(financialRecords.referenceType, 'service_labor'),
-            eq(financialRecords.referenceType, 'service_parts_revenue')
-          ),
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      // Get parts revenue
+      const [partsRevenueResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
+            eq(financialRecords.referenceType, 'service_parts_revenue'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      const [totalResult] = await db
+        .select({ count: count() })
+        .from(serviceTickets)
+        .where(
+          and(
+            gte(serviceTickets.createdAt, startDate),
+            lte(serviceTickets.createdAt, endDate)
+          )
+        );
+
+      const ticketList = await db
+        .select()
+        .from(serviceTickets)
+        .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
+        .where(
+          and(
+            gte(serviceTickets.createdAt, startDate),
+            lte(serviceTickets.createdAt, endDate)
+          )
         )
-      );
+        .orderBy(desc(serviceTickets.createdAt));
 
-    const [serviceCostResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
-      .where(
-        and(
-          eq(financialRecords.type, 'expense'),
-          eq(financialRecords.referenceType, 'service_parts_cost'),
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
-        )
-      );
+      const totalRevenue = Number(serviceIncomeResult.total || 0);
+      const totalCost = Number(serviceCostResult.total || 0);
+      const totalProfit = totalRevenue - totalCost;
 
-    // Get labor revenue
-    const [laborRevenueResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
-      .where(
-        and(
-          eq(financialRecords.type, 'income'),
-          eq(financialRecords.referenceType, 'service_labor'),
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
-        )
-      );
+      return {
+        totalServices: totalResult.count,
+        totalRevenue: totalRevenue.toString(),
+        totalCost: totalCost.toString(),
+        totalProfit: totalProfit.toString(),
+        revenueBreakdown: {
+          laborRevenue: (Number(laborRevenueResult.total || 0)).toString(),
+          partsRevenue: (Number(partsRevenueResult.total || 0)).toString(),
+        },
+        tickets: ticketList.map(t => ({
+          ...t.service_tickets,
+          customer: t.customers
+        }))
+      };
+    } catch (error) {
+      console.error("Error getting service report:", error);
+      // Fallback to simple count
+      const [totalResult] = await db
+        .select({ count: count() })
+        .from(serviceTickets)
+        .where(
+          and(
+            gte(serviceTickets.createdAt, startDate),
+            lte(serviceTickets.createdAt, endDate)
+          )
+        );
 
-    // Get parts revenue
-    const [partsRevenueResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
-      .where(
-        and(
-          eq(financialRecords.type, 'income'),
-          eq(financialRecords.referenceType, 'service_parts_revenue'),
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
-        )
-      );
-
-    const ticketList = await db
-      .select()
-      .from(serviceTickets)
-      .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
-      .where(
-        and(
-          gte(serviceTickets.createdAt, startDate),
-          lte(serviceTickets.createdAt, endDate)
-        )
-      )
-      .orderBy(desc(serviceTickets.createdAt));
-
-    const totalRevenue = Number(serviceIncomeResult.total || 0);
-    const totalCost = Number(serviceCostResult.total || 0);
-    const totalProfit = totalRevenue - totalCost;
-
-    return {
-      totalServices: totalResult.count,
-      totalRevenue: totalRevenue.toString(),
-      totalCost: totalCost.toString(),
-      totalProfit: totalProfit.toString(),
-      revenueBreakdown: {
-        laborRevenue: (Number(laborRevenueResult.total || 0)).toString(),
-        partsRevenue: (Number(partsRevenueResult.total || 0)).toString(),
-      },
-      tickets: ticketList.map(t => ({
-        ...t.service_tickets,
-        customer: t.customers
-      }))
-    };
+      return {
+        totalServices: totalResult.count,
+        totalRevenue: "0",
+        totalCost: "0", 
+        totalProfit: "0",
+        revenueBreakdown: {
+          laborRevenue: "0",
+          partsRevenue: "0",
+        },
+        tickets: []
+      };
+    }
   }
 
   async getFinancialReport(startDate: Date, endDate: Date): Promise<{
