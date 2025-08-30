@@ -21,9 +21,12 @@ import { z } from "zod";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import type { UploadResult } from "@uppy/core";
 
-const storeConfigFormSchema = insertStoreConfigSchema.extend({
-  taxRate: z.string().transform(val => parseFloat(val) || 11.0),
-  defaultDiscount: z.string().transform(val => parseFloat(val) || 0.0),
+const storeConfigFormSchema = insertStoreConfigSchema.omit({
+  taxRate: true,
+  defaultDiscount: true,
+}).extend({
+  taxRate: z.string(),
+  defaultDiscount: z.string(),
 });
 
 export default function Settings() {
@@ -67,10 +70,15 @@ export default function Settings() {
     mutationFn: async (data: any) => {
       console.log('Submitting config data:', data);
       
+      // Ensure all values are strings for proper validation
       const payload = {
-        ...data,
-        taxRate: data.taxRate || "11.00",
-        defaultDiscount: data.defaultDiscount || "0.00",
+        name: data.name || "",
+        address: data.address || "",
+        phone: data.phone || "",
+        email: data.email || "",
+        taxRate: String(data.taxRate || "11.00"),
+        defaultDiscount: String(data.defaultDiscount || "0.00"),
+        logo: data.logo || "",
       };
 
       const response = await fetch('/api/store-config', {

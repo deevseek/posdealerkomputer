@@ -1,11 +1,9 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
-import type {
-  ObjectAclPolicy,
-  ObjectPermission,
-} from "./objectAcl";
 import {
+  type ObjectAclPolicy,
+  ObjectPermission,
   canAccessObject,
   getObjectAclPolicy,
   setObjectAclPolicy,
