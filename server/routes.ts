@@ -6,7 +6,7 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
-import htmlPdf from 'html-pdf-node';
+// import htmlPdf from 'html-pdf-node';  // Removed due to Chromium dependencies issues
 import * as XLSX from 'xlsx';
 import { db } from "./db";
 
@@ -333,25 +333,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const htmlContent = generateReportHTML(reportData, startDate, endDate);
       
       console.log('Generating PDF...');
-      // Generate PDF from HTML
-      const options = { 
-        format: 'A4', 
-        margin: { top: '20mm', bottom: '20mm', left: '20mm', right: '20mm' },
-        printBackground: true
-      };
+      // For now, return HTML version with PDF styling  
+      // Client-side PDF generation will be handled by jsPDF
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `inline; filename="laporan-bisnis-${startDate}-${endDate}.html"`);
       
-      const file = { content: htmlContent };
-      const pdfBuffer = await htmlPdf.generatePdf(file, options);
-      
-      console.log('PDF generated successfully, size:', pdfBuffer.length);
-      
-      // Set proper headers and send PDF
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.pdf"`);
-      res.setHeader('Content-Length', pdfBuffer.length);
-      
-      // Send PDF buffer
-      res.send(pdfBuffer);
+      // Send HTML content with PDF-optimized styling
+      res.send(htmlContent);
     } catch (error) {
       console.error("Error exporting PDF:", error);
       res.status(500).json({ 

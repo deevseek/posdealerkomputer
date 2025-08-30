@@ -30,6 +30,7 @@ import { Calendar, DollarSign, TrendingUp, TrendingDown, BarChart3, Package, Fil
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useRef } from "react";
 
 export default function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState("this-month");
@@ -63,47 +64,92 @@ export default function Reports() {
 
   const { toast } = useToast();
 
-  // PDF Export mutation
+  // PDF Export mutation - client-side generation
   const exportPdfMutation = useMutation({
     mutationFn: async () => {
-      const reportData = {
-        salesReport,
-        serviceReport,
-        financialReport,
-        inventoryReport
-      };
-
       try {
-        const response = await fetch('/api/reports/export-pdf', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            startDate,
-            endDate,
-            reportData
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        // Handle PDF download
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `laporan-bisnis-${startDate}-${endDate}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-
-        return blob;
+        // Import jsPDF dynamically to avoid SSR issues
+        const { jsPDF } = await import('jspdf');
+        
+        const doc = new jsPDF('portrait', 'mm', 'a4');
+        
+        // Add header
+        doc.setFontSize(20);
+        doc.setTextColor(79, 70, 229);
+        doc.text('LaptopPOS - Laporan Bisnis', 20, 30);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Periode: ${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`, 20, 40);
+        
+        let yPos = 60;
+        
+        // Ringkasan Keuangan
+        doc.setFontSize(16);
+        doc.setTextColor(79, 70, 229);
+        doc.text('Ringkasan Keuangan', 20, yPos);
+        yPos += 15;
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Penjualan: Rp ${Number(salesReport?.totalSales || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Omset Servis: Rp ${Number(serviceReport?.totalRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Total Pemasukan: Rp ${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Total Pengeluaran: Rp ${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Laba Bersih: Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 20;
+        
+        // Laporan Servis
+        doc.setFontSize(16);
+        doc.setTextColor(79, 70, 229);
+        doc.text('Laporan Servis', 20, yPos);
+        yPos += 15;
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Servis: ${serviceReport?.totalServices || 0} tiket`, 20, yPos);
+        yPos += 8;
+        doc.text(`Revenue Labor: Rp ${Number(serviceReport?.revenueBreakdown?.laborRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Revenue Parts: Rp ${Number(serviceReport?.revenueBreakdown?.partsRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Modal Parts: Rp ${Number(serviceReport?.totalCost || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Laba Servis: Rp ${Number(serviceReport?.totalProfit || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 20;
+        
+        // Laporan Inventory
+        doc.setFontSize(16);
+        doc.setTextColor(79, 70, 229);
+        doc.text('Laporan Inventory', 20, yPos);
+        yPos += 15;
+        
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Total Produk: ${inventoryReport?.totalProducts || 0}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Stok Rendah: ${inventoryReport?.lowStockCount || 0}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Total Stok: ${inventoryReport?.totalStockQuantity || 0}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Nilai Aset: Rp ${Number(inventoryReport?.totalAssetValue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        
+        // Footer
+        doc.setFontSize(10);
+        doc.setTextColor(107, 114, 128);
+        doc.text(`Generated on ${new Date().toLocaleString('id-ID')}`, 20, 280);
+        doc.text('© 2025 LaptopPOS - Sistem Manajemen Bisnis Laptop', 20, 290);
+        
+        // Save PDF
+        doc.save(`laporan-bisnis-${startDate}-${endDate}.pdf`);
+        
+        return doc;
       } catch (error) {
-        console.error('Export error:', error);
+        console.error('PDF Export error:', error);
         throw error;
       }
     },
