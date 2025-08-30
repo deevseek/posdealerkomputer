@@ -372,13 +372,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/reports/export-xlsx', isAuthenticated, async (req, res) => {
     try {
       console.log('XLSX export request received');
-      const { startDate, endDate, reportData } = req.body;
+      const { startDate, endDate } = req.body;
       
-      if (!reportData) {
-        return res.status(400).json({ message: "Report data is required" });
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
       }
       
-      const { salesReport, serviceReport, financialReport, inventoryReport } = reportData;
+      // Fetch fresh data from database instead of using cached client data
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T23:59:59.999Z');
+      
+      const salesReport = await storage.getSalesReport(start, end);
+      const serviceReport = await storage.getServiceReport(start, end);
+      const financialReport = await storage.getFinancialReport(start, end);
+      const inventoryReport = await storage.getInventoryReport();
       
       // Create workbook
       const wb = XLSX.utils.book_new();
@@ -436,11 +443,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/reports/export-pdf', isAuthenticated, async (req, res) => {
     try {
       console.log('PDF export request received');
-      const { startDate, endDate, reportData } = req.body;
+      const { startDate, endDate } = req.body;
       
-      if (!reportData) {
-        return res.status(400).json({ message: "Report data is required" });
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
       }
+      
+      // Fetch fresh data from database instead of using cached client data
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T23:59:59.999Z');
+      
+      const salesReport = await storage.getSalesReport(start, end);
+      const serviceReport = await storage.getServiceReport(start, end);
+      const financialReport = await storage.getFinancialReport(start, end);
+      const inventoryReport = await storage.getInventoryReport();
+      
+      const reportData = { salesReport, serviceReport, financialReport, inventoryReport };
       
       console.log('Generating HTML content...');
       // Generate HTML template for PDF

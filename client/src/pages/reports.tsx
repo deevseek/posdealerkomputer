@@ -172,13 +172,6 @@ export default function Reports() {
   // XLSX Export mutation
   const exportXlsxMutation = useMutation({
     mutationFn: async () => {
-      const reportData = {
-        salesReport,
-        serviceReport,
-        financialReport,
-        inventoryReport
-      };
-
       try {
         const response = await fetch('/api/reports/export-xlsx', {
           method: 'POST',
@@ -187,8 +180,7 @@ export default function Reports() {
           },
           body: JSON.stringify({
             startDate,
-            endDate,
-            reportData
+            endDate
           })
         });
 
@@ -230,28 +222,12 @@ export default function Reports() {
   });
 
   const handleExportPDF = () => {
-    if (!salesReport || !serviceReport || !financialReport || !inventoryReport) {
-      toast({
-        title: "Data Belum Siap",
-        description: "Tunggu hingga semua data selesai dimuat",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+    // Server will fetch fresh data directly from database, no need to check cached data
     exportPdfMutation.mutate();
   };
 
   const handleExportXLSX = () => {
-    if (!salesReport || !serviceReport || !financialReport || !inventoryReport) {
-      toast({
-        title: "Data Belum Siap",
-        description: "Tunggu hingga semua data selesai dimuat",
-        variant: "destructive",
-      });
-      return;
-    }
-    
+    // Server will fetch fresh data directly from database, no need to check cached data
     exportXlsxMutation.mutate();
   };
 
@@ -330,7 +306,7 @@ export default function Reports() {
                   <Button 
                     className="flex items-center gap-2"
                     onClick={handleExportPDF}
-                    disabled={exportPdfMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
+                    disabled={exportPdfMutation.isPending}
                     data-testid="button-export-pdf"
                   >
                     <Download className="w-4 h-4" />
@@ -341,7 +317,7 @@ export default function Reports() {
                     variant="outline"
                     className="flex items-center gap-2"
                     onClick={handleExportXLSX}
-                    disabled={exportXlsxMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
+                    disabled={exportXlsxMutation.isPending}
                     data-testid="button-export-xlsx"
                   >
                     <FileText className="w-4 h-4" />
