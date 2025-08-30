@@ -186,14 +186,28 @@ export default function ServiceTickets() {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const ticketData = {
-        ...data,
-        estimatedCost: data.estimatedCost ? parseFloat(data.estimatedCost) : null,
-      };
-      return apiRequest('PUT', `/api/service-tickets/${id}`, ticketData);
+      console.log("Raw update body:", JSON.stringify(data, null, 2));
+      
+      const { parts, ...ticketData } = data;
+      console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
+      
+      return apiRequest('PUT', `/api/service-tickets/${id}`, { ...ticketData, parts });
     },
-    onSuccess: () => {
+    onSuccess: (updatedTicket, variables) => {
+      // Update specific item in cache immediately
+      queryClient.setQueryData(["/api/service-tickets"], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((ticket: any) => 
+          ticket.id === variables.id ? { ...ticket, ...updatedTicket } : ticket
+        );
+      });
+      
+      // Then invalidate to refresh from server
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      
       setShowDialog(false);
       setEditingTicket(null);
       setSelectedParts([]);
@@ -231,12 +245,23 @@ export default function ServiceTickets() {
     mutationFn: async (id: string) => {
       return apiRequest('DELETE', `/api/service-tickets/${id}`);
     },
-    onSuccess: () => {
-      // Invalidate multiple related queries
+    onSuccess: (_, deletedId) => {
+      // Remove item from cache immediately (optimistic update)
+      queryClient.setQueryData(["/api/service-tickets"], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.filter((ticket: any) => ticket.id !== deletedId);
+      });
+      
+      // Then invalidate to refresh from server
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/finance/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/finance/summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      
+      // Close modal if it was open
+      setEditingTicket(null);
+      setShowDialog(false);
+      
       toast({ title: "Sukses", description: "Tiket servis berhasil dihapus" });
     },
     onError: (error) => {
