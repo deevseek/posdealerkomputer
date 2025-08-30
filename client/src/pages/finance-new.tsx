@@ -293,6 +293,8 @@ export default function FinanceNew() {
       queryClient.invalidateQueries({ queryKey: ['/api/payroll'] });
       queryClient.invalidateQueries({ queryKey: ['/api/finance/transactions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/finance/summary'] });
+      // Invalidate all reports queries so payroll expenses appear immediately
+      queryClient.invalidateQueries({ queryKey: ['/api/reports'] });
     },
     onError: () => {
       toast({ title: "Gagal mengupdate status payroll", variant: "destructive" });
