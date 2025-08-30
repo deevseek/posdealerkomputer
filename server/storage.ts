@@ -430,6 +430,24 @@ export class DatabaseStorage implements IStorage {
             userId: transactionData.userId,
           });
         }
+
+        // Create financial record via new finance manager
+        try {
+          const { financeManager } = await import('./financeManager');
+          await financeManager.createTransaction({
+            type: 'income',
+            category: 'Sales Revenue',
+            subcategory: 'Product Sales',
+            amount: transaction.total,
+            description: `Penjualan ${transaction.transactionNumber}`,
+            referenceType: 'sale',
+            reference: transaction.id,
+            paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
+            userId: transactionData.userId
+          });
+        } catch (error) {
+          console.error("Error creating financial record via finance manager:", error);
+        }
       }
       
       return transaction;
@@ -504,27 +522,7 @@ export class DatabaseStorage implements IStorage {
     return movement;
   }
 
-  // Financial Records
-  async getFinancialRecords(startDate?: Date, endDate?: Date): Promise<FinancialRecord[]> {
-    const baseQuery = db.select().from(financialRecords);
-    let query = baseQuery;
-    
-    if (startDate && endDate) {
-      query = query.where(
-        and(
-          gte(financialRecords.createdAt, startDate),
-          lte(financialRecords.createdAt, endDate)
-        )
-      );
-    }
-    
-    return await query.orderBy(desc(financialRecords.createdAt));
-  }
-
-  async createFinancialRecord(recordData: InsertFinancialRecord): Promise<FinancialRecord> {
-    const [record] = await db.insert(financialRecords).values(recordData).returning();
-    return record;
-  }
+  // Note: Financial Records now handled by FinanceManager
 
   // Dashboard Statistics
   // Reports
@@ -606,48 +604,67 @@ export class DatabaseStorage implements IStorage {
     profit: string;
     records: any[];
   }> {
-    const [incomeResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .where(
-        and(
-          eq(financialRecords.type, 'income'),
-          gte(financialRecords.createdAt, startDate),
-          lte(financialRecords.createdAt, endDate)
+    try {
+      const { financeManager } = await import('./financeManager');
+      
+      const summary = await financeManager.getSummary(startDate, endDate);
+      const records = await financeManager.getTransactions({
+        startDate,
+        endDate
+      });
+
+      return {
+        totalIncome: summary.totalIncome,
+        totalExpense: summary.totalExpense,
+        profit: summary.netProfit,
+        records
+      };
+    } catch (error) {
+      console.error("Error getting financial report from finance manager:", error);
+      // Fallback to old method
+      const [incomeResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      const [expenseResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'expense'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      const records = await db
+        .select()
+        .from(financialRecords)
+        .where(
+          and(
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
         )
-      );
+        .orderBy(desc(financialRecords.createdAt));
 
-    const [expenseResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .where(
-        and(
-          eq(financialRecords.type, 'expense'),
-          gte(financialRecords.createdAt, startDate),
-          lte(financialRecords.createdAt, endDate)
-        )
-      );
+      const totalIncome = Number(incomeResult.total || 0);
+      const totalExpense = Number(expenseResult.total || 0);
 
-    const records = await db
-      .select()
-      .from(financialRecords)
-      .where(
-        and(
-          gte(financialRecords.createdAt, startDate),
-          lte(financialRecords.createdAt, endDate)
-        )
-      )
-      .orderBy(desc(financialRecords.createdAt));
-
-    const totalIncome = Number(incomeResult.total || 0);
-    const totalExpense = Number(expenseResult.total || 0);
-
-    return {
-      totalIncome: totalIncome.toString(),
-      totalExpense: totalExpense.toString(),
-      profit: (totalIncome - totalExpense).toString(),
-      records
-    };
+      return {
+        totalIncome: totalIncome.toString(),
+        totalExpense: totalExpense.toString(),
+        profit: (totalIncome - totalExpense).toString(),
+        records
+      };
+    }
   }
 
   async getInventoryReport(): Promise<{
@@ -731,30 +748,39 @@ export class DatabaseStorage implements IStorage {
         )
       );
     
-    // Monthly profit (simplified - sales minus purchases)
-    const [monthlySalesResult] = await db
-      .select({ total: sum(transactions.total) })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.type, 'sale'),
-          gte(transactions.createdAt, startOfMonth)
-        )
-      );
-    
-    const [monthlyPurchasesResult] = await db
-      .select({ total: sum(transactions.total) })
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.type, 'purchase'),
-          gte(transactions.createdAt, startOfMonth)
-        )
-      );
-    
-    const monthlySales = Number(monthlySalesResult.total || 0);
-    const monthlyPurchases = Number(monthlyPurchasesResult.total || 0);
-    const monthlyProfit = monthlySales - monthlyPurchases;
+    // Monthly profit from finance manager
+    let monthlyProfit = 0;
+    try {
+      const { financeManager } = await import('./financeManager');
+      const summary = await financeManager.getSummary(startOfMonth, new Date());
+      monthlyProfit = Number(summary.netProfit || 0);
+    } catch (error) {
+      console.error("Error getting monthly profit from finance manager:", error);
+      // Fallback to transaction-based calculation
+      const [monthlySalesResult] = await db
+        .select({ total: sum(transactions.total) })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.type, 'sale'),
+            gte(transactions.createdAt, startOfMonth)
+          )
+        );
+      
+      const [monthlyPurchasesResult] = await db
+        .select({ total: sum(transactions.total) })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.type, 'purchase'),
+            gte(transactions.createdAt, startOfMonth)
+          )
+        );
+      
+      const monthlySales = Number(monthlySalesResult.total || 0);
+      const monthlyPurchases = Number(monthlyPurchasesResult.total || 0);
+      monthlyProfit = monthlySales - monthlyPurchases;
+    }
     
     return {
       todaySales: todaySalesResult.total || '0',

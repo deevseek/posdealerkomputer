@@ -472,34 +472,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Financial Record routes
-  app.get('/api/financial-records', isAuthenticated, async (req, res) => {
-    try {
-      const { startDate, endDate } = req.query;
-      const start = startDate ? new Date(startDate as string) : undefined;
-      const end = endDate ? new Date(endDate as string) : undefined;
-      
-      const records = await storage.getFinancialRecords(start, end);
-      res.json(records);
-    } catch (error) {
-      console.error("Error fetching financial records:", error);
-      res.status(500).json({ message: "Failed to fetch financial records" });
-    }
-  });
-
-  app.post('/api/financial-records', isAuthenticated, async (req: any, res) => {
-    try {
-      const recordData = insertFinancialRecordSchema.parse(req.body);
-      const record = await storage.createFinancialRecord({
-        ...recordData,
-        userId: req.user.claims.sub,
-      });
-      res.json(record);
-    } catch (error) {
-      console.error("Error creating financial record:", error);
-      res.status(500).json({ message: "Failed to create financial record" });
-    }
-  });
 
   // User Management routes
   app.get('/api/users', isAuthenticated, async (req, res) => {
