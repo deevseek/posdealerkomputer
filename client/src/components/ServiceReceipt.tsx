@@ -99,18 +99,18 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
 
   const handlePrint = () => {
     try {
-      // Buat CSS untuk print yang lebih besar dan 1 halaman
+      // Buat CSS untuk print yang kompak dalam 1 halaman
       const thermalWidth = paperSizes[paperSize].width;
-      const printWidth = thermalWidth * 3; // Perbesar 3x untuk preview yang lebih besar
-      const fontSize = paperSize === '58' ? '14px' : paperSize === '80' ? '16px' : '18px';
+      const printWidth = Math.min(thermalWidth * 2.5, 120); // Maksimal 120mm agar tidak terlalu lebar
+      const fontSize = paperSize === '58' ? '11px' : paperSize === '80' ? '12px' : '13px';
       
       const printStyle = `
         <style id="thermal-print-style">
           @media print {
             * { 
               visibility: hidden; 
-              margin: 0; 
-              padding: 0;
+              margin: 0 !important; 
+              padding: 0 !important;
               box-sizing: border-box;
             }
             #service-receipt-content, 
@@ -120,22 +120,23 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
             #service-receipt-content {
               position: absolute;
               left: 50%;
-              top: 0;
+              top: 5mm;
               transform: translateX(-50%);
               width: ${printWidth}mm;
               max-width: ${printWidth}mm;
               font-family: 'Courier New', monospace;
               font-size: ${fontSize};
-              line-height: 1.2;
+              line-height: 1.1;
               color: #000;
               background: #fff;
+              page-break-inside: avoid;
             }
             .no-print { 
               display: none !important; 
             }
             @page {
               size: A4 portrait;
-              margin: 10mm;
+              margin: 5mm;
             }
             .text-center { text-align: center; }
             .font-bold { font-weight: bold; }
@@ -145,16 +146,18 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
             .items-center { align-items: center; }
             .border-t { 
               border-top: 1px dashed #333; 
-              margin: 6px 0; 
+              margin: 2px 0 !important; 
             }
             .border-solid { border-style: solid; }
             .border-gray-800 { border-color: #333; }
             .text-gray-600 { color: #666; }
-            .space-y-1 > * + * { margin-top: 3px; }
-            .py-2 { padding: 6px 0; }
-            .my-2 { margin: 6px 0; }
-            .mb-2 { margin-bottom: 6px; }
-            .mt-6 { margin-top: 12px; }
+            .space-y-1 > * + * { margin-top: 1px !important; }
+            .py-2 { padding: 2px 0 !important; }
+            .my-2 { margin: 2px 0 !important; }
+            .mb-2 { margin-bottom: 2px !important; }
+            .mt-6 { margin-top: 4px !important; }
+            h3 { font-size: ${fontSize}; margin: 2px 0 !important; }
+            div { margin: 1px 0 !important; }
           }
           @media screen {
             #thermal-print-style { display: none; }
