@@ -1,4 +1,5 @@
 import { useState } from "react";
+import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import Sidebar from "@/components/layout/sidebar";
@@ -35,24 +36,30 @@ export default function Settings() {
   const form = useForm({
     resolver: zodResolver(storeConfigFormSchema),
     defaultValues: {
-      name: storeConfig?.name || "",
-      address: storeConfig?.address || "",
-      phone: storeConfig?.phone || "",
-      email: storeConfig?.email || "",
-      taxRate: storeConfig?.taxRate?.toString() || "11.0",
-      defaultDiscount: storeConfig?.defaultDiscount?.toString() || "0.0",
-      logo: storeConfig?.logo || "",
+      name: "",
+      address: "",
+      phone: "",
+      email: "",
+      taxRate: "11.0",
+      defaultDiscount: "0.0",
+      logo: "",
     },
-    values: storeConfig ? {
-      name: storeConfig.name || "",
-      address: storeConfig.address || "",
-      phone: storeConfig.phone || "",
-      email: storeConfig.email || "",
-      taxRate: storeConfig.taxRate?.toString() || "11.0",
-      defaultDiscount: storeConfig.defaultDiscount?.toString() || "0.0",
-      logo: storeConfig.logo || "",
-    } : undefined,
   });
+
+  // Update form values when storeConfig data loads
+  React.useEffect(() => {
+    if (storeConfig) {
+      form.reset({
+        name: storeConfig.name || "",
+        address: storeConfig.address || "",
+        phone: storeConfig.phone || "",
+        email: storeConfig.email || "",
+        taxRate: storeConfig.taxRate?.toString() || "11.0",
+        defaultDiscount: storeConfig.defaultDiscount?.toString() || "0.0",
+        logo: storeConfig.logo || "",
+      });
+    }
+  }, [storeConfig, form]);
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: any) => {
