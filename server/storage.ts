@@ -9,6 +9,7 @@ import {
   transactions,
   transactionItems,
   serviceTickets,
+  serviceTicketParts,
   stockMovements,
   financialRecords,
   type User,
@@ -31,6 +32,8 @@ import {
   type InsertTransactionItem,
   type ServiceTicket,
   type InsertServiceTicket,
+  type ServiceTicketPart,
+  type InsertServiceTicketPart,
   type StockMovement,
   type InsertStockMovement,
   type FinancialRecord,
@@ -477,33 +480,126 @@ export class DatabaseStorage implements IStorage {
     return ticket;
   }
 
-  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>): Promise<ServiceTicket> {
-    const [ticket] = await db
-      .update(serviceTickets)
-      .set({ ...ticketData, updatedAt: new Date() })
-      .where(eq(serviceTickets.id, id))
-      .returning();
-    
-    // Auto-record financial transaction for completed services
-    if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
-      const amount = ticket.actualCost || ticket.estimatedCost;
+  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[]): Promise<ServiceTicket> {
+    return await db.transaction(async (tx) => {
+      const [ticket] = await tx
+        .update(serviceTickets)
+        .set({ ...ticketData, updatedAt: new Date() })
+        .where(eq(serviceTickets.id, id))
+        .returning();
       
-      if (amount && parseFloat(amount) > 0) {
-        try {
-          const { financeManager } = await import('./financeManager');
-          await financeManager.recordServiceIncome(
-            ticket.id,
-            amount,
-            `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
-            '46332812'
-          );
-        } catch (error) {
-          console.error("Error recording service income:", error);
+      // Handle parts if provided
+      if (parts && parts.length > 0) {
+        // Clear existing parts
+        await tx.delete(serviceTicketParts).where(eq(serviceTicketParts.serviceTicketId, id));
+        
+        let totalPartsCost = 0;
+        
+        // Add new parts and update stock
+        for (const part of parts) {
+          // Check if product has enough stock
+          const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
+          
+          if (!product) {
+            throw new Error(`Product dengan ID ${part.productId} tidak ditemukan`);
+          }
+          
+          if (product.stock < part.quantity) {
+            throw new Error(`Stock ${product.name} tidak cukup. Tersedia: ${product.stock}, Diperlukan: ${part.quantity}`);
+          }
+          
+          // Use product selling price as default
+          const unitPrice = part.unitPrice || product.sellingPrice || '0';
+          const totalPrice = (parseFloat(unitPrice) * part.quantity).toString();
+          
+          // Insert service ticket part
+          await tx.insert(serviceTicketParts).values({
+            serviceTicketId: id,
+            productId: part.productId,
+            quantity: part.quantity,
+            unitPrice: unitPrice,
+            totalPrice: totalPrice
+          });
+          
+          // Update product stock
+          await tx.update(products)
+            .set({ 
+              stock: product.stock - part.quantity,
+              updatedAt: new Date()
+            })
+            .where(eq(products.id, part.productId));
+          
+          // Record stock movement
+          await tx.insert(stockMovements).values({
+            productId: part.productId,
+            type: 'out',
+            quantity: part.quantity,
+            reference: id,
+            notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
+            userId: '46332812'
+          });
+          
+          totalPartsCost += parseFloat(totalPrice);
+        }
+        
+        // Update ticket with parts cost
+        const currentLaborCost = parseFloat(ticket.laborCost || '0');
+        const newActualCost = (currentLaborCost + totalPartsCost).toString();
+        
+        await tx.update(serviceTickets)
+          .set({ 
+            partsCost: totalPartsCost.toString(),
+            actualCost: newActualCost,
+            updatedAt: new Date()
+          })
+          .where(eq(serviceTickets.id, id));
+          
+        ticket.partsCost = totalPartsCost.toString();
+        ticket.actualCost = newActualCost;
+      }
+      
+      // Auto-record financial transaction for completed services
+      if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
+        const amount = ticket.actualCost || ticket.estimatedCost;
+        
+        if (amount && parseFloat(amount) > 0) {
+          try {
+            const { financeManager } = await import('./financeManager');
+            await financeManager.recordServiceIncome(
+              ticket.id,
+              amount,
+              `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
+              '46332812'
+            );
+          } catch (error) {
+            console.error("Error recording service income:", error);
+          }
         }
       }
-    }
+      
+      return ticket;
+    });
+  }
+
+  // Service Ticket Parts
+  async getServiceTicketParts(serviceTicketId: string): Promise<(ServiceTicketPart & { productName: string })[]> {
+    const parts = await db
+      .select({
+        id: serviceTicketParts.id,
+        serviceTicketId: serviceTicketParts.serviceTicketId,
+        productId: serviceTicketParts.productId,
+        quantity: serviceTicketParts.quantity,
+        unitPrice: serviceTicketParts.unitPrice,
+        totalPrice: serviceTicketParts.totalPrice,
+        createdAt: serviceTicketParts.createdAt,
+        productName: products.name
+      })
+      .from(serviceTicketParts)
+      .innerJoin(products, eq(serviceTicketParts.productId, products.id))
+      .where(eq(serviceTicketParts.serviceTicketId, serviceTicketId))
+      .orderBy(desc(serviceTicketParts.createdAt));
     
-    return ticket;
+    return parts;
   }
 
   // Stock Movements

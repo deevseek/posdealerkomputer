@@ -381,7 +381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       
       // Manual validation and transformation
-      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost } = req.body;
+      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost } = req.body;
       
       const ticketData = {
         customerId: customerId || "",
@@ -394,7 +394,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: status || 'pending',
         technicianId: technicianId || null,
         estimatedCost: estimatedCost ? String(estimatedCost) : null,
+        laborCost: laborCost ? String(laborCost) : null,
         actualCost: null,
+        partsCost: null,
         estimatedCompletion: null,
         completedAt: null,
       };
@@ -421,7 +423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Raw update body:", JSON.stringify(req.body, null, 2));
       
       // Manual validation and transformation for update
-      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost } = req.body;
+      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost, parts } = req.body;
       
       const ticketData: any = {};
       
@@ -435,14 +437,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status !== undefined) ticketData.status = status;
       if (technicianId !== undefined) ticketData.technicianId = technicianId || null;
       if (estimatedCost !== undefined) ticketData.estimatedCost = estimatedCost ? String(estimatedCost) : null;
+      if (laborCost !== undefined) ticketData.laborCost = laborCost ? String(laborCost) : null;
       
       console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
       
-      const ticket = await storage.updateServiceTicket(req.params.id, ticketData);
+      const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts);
       res.json(ticket);
     } catch (error) {
       console.error("Error updating service ticket:", error);
-      res.status(500).json({ message: "Failed to update service ticket" });
+      res.status(500).json({ message: error instanceof Error ? error.message : "Failed to update service ticket" });
+    }
+  });
+
+  // Get parts for a service ticket
+  app.get('/api/service-tickets/:id/parts', isAuthenticated, async (req, res) => {
+    try {
+      const parts = await storage.getServiceTicketParts(req.params.id);
+      res.json(parts);
+    } catch (error) {
+      console.error("Error fetching service ticket parts:", error);
+      res.status(500).json({ message: "Failed to fetch service ticket parts" });
     }
   });
 

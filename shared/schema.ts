@@ -160,12 +160,25 @@ export const serviceTickets = pgTable("service_tickets", {
   solution: text("solution"),
   estimatedCost: decimal("estimated_cost", { precision: 12, scale: 2 }),
   actualCost: decimal("actual_cost", { precision: 12, scale: 2 }),
+  laborCost: decimal("labor_cost", { precision: 12, scale: 2 }),
+  partsCost: decimal("parts_cost", { precision: 12, scale: 2 }),
   status: serviceStatusEnum("status").default('pending'),
   technicianId: varchar("technician_id").references(() => users.id),
   estimatedCompletion: timestamp("estimated_completion"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Service Ticket Parts - Track parts used in service repairs
+export const serviceTicketParts = pgTable("service_ticket_parts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceTicketId: varchar("service_ticket_id").references(() => serviceTickets.id).notNull(),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Stock Movements
@@ -463,6 +476,11 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements).omit
   createdAt: true,
 });
 
+export const insertServiceTicketPartSchema = createInsertSchema(serviceTicketParts).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertFinancialRecordSchema = createInsertSchema(financialRecords).omit({
   id: true,
   createdAt: true,
@@ -520,6 +538,8 @@ export type InsertServiceTicket = z.infer<typeof insertServiceTicketSchema>;
 export type ServiceTicket = typeof serviceTickets.$inferSelect;
 export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 export type StockMovement = typeof stockMovements.$inferSelect;
+export type InsertServiceTicketPart = z.infer<typeof insertServiceTicketPartSchema>;
+export type ServiceTicketPart = typeof serviceTicketParts.$inferSelect;
 export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
 export type FinancialRecord = typeof financialRecords.$inferSelect;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;

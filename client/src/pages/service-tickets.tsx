@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -45,6 +46,7 @@ import { serviceTickets, type ServiceTicket, type Customer } from "@shared/schem
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { ServicePartsSelector } from "@/components/service-parts-selector";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,
@@ -53,11 +55,22 @@ const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   updatedAt: true,
   estimatedCost: true,
   actualCost: true,
+  partsCost: true,
   completedAt: true,
   estimatedCompletion: true,
 }).extend({
   estimatedCost: z.string().optional(),
+  laborCost: z.string().optional(),
 });
+
+interface ServicePart {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: string;
+  totalPrice: string;
+  stock: number;
+}
 
 type ServiceTicketStatus = "pending" | "in_progress" | "completed" | "delivered" | "cancelled";
 
@@ -83,6 +96,7 @@ export default function ServiceTickets() {
   const [statusFilter, setStatusFilter] = useState<ServiceTicketStatus | "all">("all");
   const [showDialog, setShowDialog] = useState(false);
   const [editingTicket, setEditingTicket] = useState<ServiceTicket | null>(null);
+  const [selectedParts, setSelectedParts] = useState<ServicePart[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -198,10 +212,19 @@ export default function ServiceTickets() {
   });
 
   const handleSubmit = (data: any) => {
+    const submitData = {
+      ...data,
+      parts: selectedParts.map(part => ({
+        productId: part.productId,
+        quantity: part.quantity,
+        unitPrice: part.unitPrice
+      }))
+    };
+    
     if (editingTicket) {
-      updateMutation.mutate({ id: editingTicket.id, data });
+      updateMutation.mutate({ id: editingTicket.id, data: submitData });
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(submitData);
     }
   };
 
@@ -217,7 +240,11 @@ export default function ServiceTickets() {
       solution: ticket.solution || "",
       status: ticket.status || "pending",
       estimatedCost: ticket.estimatedCost ? ticket.estimatedCost.toString() : "",
+      laborCost: ticket.laborCost ? ticket.laborCost.toString() : "",
     });
+    
+    // Reset parts when editing
+    setSelectedParts([]);
     setShowDialog(true);
   };
 
@@ -230,6 +257,7 @@ export default function ServiceTickets() {
   const handleNew = () => {
     setEditingTicket(null);
     form.reset();
+    setSelectedParts([]);
     setShowDialog(true);
   };
 
@@ -421,7 +449,7 @@ export default function ServiceTickets() {
 
       {/* Service Ticket Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingTicket ? "Edit Tiket Servis" : "Buat Tiket Servis Baru"}
@@ -429,6 +457,19 @@ export default function ServiceTickets() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <Tabs defaultValue="ticket-info" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="ticket-info" className="flex items-center gap-2">
+                    <Settings className="w-4 h-4" />
+                    Informasi Servis
+                  </TabsTrigger>
+                  <TabsTrigger value="spare-parts" className="flex items-center gap-2">
+                    <Package className="w-4 h-4" />
+                    Spare Parts
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="ticket-info" className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -554,7 +595,7 @@ export default function ServiceTickets() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="status"
@@ -582,6 +623,25 @@ export default function ServiceTickets() {
 
                 <FormField
                   control={form.control}
+                  name="laborCost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Biaya Tenaga Kerja</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="0" 
+                          {...field} 
+                          data-testid="input-labor-cost" 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="estimatedCost"
                   render={({ field }) => (
                     <FormItem>
@@ -599,8 +659,18 @@ export default function ServiceTickets() {
                   )}
                 />
               </div>
+                </TabsContent>
 
-              <div className="flex justify-end space-x-3 pt-6">
+                <TabsContent value="spare-parts" className="space-y-4">
+                  <ServicePartsSelector
+                    parts={selectedParts}
+                    onPartsChange={setSelectedParts}
+                    laborCost={parseFloat(form.watch("laborCost") || "0")}
+                  />
+                </TabsContent>
+              </Tabs>
+
+              <div className="flex justify-end space-x-3 pt-6 border-t">
                 <Button 
                   type="button" 
                   variant="outline" 
