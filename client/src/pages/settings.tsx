@@ -1,4 +1,5 @@
 import { useState } from "react";
+import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Store, Users, Shield, Database, MessageCircle, Settings as SettingsIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,9 +15,12 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch store config
+  // Fetch store config with proper caching
   const { data: storeConfig, isLoading: configLoading } = useQuery({
     queryKey: ['/api/store-config'],
+    staleTime: 60000, // Cache for 1 minute
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Store settings mutation
@@ -231,24 +235,33 @@ export default function Settings() {
   );
 }
 
-// WhatsApp Settings Component - Full Implementation
+// WhatsApp Settings Component - Simplified and stable
 function WhatsAppSettings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [testPhone, setTestPhone] = useState("");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   
-  // Fetch store config for WhatsApp settings
-  const { data: storeConfig, isLoading: configLoading } = useQuery({
+  // Use store config from parent component instead of fetching again
+  const { data: storeConfig } = useQuery({
     queryKey: ['/api/store-config'],
+    staleTime: 60000,
   });
   
-  const whatsappEnabled = (storeConfig as any)?.whatsappEnabled || false;
+  // Update local state when config changes
+  React.useEffect(() => {
+    if (storeConfig) {
+      setWhatsappEnabled((storeConfig as any)?.whatsappEnabled || false);
+    }
+  }, [storeConfig]);
   
-  // WhatsApp status query - only when WhatsApp is enabled
-  const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
+  // WhatsApp status query - simple fetch
+  const { data: whatsappStatus } = useQuery({
     queryKey: ['/api/whatsapp/status'],
-    refetchInterval: whatsappEnabled ? 3000 : false, // Only refresh when enabled
-    enabled: whatsappEnabled, // Only run query when WhatsApp is enabled
+    enabled: whatsappEnabled,
+    refetchInterval: whatsappEnabled ? 10000 : false, // 10 second refresh
+    staleTime: 5000,
+    refetchOnWindowFocus: false,
   });
 
   // Enable/disable WhatsApp mutation
@@ -380,15 +393,16 @@ function WhatsAppSettings() {
     testMessageMutation.mutate(testPhone);
   };
 
-  if (configLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div>Memuat pengaturan WhatsApp...</div>
-        </CardContent>
-      </Card>
-    );
-  }
+  // Show WhatsApp UI immediately since config is fetched by parent
+  // if (!storeConfig) {
+  //   return (
+  //     <Card>
+  //       <CardContent className="p-6">
+  //         <div>Memuat pengaturan WhatsApp...</div>
+  //       </CardContent>
+  //     </Card>
+  //   );
+  // }
   const whatsappConnected = (whatsappStatus as any)?.connected || false;
   const connectionState = (whatsappStatus as any)?.connectionState || 'close';
   const qrCode = (whatsappStatus as any)?.qrCode;
