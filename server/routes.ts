@@ -48,6 +48,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Reports API endpoints
+  app.get('/api/reports/sales', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const end = endDate ? new Date(endDate as string) : new Date();
+      
+      const report = await storage.getSalesReport(start, end);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching sales report:", error);
+      res.status(500).json({ message: "Failed to fetch sales report" });
+    }
+  });
+
+  app.get('/api/reports/services', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const end = endDate ? new Date(endDate as string) : new Date();
+      
+      const report = await storage.getServiceReport(start, end);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching service report:", error);
+      res.status(500).json({ message: "Failed to fetch service report" });
+    }
+  });
+
+  app.get('/api/reports/financial', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const end = endDate ? new Date(endDate as string) : new Date();
+      
+      const report = await storage.getFinancialReport(start, end);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching financial report:", error);
+      res.status(500).json({ message: "Failed to fetch financial report" });
+    }
+  });
+
+  app.get('/api/reports/inventory', isAuthenticated, async (req, res) => {
+    try {
+      const report = await storage.getInventoryReport();
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching inventory report:", error);
+      res.status(500).json({ message: "Failed to fetch inventory report" });
+    }
+  });
+
   // Store configuration routes
   app.get('/api/store-config', isAuthenticated, async (req, res) => {
     try {

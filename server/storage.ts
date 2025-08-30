@@ -114,6 +114,12 @@ export interface IStorage {
   getFinancialRecords(startDate?: Date, endDate?: Date): Promise<FinancialRecord[]>;
   createFinancialRecord(record: InsertFinancialRecord): Promise<FinancialRecord>;
   
+  // Reports
+  getSalesReport(startDate: Date, endDate: Date): Promise<{ totalSales: string; transactions: any[] }>;
+  getServiceReport(startDate: Date, endDate: Date): Promise<{ totalServices: number; tickets: any[] }>;
+  getFinancialReport(startDate: Date, endDate: Date): Promise<{ totalIncome: string; totalExpense: string; profit: string; records: any[] }>;
+  getInventoryReport(): Promise<{ lowStockCount: number; lowStockProducts: any[]; totalProducts: number }>;
+  
   // Dashboard Statistics
   getDashboardStats(): Promise<{
     todaySales: string;
@@ -454,11 +460,33 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>): Promise<ServiceTicket> {
+    // Get the current ticket to check status change
+    const currentTicket = await this.getServiceTicketById(id);
+    
     const [ticket] = await db
       .update(serviceTickets)
       .set({ ...ticketData, updatedAt: new Date() })
       .where(eq(serviceTickets.id, id))
       .returning();
+    
+    // If status changed to completed or delivered, create financial record
+    if (ticket && currentTicket && 
+        (ticket.status === 'completed' || ticket.status === 'delivered') &&
+        currentTicket.status !== 'completed' && currentTicket.status !== 'delivered') {
+      
+      const amount = ticket.estimatedCost || ticket.actualCost;
+      if (amount && parseFloat(amount) > 0) {
+        await this.createFinancialRecord({
+          type: 'income',
+          category: 'Servis Repair',
+          amount: amount,
+          description: `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
+          reference: ticket.id,
+          userId: '46332812', // TODO: Get from authenticated user
+        });
+      }
+    }
+    
     return ticket;
   }
 
@@ -501,6 +529,171 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Dashboard Statistics
+  // Reports
+  async getSalesReport(startDate: Date, endDate: Date): Promise<{
+    totalSales: string;
+    transactions: any[];
+  }> {
+    const [totalResult] = await db
+      .select({ total: sum(transactions.total) })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.type, 'sale'),
+          gte(transactions.createdAt, startDate),
+          lte(transactions.createdAt, endDate)
+        )
+      );
+
+    const transactionList = await db
+      .select()
+      .from(transactions)
+      .leftJoin(customers, eq(transactions.customerId, customers.id))
+      .where(
+        and(
+          eq(transactions.type, 'sale'),
+          gte(transactions.createdAt, startDate),
+          lte(transactions.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(transactions.createdAt));
+
+    return {
+      totalSales: totalResult.total || '0',
+      transactions: transactionList.map(t => ({
+        ...t.transactions,
+        customer: t.customers
+      }))
+    };
+  }
+
+  async getServiceReport(startDate: Date, endDate: Date): Promise<{
+    totalServices: number;
+    tickets: any[];
+  }> {
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(serviceTickets)
+      .where(
+        and(
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      );
+
+    const ticketList = await db
+      .select()
+      .from(serviceTickets)
+      .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
+      .where(
+        and(
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(serviceTickets.createdAt));
+
+    return {
+      totalServices: totalResult.count,
+      tickets: ticketList.map(t => ({
+        ...t.service_tickets,
+        customer: t.customers
+      }))
+    };
+  }
+
+  async getFinancialReport(startDate: Date, endDate: Date): Promise<{
+    totalIncome: string;
+    totalExpense: string;
+    profit: string;
+    records: any[];
+  }> {
+    const [incomeResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(
+        and(
+          eq(financialRecords.type, 'income'),
+          gte(financialRecords.createdAt, startDate),
+          lte(financialRecords.createdAt, endDate)
+        )
+      );
+
+    const [expenseResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(
+        and(
+          eq(financialRecords.type, 'expense'),
+          gte(financialRecords.createdAt, startDate),
+          lte(financialRecords.createdAt, endDate)
+        )
+      );
+
+    const records = await db
+      .select()
+      .from(financialRecords)
+      .where(
+        and(
+          gte(financialRecords.createdAt, startDate),
+          lte(financialRecords.createdAt, endDate)
+        )
+      )
+      .orderBy(desc(financialRecords.createdAt));
+
+    const totalIncome = Number(incomeResult.total || 0);
+    const totalExpense = Number(expenseResult.total || 0);
+
+    return {
+      totalIncome: totalIncome.toString(),
+      totalExpense: totalExpense.toString(),
+      profit: (totalIncome - totalExpense).toString(),
+      records
+    };
+  }
+
+  async getInventoryReport(): Promise<{
+    lowStockCount: number;
+    lowStockProducts: any[];
+    totalProducts: number;
+  }> {
+    const [lowStockResult] = await db
+      .select({ count: count() })
+      .from(products)
+      .where(
+        and(
+          eq(products.isActive, true),
+          sql`${products.stock} <= ${products.minStock}`
+        )
+      );
+
+    const lowStockProducts = await db
+      .select()
+      .from(products)
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(
+        and(
+          eq(products.isActive, true),
+          sql`${products.stock} <= ${products.minStock}`
+        )
+      )
+      .orderBy(products.stock);
+
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(products)
+      .where(eq(products.isActive, true));
+
+    return {
+      lowStockCount: lowStockResult.count,
+      lowStockProducts: lowStockProducts.map(p => ({
+        ...p.products,
+        category: p.categories
+      })),
+      totalProducts: totalResult.count
+    };
+  }
+
   async getDashboardStats(): Promise<{
     todaySales: string;
     activeServices: number;
