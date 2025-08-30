@@ -19,6 +19,7 @@ import StockMovements from "@/pages/stock-movements";
 import Settings from "@/pages/settings";
 import RolesPage from "@/pages/roles";
 import UsersPage from "@/pages/users";
+import ServiceStatus from "@/pages/ServiceStatus";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -44,6 +45,7 @@ function Router() {
           <Route path="/settings" component={Settings} />
         </>
       )}
+      <Route path="/service-status" component={ServiceStatus} />
       <Route component={NotFound} />
     </Switch>
   );

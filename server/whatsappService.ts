@@ -159,12 +159,17 @@ export class WhatsAppService {
   }
 
   // Service notification templates
-  async sendServiceCreatedNotification(customerPhone: string, customerName: string, serviceId: string, description: string) {
+  async sendServiceCreatedNotification(customerPhone: string, customerName: string, serviceNumber: string, description: string) {
+    const statusUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] ? 'https://' + process.env.REPLIT_DOMAINS.split(',')[0] : 'http://localhost:5000'}/service-status`;
+    
     const message = `Halo ${customerName},
 
 Service laptop Anda telah kami terima dengan detail:
-📝 ID Service: ${serviceId}
+📝 Nomor Service: ${serviceNumber}
 🔧 Deskripsi: ${description}
+
+🔍 Cek status service Anda kapan saja:
+${statusUrl}
 
 Kami akan segera memproses service Anda. Terima kasih telah mempercayakan laptop Anda kepada kami.
 
@@ -173,12 +178,12 @@ Kami akan segera memproses service Anda. Terima kasih telah mempercayakan laptop
     return await this.sendMessage(customerPhone, message);
   }
 
-  async sendServiceStatusNotification(customerPhone: string, customerName: string, serviceId: string, status: string, description: string) {
+  async sendServiceStatusNotification(customerPhone: string, customerName: string, serviceNumber: string, status: string, description: string) {
     let statusText = '';
     let emoji = '';
     
     switch (status) {
-      case 'in_progress':
+      case 'in-progress':
         statusText = 'sedang dikerjakan';
         emoji = '🔧';
         break;
@@ -186,27 +191,36 @@ Kami akan segera memproses service Anda. Terima kasih telah mempercayakan laptop
         statusText = 'telah selesai dikerjakan';
         emoji = '✅';
         break;
-      case 'delivered':
-        statusText = 'telah diserahkan';
-        emoji = '📦';
-        break;
       case 'cancelled':
         statusText = 'dibatalkan';
         emoji = '❌';
+        break;
+      case 'waiting-parts':
+        statusText = 'menunggu sparepart';
+        emoji = '📦';
+        break;
+      case 'waiting-payment':
+        statusText = 'menunggu pembayaran';
+        emoji = '💳';
         break;
       default:
         statusText = status;
         emoji = '📋';
     }
 
+    const statusUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] ? 'https://' + process.env.REPLIT_DOMAINS.split(',')[0] : 'http://localhost:5000'}/service-status`;
+
     const message = `Halo ${customerName},
 
 Update status service laptop Anda:
-📝 ID Service: ${serviceId}
+📝 Nomor Service: ${serviceNumber}
 ${emoji} Status: Service ${statusText}
 🔧 Deskripsi: ${description}
 
-${status === 'completed' ? 'Laptop Anda sudah siap diambil!' : status === 'delivered' ? 'Terima kasih telah menggunakan layanan kami!' : ''}
+🔍 Cek detail lengkap service Anda:
+${statusUrl}
+
+${status === 'completed' ? 'Laptop Anda sudah siap diambil!' : status === 'cancelled' ? 'Hubungi kami jika ada pertanyaan.' : ''}
 
 - LaptopPOS Service Center`;
 

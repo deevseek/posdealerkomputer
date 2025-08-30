@@ -850,8 +850,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await whatsappService.sendServiceCreatedNotification(
                 customer.phone,
                 customer.name,
-                ticket.ticketNumber || ticket.id,
-                `${ticket.deviceType} - ${ticket.problem}`
+                ticket.serviceNumber,
+                `${ticket.device} - ${ticket.problem}`
               );
             }
           }
@@ -905,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 await whatsappService.sendServiceStatusNotification(
                   customer.phone,
                   customer.name,
-                  ticket.ticketNumber || ticket.id,
+                  ticket.serviceNumber,
                   status,
                   `${ticket.deviceType} - ${ticket.problem}`
                 );
@@ -1378,6 +1378,53 @@ Terima kasih!
     } catch (error) {
       console.error('Error sending test message:', error);
       res.status(500).json({ message: 'Failed to send test message' });
+    }
+  });
+
+  // Public API for customers to check service status
+  app.get('/api/public/service-status/:serviceNumber', async (req, res) => {
+    try {
+      const { serviceNumber } = req.params;
+      
+      if (!serviceNumber) {
+        return res.status(400).json({ message: 'Service number is required' });
+      }
+
+      // Get service ticket with customer info
+      const serviceTickets = await storage.getServiceTickets();
+      const service = serviceTickets.find(s => s.serviceNumber === serviceNumber);
+      
+      if (!service) {
+        return res.status(404).json({ message: 'Service not found' });
+      }
+
+      // Get customer info
+      const customer = service.customerId ? await storage.getCustomerById(service.customerId) : null;
+      
+      // Get used parts
+      const parts = await storage.getServiceTicketParts(service.id);
+      
+      // Return limited info for customer
+      res.json({
+        serviceNumber: service.serviceNumber,
+        customerName: customer?.name || service.customerName,
+        device: service.device,
+        problem: service.problem,
+        diagnosis: service.diagnosis,
+        status: service.status,
+        estimatedCompletion: service.estimatedCompletion,
+        completedAt: service.completedAt,
+        totalCost: service.totalCost,
+        createdAt: service.createdAt,
+        parts: parts.map(part => ({
+          name: part.product.name,
+          quantity: part.quantity,
+          unitPrice: part.unitPrice
+        }))
+      });
+    } catch (error) {
+      console.error('Error getting service status:', error);
+      res.status(500).json({ message: 'Failed to get service status' });
     }
   });
 

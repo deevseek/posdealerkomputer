@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -47,6 +47,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { ServicePartsSelector } from "@/components/service-parts-selector";
+import ServiceReceipt from "@/components/ServiceReceipt";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,

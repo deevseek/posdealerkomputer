@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Printer, Mail, X } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface ReceiptModalProps {
   open: boolean;
@@ -15,6 +16,12 @@ interface ReceiptModalProps {
 
 export default function ReceiptModal({ open, onClose, transaction }: ReceiptModalProps) {
   if (!transaction) return null;
+
+  // Get store config for receipt header
+  const { data: storeConfig } = useQuery({
+    queryKey: ['/api/store-config'],
+    retry: false,
+  });
 
   const handlePrint = () => {
     window.print();
@@ -45,14 +52,21 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
         <div className="space-y-6" id="receipt-content">
           <div className="text-center">
             <h3 className="text-lg font-bold" data-testid="text-store-name">
-              LaptopPOS Service Center
+              {(storeConfig as any)?.name || 'LaptopPOS Service Center'}
             </h3>
-            <p className="text-xs text-muted-foreground">
-              Jl. Teknologi No. 123, Jakarta
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Phone: (021) 12345678
-            </p>
+            {(storeConfig as any)?.address && (
+              <p className="text-xs text-muted-foreground" data-testid="text-store-address">
+                {(storeConfig as any).address}
+              </p>
+            )}
+            <div className="flex justify-center gap-4 text-xs text-muted-foreground">
+              {(storeConfig as any)?.phone && (
+                <span data-testid="text-store-phone">Phone: {(storeConfig as any).phone}</span>
+              )}
+              {(storeConfig as any)?.email && (
+                <span data-testid="text-store-email">Email: {(storeConfig as any).email}</span>
+              )}
+            </div>
           </div>
 
           <div className="border-t border-b py-4 space-y-2">
