@@ -99,20 +99,19 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
 
   const handlePrint = () => {
     try {
-      // Simpan CSS asli
-      const originalStyle = document.head.innerHTML;
-      
-      // Buat CSS untuk print
+      // Buat CSS untuk print yang lebih besar dan 1 halaman
       const thermalWidth = paperSizes[paperSize].width;
-      const fontSize = paperSize === '58' ? '10px' : paperSize === '80' ? '12px' : '14px';
+      const printWidth = thermalWidth * 3; // Perbesar 3x untuk preview yang lebih besar
+      const fontSize = paperSize === '58' ? '14px' : paperSize === '80' ? '16px' : '18px';
       
       const printStyle = `
-        <style>
+        <style id="thermal-print-style">
           @media print {
             * { 
               visibility: hidden; 
               margin: 0; 
               padding: 0;
+              box-sizing: border-box;
             }
             #service-receipt-content, 
             #service-receipt-content * { 
@@ -120,44 +119,63 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
             }
             #service-receipt-content {
               position: absolute;
-              left: 0;
+              left: 50%;
               top: 0;
-              width: ${thermalWidth}mm;
+              transform: translateX(-50%);
+              width: ${printWidth}mm;
+              max-width: ${printWidth}mm;
               font-family: 'Courier New', monospace;
               font-size: ${fontSize};
-              line-height: 1.4;
+              line-height: 1.2;
+              color: #000;
+              background: #fff;
             }
             .no-print { 
               display: none !important; 
             }
             @page {
-              size: ${thermalWidth}mm auto;
-              margin: 2mm;
+              size: A4 portrait;
+              margin: 10mm;
             }
             .text-center { text-align: center; }
             .font-bold { font-weight: bold; }
             .flex { display: flex; }
+            .flex-1 { flex: 1; }
             .justify-between { justify-content: space-between; }
-            .border-t { border-top: 1px dashed #333; margin: 4px 0; }
+            .items-center { align-items: center; }
+            .border-t { 
+              border-top: 1px dashed #333; 
+              margin: 6px 0; 
+            }
             .border-solid { border-style: solid; }
+            .border-gray-800 { border-color: #333; }
             .text-gray-600 { color: #666; }
-            .space-y-1 > * + * { margin-top: 2px; }
-            .py-2 { padding: 4px 0; }
-            .my-2 { margin: 4px 0; }
+            .space-y-1 > * + * { margin-top: 3px; }
+            .py-2 { padding: 6px 0; }
+            .my-2 { margin: 6px 0; }
+            .mb-2 { margin-bottom: 6px; }
+            .mt-6 { margin-top: 12px; }
+          }
+          @media screen {
+            #thermal-print-style { display: none; }
           }
         </style>
       `;
       
-      // Tambahkan CSS print
+      // Hapus style print lama jika ada
+      const oldStyle = document.getElementById('thermal-print-style');
+      if (oldStyle) oldStyle.remove();
+      
+      // Tambahkan CSS print baru
       document.head.insertAdjacentHTML('beforeend', printStyle);
       
       // Print
       window.print();
       
-      // Restore CSS asli setelah delay
+      // Restore setelah delay
       setTimeout(() => {
-        const printStyleElement = document.head.lastElementChild;
-        if (printStyleElement?.tagName === 'STYLE') {
+        const printStyleElement = document.getElementById('thermal-print-style');
+        if (printStyleElement) {
           printStyleElement.remove();
         }
       }, 1000);
@@ -314,7 +332,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
               <div className="border-t border-dashed border-gray-400 my-2"></div>
 
               {/* Footer */}
-              <div className={`text-center ${getTextSize()} text-gray-600 space-y-1`}>
+              <div className={`text-center ${getTextSize()} text-gray-600 space-y-1 mt-6`}>
                 <div>Terima kasih atas kepercayaan Anda!</div>
                 <div>Garansi service 30 hari</div>
                 <div data-testid="text-print-date">Cetak: {format(new Date(), 'dd/MM/yy HH:mm', { locale: idLocale })}</div>
