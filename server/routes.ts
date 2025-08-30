@@ -6,7 +6,8 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
-// import htmlPdf from 'html-pdf-node';
+import htmlPdf from 'html-pdf-node';
+import * as XLSX from 'xlsx';
 import { db } from "./db";
 
 // HTML template generator for PDF reports
@@ -253,6 +254,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Export XLSX endpoint
+  app.post('/api/reports/export-xlsx', isAuthenticated, async (req, res) => {
+    try {
+      console.log('XLSX export request received');
+      const { startDate, endDate, reportData } = req.body;
+      
+      if (!reportData) {
+        return res.status(400).json({ message: "Report data is required" });
+      }
+      
+      const { salesReport, serviceReport, financialReport, inventoryReport } = reportData;
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Overview sheet
+      const overviewData = [
+        ['Laporan Bisnis LaptopPOS'],
+        ['Periode', `${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`],
+        [],
+        ['Ringkasan Keuangan'],
+        ['Total Penjualan', Number(salesReport?.totalSales || 0)],
+        ['Omset Servis', Number(serviceReport?.totalRevenue || 0)],
+        ['Total Pemasukan', Number(financialReport?.totalIncome || 0)],
+        ['Total Pengeluaran', Number(financialReport?.totalExpense || 0)],
+        ['Laba Bersih', Number(financialReport?.profit || 0)],
+        [],
+        ['Laporan Servis'],
+        ['Total Servis', serviceReport?.totalServices || 0],
+        ['Revenue Labor', Number(serviceReport?.revenueBreakdown?.laborRevenue || 0)],
+        ['Revenue Parts', Number(serviceReport?.revenueBreakdown?.partsRevenue || 0)],
+        ['Modal Parts', Number(serviceReport?.totalCost || 0)],
+        ['Laba Servis', Number(serviceReport?.totalProfit || 0)],
+        [],
+        ['Laporan Inventory'],
+        ['Total Produk', inventoryReport?.totalProducts || 0],
+        ['Stok Rendah', inventoryReport?.lowStockCount || 0],
+        ['Total Stok', inventoryReport?.totalStockQuantity || 0],
+        ['Nilai Aset', Number(inventoryReport?.totalAssetValue || 0)]
+      ];
+      
+      const ws = XLSX.utils.aoa_to_sheet(overviewData);
+      XLSX.utils.book_append_sheet(wb, ws, 'Overview');
+      
+      // Generate buffer
+      const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      
+      console.log('XLSX generated successfully, size:', buffer.length);
+      
+      // Set headers and send file
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.xlsx"`);
+      res.setHeader('Content-Length', buffer.length);
+      
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error exporting XLSX:", error);
+      res.status(500).json({ 
+        message: "Failed to export XLSX", 
+        error: error.message 
+      });
+    }
+  });
+
   // Export PDF endpoint
   app.post('/api/reports/export-pdf', isAuthenticated, async (req, res) => {
     try {
@@ -268,14 +333,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const htmlContent = generateReportHTML(reportData, startDate, endDate);
       
       console.log('Generating PDF...');
+      // Generate PDF from HTML
+      const options = { 
+        format: 'A4', 
+        margin: { top: '20mm', bottom: '20mm', left: '20mm', right: '20mm' },
+        printBackground: true
+      };
       
-      // For now, return HTML as response to test
-      // Will implement proper PDF generation after testing
-      res.setHeader('Content-Type', 'text/html');
-      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.html"`);
+      const file = { content: htmlContent };
+      const pdfBuffer = await htmlPdf.generatePdf(file, options);
       
-      // Send HTML content for testing
-      res.send(htmlContent);
+      console.log('PDF generated successfully, size:', pdfBuffer.length);
+      
+      // Set proper headers and send PDF
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      // Send PDF buffer
+      res.send(pdfBuffer);
     } catch (error) {
       console.error("Error exporting PDF:", error);
       res.status(500).json({ 

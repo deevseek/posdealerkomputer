@@ -64,7 +64,7 @@ export default function Reports() {
   const { toast } = useToast();
 
   // PDF Export mutation
-  const exportMutation = useMutation({
+  const exportPdfMutation = useMutation({
     mutationFn: async () => {
       const reportData = {
         salesReport,
@@ -90,12 +90,12 @@ export default function Reports() {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        // Handle file download (HTML for now)
+        // Handle PDF download
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `laporan-bisnis-${startDate}-${endDate}.html`;
+        link.download = `laporan-bisnis-${startDate}-${endDate}.pdf`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -109,15 +109,75 @@ export default function Reports() {
     },
     onSuccess: () => {
       toast({
-        title: "Export Berhasil",
+        title: "Export PDF Berhasil",
         description: "Laporan PDF berhasil didownload",
       });
     },
     onError: (error) => {
-      console.error('Export error:', error);
+      console.error('Export PDF error:', error);
       toast({
-        title: "Export Gagal",
-        description: "Terjadi kesalahan saat mengexport laporan",
+        title: "Export PDF Gagal",
+        description: "Terjadi kesalahan saat mengexport laporan PDF",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // XLSX Export mutation
+  const exportXlsxMutation = useMutation({
+    mutationFn: async () => {
+      const reportData = {
+        salesReport,
+        serviceReport,
+        financialReport,
+        inventoryReport
+      };
+
+      try {
+        const response = await fetch('/api/reports/export-xlsx', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            startDate,
+            endDate,
+            reportData
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        // Handle XLSX download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `laporan-bisnis-${startDate}-${endDate}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        return blob;
+      } catch (error) {
+        console.error('Export XLSX error:', error);
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      toast({
+        title: "Export XLSX Berhasil",
+        description: "Laporan Excel berhasil didownload",
+      });
+    },
+    onError: (error) => {
+      console.error('Export XLSX error:', error);
+      toast({
+        title: "Export XLSX Gagal",
+        description: "Terjadi kesalahan saat mengexport laporan Excel",
         variant: "destructive",
       });
     },
@@ -133,7 +193,20 @@ export default function Reports() {
       return;
     }
     
-    exportMutation.mutate();
+    exportPdfMutation.mutate();
+  };
+
+  const handleExportXLSX = () => {
+    if (!salesReport || !serviceReport || !financialReport || !inventoryReport) {
+      toast({
+        title: "Data Belum Siap",
+        description: "Tunggu hingga semua data selesai dimuat",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    exportXlsxMutation.mutate();
   };
 
   const handlePeriodChange = (period: string) => {
@@ -207,15 +280,28 @@ export default function Reports() {
                   disabled={selectedPeriod !== "custom"}
                 />
                 
-                <Button 
-                  className="flex items-center gap-2"
-                  onClick={handleExportPDF}
-                  disabled={exportMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
-                  data-testid="button-export-pdf"
-                >
-                  <Download className="w-4 h-4" />
-                  {exportMutation.isPending ? "Mengexport..." : "Export HTML"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    className="flex items-center gap-2"
+                    onClick={handleExportPDF}
+                    disabled={exportPdfMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
+                    data-testid="button-export-pdf"
+                  >
+                    <Download className="w-4 h-4" />
+                    {exportPdfMutation.isPending ? "Mengexport..." : "Export PDF"}
+                  </Button>
+                  
+                  <Button 
+                    variant="outline"
+                    className="flex items-center gap-2"
+                    onClick={handleExportXLSX}
+                    disabled={exportXlsxMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
+                    data-testid="button-export-xlsx"
+                  >
+                    <FileText className="w-4 h-4" />
+                    {exportXlsxMutation.isPending ? "Mengexport..." : "Export Excel"}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
