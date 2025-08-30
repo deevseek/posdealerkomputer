@@ -604,9 +604,14 @@ function WhatsAppSettings() {
   // Enable/disable WhatsApp mutation
   const toggleWhatsAppMutation = useMutation({
     mutationFn: async (enabled: boolean) => {
-      return await apiRequest(`/api/whatsapp/${enabled ? 'enable' : 'disable'}`, {
+      const response = await fetch(`/api/whatsapp/${enabled ? 'enable' : 'disable'}`, {
         method: 'POST',
+        credentials: 'include',
       });
+      if (!response.ok) {
+        throw new Error('Failed to toggle WhatsApp');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
@@ -628,9 +633,14 @@ function WhatsAppSettings() {
   // Connect WhatsApp mutation
   const connectWhatsAppMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/whatsapp/connect', {
+      const response = await fetch('/api/whatsapp/connect', {
         method: 'POST',
+        credentials: 'include',
       });
+      if (!response.ok) {
+        throw new Error('Failed to connect WhatsApp');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
@@ -651,9 +661,14 @@ function WhatsAppSettings() {
   // Disconnect WhatsApp mutation
   const disconnectWhatsAppMutation = useMutation({
     mutationFn: async () => {
-      return await apiRequest('/api/whatsapp/disconnect', {
+      const response = await fetch('/api/whatsapp/disconnect', {
         method: 'POST',
+        credentials: 'include',
       });
+      if (!response.ok) {
+        throw new Error('Failed to disconnect WhatsApp');
+      }
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
@@ -675,10 +690,18 @@ function WhatsAppSettings() {
   const [testPhone, setTestPhone] = useState("");
   const testMessageMutation = useMutation({
     mutationFn: async (phone: string) => {
-      return await apiRequest('/api/whatsapp/test-message', {
+      const response = await fetch('/api/whatsapp/test-message', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
         body: JSON.stringify({ phoneNumber: phone }),
       });
+      if (!response.ok) {
+        throw new Error('Failed to send test message');
+      }
+      return response.json();
     },
     onSuccess: () => {
       toast({
@@ -730,10 +753,10 @@ function WhatsAppSettings() {
     );
   }
 
-  const whatsappEnabled = storeConfig?.whatsappEnabled || false;
-  const whatsappConnected = whatsappStatus?.connected || false;
-  const connectionState = whatsappStatus?.connectionState || 'close';
-  const qrCode = whatsappStatus?.qrCode;
+  const whatsappEnabled = (storeConfig as any)?.whatsappEnabled || false;
+  const whatsappConnected = (whatsappStatus as any)?.connected || false;
+  const connectionState = (whatsappStatus as any)?.connectionState || 'close';
+  const qrCode = (whatsappStatus as any)?.qrCode;
 
   return (
     <Card>
