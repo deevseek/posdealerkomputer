@@ -207,10 +207,7 @@ export default function FinanceNew() {
   // Create transaction mutation
   const createTransactionMutation = useMutation({
     mutationFn: async (data: typeof transactionForm) => {
-      return apiRequest('/api/finance/transactions', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      return apiRequest('POST', '/api/finance/transactions', data);
     },
     onSuccess: () => {
       toast({ title: "Transaksi berhasil dibuat" });
@@ -235,10 +232,7 @@ export default function FinanceNew() {
   // Create employee mutation
   const createEmployeeMutation = useMutation({
     mutationFn: async (data: typeof employeeForm) => {
-      return apiRequest('/api/employees', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      return apiRequest('POST', '/api/employees', data);
     },
     onSuccess: () => {
       toast({ title: "Karyawan berhasil ditambahkan" });
@@ -264,10 +258,7 @@ export default function FinanceNew() {
   // Create payroll mutation
   const createPayrollMutation = useMutation({
     mutationFn: async (data: typeof payrollForm) => {
-      return apiRequest('/api/payroll', {
-        method: 'POST',
-        body: JSON.stringify(data)
-      });
+      return apiRequest('POST', '/api/payroll', data);
     },
     onSuccess: () => {
       toast({ title: "Payroll berhasil dibuat" });
@@ -295,10 +286,7 @@ export default function FinanceNew() {
   // Update payroll status mutation
   const updatePayrollStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      return apiRequest(`/api/payroll/${id}/status`, {
-        method: 'PUT',
-        body: JSON.stringify({ status })
-      });
+      return apiRequest('PUT', `/api/payroll/${id}/status`, { status });
     },
     onSuccess: () => {
       toast({ title: "Status payroll berhasil diupdate" });
