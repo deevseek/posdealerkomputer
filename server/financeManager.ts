@@ -253,10 +253,16 @@ export class FinanceManager {
   // Employee Management
   async createEmployee(data: InsertEmployee): Promise<Employee> {
     const employeeNumber = `EMP${Date.now().toString().slice(-6)}`;
-    const [employee] = await db.insert(employees).values({
+    
+    // Convert string date to Date object if needed
+    const processedData = {
       ...data,
-      employeeNumber
-    }).returning();
+      employeeNumber,
+      joinDate: typeof data.joinDate === 'string' ? new Date(data.joinDate) : data.joinDate,
+      endDate: data.endDate && typeof data.endDate === 'string' ? new Date(data.endDate) : data.endDate
+    };
+    
+    const [employee] = await db.insert(employees).values(processedData).returning();
     return employee;
   }
 
@@ -281,9 +287,17 @@ export class FinanceManager {
   }
 
   async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee> {
+    // Convert string dates to Date objects if needed
+    const processedData = {
+      ...data,
+      updatedAt: new Date(),
+      joinDate: data.joinDate && typeof data.joinDate === 'string' ? new Date(data.joinDate) : data.joinDate,
+      endDate: data.endDate && typeof data.endDate === 'string' ? new Date(data.endDate) : data.endDate
+    };
+    
     const [employee] = await db
       .update(employees)
-      .set({ ...data, updatedAt: new Date() })
+      .set(processedData)
       .where(eq(employees.id, id))
       .returning();
     return employee;
