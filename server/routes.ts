@@ -554,6 +554,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/products/:id/adjust-stock', isAuthenticated, async (req: any, res) => {
+    try {
+      const { quantity, notes } = req.body;
+      
+      if (!quantity || quantity <= 0) {
+        return res.status(400).json({ message: 'Quantity must be greater than 0' });
+      }
+
+      const userId = req.user.claims.sub;
+      const updatedProduct = await storage.adjustStock(req.params.id, Number(quantity), notes, userId);
+      
+      res.json(updatedProduct);
+    } catch (error) {
+      console.error("Error adjusting stock:", error);
+      res.status(500).json({ message: "Failed to adjust stock" });
+    }
+  });
+
   // Customer routes
   app.get('/api/customers', isAuthenticated, async (req, res) => {
     try {

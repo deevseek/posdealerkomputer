@@ -323,6 +323,39 @@ export class DatabaseStorage implements IStorage {
     await db.update(products).set({ isActive: false }).where(eq(products.id, id));
   }
 
+  async adjustStock(productId: string, quantity: number, notes: string, userId: string): Promise<Product> {
+    return await db.transaction(async (tx) => {
+      // Get current product
+      const [product] = await tx.select().from(products).where(eq(products.id, productId));
+      if (!product) {
+        throw new Error('Product not found');
+      }
+
+      // Update stock
+      const [updatedProduct] = await tx
+        .update(products)
+        .set({ 
+          stock: sql`${products.stock} + ${quantity}`,
+          updatedAt: new Date()
+        })
+        .where(eq(products.id, productId))
+        .returning();
+
+      // Create stock movement record
+      await tx.insert(stockMovements).values({
+        productId: productId,
+        type: 'in',
+        quantity: quantity,
+        reference: `STOCK-ADJ-${Date.now()}`,
+        referenceType: 'adjustment',
+        notes: notes || `Penambahan stock +${quantity}`,
+        userId: userId,
+      });
+
+      return updatedProduct;
+    });
+  }
+
   // Customers
   async getCustomers(): Promise<Customer[]> {
     return await db.select().from(customers).orderBy(asc(customers.name));

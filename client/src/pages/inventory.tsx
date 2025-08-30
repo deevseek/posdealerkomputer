@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Package, AlertTriangle, Edit, Trash2, Barcode } from "lucide-react";
+import { Plus, Search, Package, AlertTriangle, Edit, Trash2, Barcode, PackagePlus } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -57,12 +57,19 @@ const productFormSchema = insertProductSchema.extend({
 
 const categoryFormSchema = insertCategorySchema;
 
+const stockAdjustmentSchema = z.object({
+  quantity: z.string().min(1, "Quantity is required").transform(val => parseInt(val)),
+  notes: z.string().min(1, "Notes are required"),
+});
+
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showProductDialog, setShowProductDialog] = useState(false);
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [showStockDialog, setShowStockDialog] = useState(false);
+  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -100,6 +107,14 @@ export default function Inventory() {
     defaultValues: {
       name: "",
       description: "",
+    },
+  });
+
+  const stockForm = useForm({
+    resolver: zodResolver(stockAdjustmentSchema),
+    defaultValues: {
+      quantity: "",
+      notes: "",
     },
   });
 
@@ -195,6 +210,36 @@ export default function Inventory() {
     },
   });
 
+  const adjustStockMutation = useMutation({
+    mutationFn: async (data: { productId: string; quantity: number; notes: string }) => {
+      return apiRequest('POST', `/api/products/${data.productId}/adjust-stock`, {
+        quantity: data.quantity,
+        notes: data.notes,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      setShowStockDialog(false);
+      setAdjustingProduct(null);
+      stockForm.reset();
+      toast({ title: "Success", description: "Stock berhasil ditambahkan" });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error as Error)) {
+        toast({
+          title: "Unauthorized", 
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({ title: "Error", description: "Failed to adjust stock", variant: "destructive" });
+    },
+  });
+
   const createCategoryMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest('POST', '/api/categories', data);
@@ -257,6 +302,25 @@ export default function Inventory() {
     setEditingProduct(null);
     productForm.reset();
     setShowProductDialog(true);
+  };
+
+  const handleAdjustStock = (product: Product) => {
+    setAdjustingProduct(product);
+    stockForm.reset({
+      quantity: "",
+      notes: `Tambah stok ${product.name}`,
+    });
+    setShowStockDialog(true);
+  };
+
+  const handleStockSubmit = (data: any) => {
+    if (adjustingProduct) {
+      adjustStockMutation.mutate({
+        productId: adjustingProduct.id,
+        quantity: data.quantity,
+        notes: data.notes,
+      });
+    }
   };
 
   const getStockStatus = (product: Product) => {
@@ -404,6 +468,15 @@ export default function Inventory() {
                               </TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleAdjustStock(product)}
+                                    data-testid={`button-adjust-stock-${product.id}`}
+                                    title="Tambah Stock"
+                                  >
+                                    <PackagePlus className="w-4 h-4" />
+                                  </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -704,6 +777,89 @@ export default function Inventory() {
                   data-testid="button-save-product"
                 >
                   {editingProduct ? "Update Product" : "Create Product"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Adjustment Dialog */}
+      <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Tambah Stock - {adjustingProduct?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <Form {...stockForm}>
+            <form onSubmit={stockForm.handleSubmit(handleStockSubmit)} className="space-y-4">
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="font-medium">Current Stock:</p>
+                    <p className="text-2xl font-bold text-blue-600">{adjustingProduct?.stock || 0}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Minimum Stock:</p>
+                    <p className="text-lg">{adjustingProduct?.minStock || 5}</p>
+                  </div>
+                </div>
+              </div>
+
+              <FormField
+                control={stockForm.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantity to Add *</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="Masukkan jumlah yang akan ditambah" 
+                        {...field} 
+                        data-testid="input-stock-quantity" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={stockForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Keterangan penambahan stock..." 
+                        {...field} 
+                        data-testid="input-stock-notes" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex justify-end space-x-3 pt-6">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowStockDialog(false)}
+                  data-testid="button-cancel-stock"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={adjustStockMutation.isPending}
+                  data-testid="button-save-stock"
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {adjustStockMutation.isPending ? "Adding..." : "Add Stock"}
                 </Button>
               </div>
             </form>
