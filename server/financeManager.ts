@@ -406,7 +406,7 @@ export class FinanceManager {
           referenceType: 'payroll',
           reference: payroll.id,
           paymentMethod: 'bank_transfer',
-          userId: payroll.userId || '46332812'
+          userId: payroll.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
         });
       }
     }

@@ -676,7 +676,7 @@ export class DatabaseStorage implements IStorage {
             reference: id,
             referenceType: 'service',
             notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
-            userId: '46332812'
+            userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
           });
           
           totalPartsCost += parseFloat(totalPrice);
@@ -709,7 +709,7 @@ export class DatabaseStorage implements IStorage {
               ticket.id,
               ticket.laborCost,
               `${ticket.ticketNumber}: ${ticket.problem}`,
-              '46332812'
+              ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
             );
           }
           
@@ -725,7 +725,7 @@ export class DatabaseStorage implements IStorage {
                   part.quantity,
                   product.purchasePrice || '0', // modal price
                   part.unitPrice, // selling price
-                  '46332812'
+                  ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
                 );
               }
             }

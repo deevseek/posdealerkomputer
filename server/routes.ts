@@ -1085,7 +1085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/finance/transactions', isAuthenticated, async (req, res) => {
     try {
-      const userId = (req.user as any)?.claims?.sub || '46332812';
+      const userId = req.session.user.id;
       const transaction = await financeManager.createTransaction({
         ...req.body,
         userId
@@ -1197,12 +1197,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/payroll', isAuthenticated, async (req, res) => {
+  app.post('/api/payroll', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = (req.user as any)?.claims?.sub || '46332812';
       const payroll = await financeManager.createPayroll({
         ...req.body,
-        userId
+        userId: req.session.user.id
       });
       res.json(payroll);
     } catch (error) {
