@@ -73,30 +73,39 @@ export default function Reports() {
         inventoryReport
       };
 
-      const response = await apiRequest('/api/reports/export-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          startDate,
-          endDate,
-          reportData
-        })
-      });
+      try {
+        const response = await fetch('/api/reports/export-pdf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            startDate,
+            endDate,
+            reportData
+          })
+        });
 
-      // Handle file download
-      const blob = new Blob([response], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `laporan-bisnis-${startDate}-${endDate}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
 
-      return response;
+        // Handle file download (HTML for now)
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `laporan-bisnis-${startDate}-${endDate}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        return blob;
+      } catch (error) {
+        console.error('Export error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       toast({
@@ -205,7 +214,7 @@ export default function Reports() {
                   data-testid="button-export-pdf"
                 >
                   <Download className="w-4 h-4" />
-                  {exportMutation.isPending ? "Mengexport..." : "Export PDF"}
+                  {exportMutation.isPending ? "Mengexport..." : "Export HTML"}
                 </Button>
               </div>
             </CardContent>

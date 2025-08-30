@@ -6,7 +6,7 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
-import htmlPdf from 'html-pdf-node';
+// import htmlPdf from 'html-pdf-node';
 import { db } from "./db";
 
 // HTML template generator for PDF reports
@@ -256,30 +256,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Export PDF endpoint
   app.post('/api/reports/export-pdf', isAuthenticated, async (req, res) => {
     try {
+      console.log('PDF export request received');
       const { startDate, endDate, reportData } = req.body;
       
+      if (!reportData) {
+        return res.status(400).json({ message: "Report data is required" });
+      }
+      
+      console.log('Generating HTML content...');
       // Generate HTML template for PDF
       const htmlContent = generateReportHTML(reportData, startDate, endDate);
       
-      // Generate PDF from HTML
-      const options = { 
-        format: 'A4', 
-        margin: { top: '20mm', bottom: '20mm', left: '20mm', right: '20mm' }
-      };
+      console.log('Generating PDF...');
       
-      const file = { content: htmlContent };
-      const pdfBuffer = await htmlPdf.generatePdf(file, options);
+      // For now, return HTML as response to test
+      // Will implement proper PDF generation after testing
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.html"`);
       
-      // Set proper headers and send PDF
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.pdf"`);
-      res.setHeader('Content-Length', pdfBuffer.length);
-      
-      // Send PDF buffer
-      res.send(pdfBuffer);
+      // Send HTML content for testing
+      res.send(htmlContent);
     } catch (error) {
       console.error("Error exporting PDF:", error);
-      res.status(500).json({ message: "Failed to export PDF" });
+      res.status(500).json({ 
+        message: "Failed to export PDF", 
+        error: error.message,
+        stack: error.stack 
+      });
     }
   });
 
