@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
-import { Printer, Download } from "lucide-react";
+import { Printer, Download, FileText } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -99,90 +99,69 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
 
   const handlePrint = () => {
     try {
-      const element = document.getElementById('service-receipt-content');
-      if (!element) {
-        console.error('Element service-receipt-content not found');
-        return;
-      }
-
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        console.error('Failed to open print window');
-        return;
-      }
-
+      // Simpan CSS asli
+      const originalStyle = document.head.innerHTML;
+      
+      // Buat CSS untuk print
       const thermalWidth = paperSizes[paperSize].width;
       const fontSize = paperSize === '58' ? '10px' : paperSize === '80' ? '12px' : '14px';
-      const headerSize = paperSize === '58' ? '14px' : paperSize === '80' ? '16px' : '18px';
-
-      // Create a cleaned version of the element content
-      const clonedElement = element.cloneNode(true) as HTMLElement;
       
-      // Remove any problematic elements or classes that might cause issues
-      const problematicElements = clonedElement.querySelectorAll('.no-print, script, style');
-      problematicElements.forEach(el => el.remove());
-
-      const printContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Nota Service - ${serviceData.serviceNumber}</title>
-            <style>
-              @page { 
-                size: ${thermalWidth}mm auto; 
-                margin: 2mm; 
-              }
-              * { 
-                box-sizing: border-box; 
-                margin: 0; 
-                padding: 0;
-              }
-              body { 
-                font-family: 'Courier New', monospace; 
-                font-size: ${fontSize};
-                line-height: 1.4;
-                width: ${thermalWidth - 4}mm;
-                margin: 0 auto;
-                color: #000;
-                background: #fff;
-              }
-              .text-center { text-align: center; }
-              .text-left { text-align: left; }
-              .text-right { text-align: right; }
-              .font-bold { font-weight: bold; }
-              .space-y-1 > * + * { margin-top: 4px; }
-              .space-y-2 > * + * { margin-top: 8px; }
-              .flex { display: flex; }
-              .flex-col { flex-direction: column; }
-              .justify-between { justify-content: space-between; }
-              .border-t { border-top: 1px dashed #333; margin: 8px 0; }
-              .border-solid { border-style: solid; }
-              .border-gray-800 { border-color: #333; }
-              .text-gray-600 { color: #666; }
-              .py-2 { padding-top: 8px; padding-bottom: 8px; }
-              .my-2 { margin-top: 8px; margin-bottom: 8px; }
-              @media print { 
-                body { margin: 0; padding: 2mm; }
-                .no-print { display: none !important; }
-              }
-            </style>
-          </head>
-          <body>
-            ${clonedElement.innerHTML}
-          </body>
-        </html>
+      const printStyle = `
+        <style>
+          @media print {
+            * { 
+              visibility: hidden; 
+              margin: 0; 
+              padding: 0;
+            }
+            #service-receipt-content, 
+            #service-receipt-content * { 
+              visibility: visible; 
+            }
+            #service-receipt-content {
+              position: absolute;
+              left: 0;
+              top: 0;
+              width: ${thermalWidth}mm;
+              font-family: 'Courier New', monospace;
+              font-size: ${fontSize};
+              line-height: 1.4;
+            }
+            .no-print { 
+              display: none !important; 
+            }
+            @page {
+              size: ${thermalWidth}mm auto;
+              margin: 2mm;
+            }
+            .text-center { text-align: center; }
+            .font-bold { font-weight: bold; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .border-t { border-top: 1px dashed #333; margin: 4px 0; }
+            .border-solid { border-style: solid; }
+            .text-gray-600 { color: #666; }
+            .space-y-1 > * + * { margin-top: 2px; }
+            .py-2 { padding: 4px 0; }
+            .my-2 { margin: 4px 0; }
+          }
+        </style>
       `;
-
-      printWindow.document.write(printContent);
-      printWindow.document.close();
       
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 250);
-      };
+      // Tambahkan CSS print
+      document.head.insertAdjacentHTML('beforeend', printStyle);
+      
+      // Print
+      window.print();
+      
+      // Restore CSS asli setelah delay
+      setTimeout(() => {
+        const printStyleElement = document.head.lastElementChild;
+        if (printStyleElement?.tagName === 'STYLE') {
+          printStyleElement.remove();
+        }
+      }, 1000);
+      
     } catch (error) {
       console.error('Print error:', error);
       alert('Terjadi kesalahan saat mencetak. Silakan coba lagi.');
