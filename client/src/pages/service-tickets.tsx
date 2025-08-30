@@ -113,6 +113,8 @@ export default function ServiceTickets() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingTicket, setEditingTicket] = useState<ServiceTicket | null>(null);
   const [selectedParts, setSelectedParts] = useState<ServicePart[]>([]);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptData, setReceiptData] = useState<ServiceTicket | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -123,6 +125,11 @@ export default function ServiceTickets() {
 
   const { data: customers = [] } = useQuery({
     queryKey: ["/api/customers"],
+    retry: false,
+  });
+
+  const { data: storeConfig = {} } = useQuery({
+    queryKey: ['/api/store-config'],
     retry: false,
   });
 
@@ -369,6 +376,11 @@ export default function ServiceTickets() {
     }
   };
 
+  const handlePrintReceipt = (ticket: ServiceTicket) => {
+    setReceiptData(ticket);
+    setShowReceipt(true);
+  };
+
   const handleNew = () => {
     setEditingTicket(null);
     form.reset({
@@ -544,6 +556,15 @@ export default function ServiceTickets() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePrintReceipt(ticket)}
+                                data-testid={`button-receipt-ticket-${ticket.id}`}
+                                title="Cetak Nota"
+                              >
+                                <Receipt className="w-4 h-4" />
+                              </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -815,6 +836,36 @@ export default function ServiceTickets() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Service Receipt Dialog */}
+      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Nota Service - #{receiptData?.id?.slice(-8)}
+            </DialogTitle>
+          </DialogHeader>
+          {receiptData && (
+            <ServiceReceipt 
+              serviceData={{
+                id: receiptData.id,
+                serviceNumber: receiptData.id.slice(-8),
+                device: `${receiptData.deviceBrand} ${receiptData.deviceModel}`,
+                problem: receiptData.problem,
+                diagnosis: receiptData.diagnosis || "",
+                status: receiptData.status,
+                totalCost: receiptData.estimatedCost || "0",
+                estimatedCompletion: receiptData.estimatedCompletion || undefined,
+                completedAt: receiptData.completedAt || undefined,
+                createdAt: receiptData.createdAt,
+                customer: customers.find((c: Customer) => c.id === receiptData.customerId),
+                parts: []
+              }}
+              storeConfig={storeConfig}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
