@@ -186,16 +186,16 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
         type: 'sale' as const,
         customerId: selectedCustomer?.id || null,
         paymentMethod,
-        subtotal: Math.round(subtotal),
-        tax: Math.round(tax),
-        total: Math.round(total),
+        subtotal: Math.round(subtotal).toString(),
+        taxAmount: Math.round(tax).toString(),
+        total: Math.round(total).toString(),
         notes: `POS Sale - ${items.length} items${selectedCustomer ? ` for ${selectedCustomer.name}` : ''}`,
       },
       items: items.map(item => ({
         productId: item.productId,
         quantity: item.quantity,
-        unitPrice: item.sellingPrice,
-        subtotal: item.sellingPrice * item.quantity,
+        unitPrice: item.sellingPrice.toString(),
+        totalPrice: (item.sellingPrice * item.quantity).toString(),
       })),
     };
 
