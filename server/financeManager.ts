@@ -306,8 +306,8 @@ export class FinanceManager {
   // Payroll Management
   async createPayroll(data: {
     employeeId: string;
-    periodStart: Date;
-    periodEnd: Date;
+    periodStart: Date | string;
+    periodEnd: Date | string;
     baseSalary: string;
     overtime?: string;
     bonus?: string;
@@ -319,6 +319,10 @@ export class FinanceManager {
     userId: string;
   }): Promise<PayrollRecord> {
     const payrollNumber = `PAY${Date.now().toString().slice(-8)}`;
+    
+    // Convert string dates to Date objects if needed
+    const periodStart = typeof data.periodStart === 'string' ? new Date(data.periodStart) : data.periodStart;
+    const periodEnd = typeof data.periodEnd === 'string' ? new Date(data.periodEnd) : data.periodEnd;
     
     const baseSalary = Number(data.baseSalary);
     const overtime = Number(data.overtime || 0);
@@ -337,8 +341,8 @@ export class FinanceManager {
     const [payroll] = await db.insert(payrollRecords).values({
       employeeId: data.employeeId,
       payrollNumber,
-      periodStart: data.periodStart,
-      periodEnd: data.periodEnd,
+      periodStart,
+      periodEnd,
       baseSalary: data.baseSalary,
       overtime: data.overtime || "0",
       bonus: data.bonus || "0",
