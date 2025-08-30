@@ -508,7 +508,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Store configuration routes
-  app.get('/api/store-config', isAuthenticated, async (req, res) => {
+  // GET is public so app name can be displayed on login/landing pages
+  app.get('/api/store-config', async (req, res) => {
     try {
       const config = await storage.getStoreConfig();
       res.json(config);
@@ -519,6 +520,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/store-config', isAuthenticated, async (req, res) => {
+    try {
+      const configData = insertStoreConfigSchema.parse(req.body);
+      const config = await storage.upsertStoreConfig(configData);
+      res.json(config);
+    } catch (error) {
+      console.error("Error updating store config:", error);
+      res.status(500).json({ message: "Failed to update store config" });
+    }
+  });
+
+  // Add PATCH method for store config updates
+  app.patch('/api/store-config', isAuthenticated, async (req, res) => {
     try {
       const configData = insertStoreConfigSchema.parse(req.body);
       const config = await storage.upsertStoreConfig(configData);
