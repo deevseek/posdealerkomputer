@@ -72,8 +72,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/sales/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T23:59:59.999Z');
       
       const report = await storage.getSalesReport(start, end);
       res.json(report);
@@ -86,8 +86,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/services/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T23:59:59.999Z');
       
       const report = await storage.getServiceReport(start, end);
       res.json(report);
@@ -100,8 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/financial/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(startDate + 'T00:00:00.000Z');
+      const end = new Date(endDate + 'T23:59:59.999Z');
       
       const report = await storage.getFinancialReport(start, end);
       res.json(report);
