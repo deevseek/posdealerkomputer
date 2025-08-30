@@ -7,7 +7,22 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 import { db } from "./db";
-import { financialRecords } from "@shared/schema";
+import { 
+  financialRecords,
+  serviceTickets,
+  serviceTicketParts, 
+  transactions,
+  transactionItems,
+  products,
+  categories,
+  customers,
+  suppliers,
+  stockMovements,
+  employees,
+  payrollRecords,
+  attendanceRecords,
+  storeConfig
+} from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { 
   insertProductSchema,
@@ -630,6 +645,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error clearing service financial records:", error);
       res.status(500).json({ message: "Failed to clear records" });
+    }
+  });
+
+  // Reset database (keep only users and roles)
+  app.post('/api/admin/reset-database', isAuthenticated, async (req, res) => {
+    try {
+      await db.transaction(async (tx) => {
+        // Delete in correct order to handle foreign keys
+        await tx.delete(attendanceRecords);
+        await tx.delete(payrollRecords);
+        await tx.delete(employees);
+        await tx.delete(financialRecords);
+        await tx.delete(stockMovements);
+        await tx.delete(serviceTicketParts);
+        await tx.delete(serviceTickets);
+        await tx.delete(transactionItems);
+        await tx.delete(transactions);
+        await tx.delete(products);
+        await tx.delete(categories);
+        await tx.delete(customers);
+        await tx.delete(suppliers);
+        await tx.delete(storeConfig);
+      });
+      
+      res.json({ message: "Database reset completed. Users and roles preserved." });
+    } catch (error) {
+      console.error("Error resetting database:", error);
+      res.status(500).json({ message: "Failed to reset database" });
     }
   });
 
