@@ -18,6 +18,8 @@ import { Settings as SettingsIcon, Store, Shield, Bell, Database, Save } from "l
 import { useToast } from "@/hooks/use-toast";
 import type { StoreConfig } from "@shared/schema";
 import { z } from "zod";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import type { UploadResult } from "@uppy/core";
 
 const storeConfigFormSchema = insertStoreConfigSchema.extend({
   taxRate: z.string().transform(val => parseFloat(val) || 11.0),
@@ -232,13 +234,79 @@ export default function Settings() {
                           name="logo"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Logo URL</FormLabel>
+                              <FormLabel>Logo Toko</FormLabel>
                               <FormControl>
-                                <Input 
-                                  placeholder="https://example.com/logo.png"
-                                  data-testid="input-logo"
-                                  {...field}
-                                />
+                                <div className="space-y-4">
+                                  {field.value && (
+                                    <div className="flex items-center space-x-4">
+                                      <img 
+                                        src={field.value.startsWith('/objects/') ? field.value : `/objects/${field.value}`}
+                                        alt="Logo toko" 
+                                        className="w-16 h-16 object-cover rounded border"
+                                        onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                        }}
+                                      />
+                                      <span className="text-sm text-muted-foreground">Logo saat ini</span>
+                                    </div>
+                                  )}
+                                  <ObjectUploader
+                                    maxNumberOfFiles={1}
+                                    maxFileSize={5 * 1024 * 1024} // 5MB
+                                    onGetUploadParameters={async () => {
+                                      const response = await fetch('/api/objects/upload', {
+                                        method: 'POST',
+                                        credentials: 'include',
+                                      });
+                                      if (!response.ok) {
+                                        throw new Error('Failed to get upload URL');
+                                      }
+                                      const { uploadURL } = await response.json();
+                                      return {
+                                        method: 'PUT' as const,
+                                        url: uploadURL,
+                                      };
+                                    }}
+                                    onComplete={(result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+                                      if (result.successful?.[0]?.uploadURL) {
+                                        const uploadURL = result.successful[0].uploadURL as string;
+                                        // Call API to set logo
+                                        fetch('/api/logos', {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                          },
+                                          credentials: 'include',
+                                          body: JSON.stringify({
+                                            logoURL: uploadURL,
+                                          }),
+                                        })
+                                        .then(response => response.json())
+                                        .then(data => {
+                                          field.onChange(data.objectPath);
+                                          toast({
+                                            title: "Berhasil",
+                                            description: "Logo berhasil diupload",
+                                          });
+                                        })
+                                        .catch(error => {
+                                          console.error('Error setting logo:', error);
+                                          toast({
+                                            title: "Error",
+                                            description: "Gagal menyimpan logo",
+                                            variant: "destructive",
+                                          });
+                                        });
+                                      }
+                                    }}
+                                    buttonClassName="w-full"
+                                  >
+                                    <div className="flex items-center justify-center space-x-2">
+                                      <span>📁</span>
+                                      <span>Upload Logo</span>
+                                    </div>
+                                  </ObjectUploader>
+                                </div>
                               </FormControl>
                               <FormMessage />
                             </FormItem>
