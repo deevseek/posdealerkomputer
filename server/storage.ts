@@ -436,9 +436,11 @@ export class DatabaseStorage implements IStorage {
           });
         }
 
-        // Create financial record via new finance manager
+        // Create financial records via new finance manager
         try {
           const { financeManager } = await import('./financeManager');
+          
+          // Record revenue (income)
           await financeManager.createTransaction({
             type: 'income',
             category: 'Sales Revenue',
@@ -450,8 +452,33 @@ export class DatabaseStorage implements IStorage {
             paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
             userId: transactionData.userId
           });
+
+          // Calculate and record COGS (Cost of Goods Sold)
+          let totalCOGS = 0;
+          for (const item of items) {
+            const [product] = await tx.select().from(products).where(eq(products.id, item.productId));
+            if (product) {
+              const itemCOGS = parseFloat(product.purchasePrice) * item.quantity;
+              totalCOGS += itemCOGS;
+            }
+          }
+
+          // Record COGS as expense
+          if (totalCOGS > 0) {
+            await financeManager.createTransaction({
+              type: 'expense',
+              category: 'Cost of Goods Sold',
+              subcategory: 'Product Cost',
+              amount: totalCOGS.toString(),
+              description: `COGS - ${transaction.transactionNumber}`,
+              referenceType: 'sale',
+              reference: transaction.id,
+              paymentMethod: 'system',
+              userId: transactionData.userId
+            });
+          }
         } catch (error) {
-          console.error("Error creating financial record via finance manager:", error);
+          console.error("Error creating financial records via finance manager:", error);
         }
       }
       
