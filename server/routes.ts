@@ -390,6 +390,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create workbook
       const wb = XLSX.utils.book_new();
       
+      // No need for additional DB query, we'll use financialReport.records
+
       // Overview sheet
       const overviewData = [
         ['Laporan Bisnis LaptopPOS'],
@@ -401,7 +403,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ['Total Pemasukan', Number(financialReport?.totalIncome || 0)],
         ['Total Pengeluaran', Number(financialReport?.totalExpense || 0)],
         ['Laba Bersih', Number(financialReport?.profit || 0)],
-        [],
+        []
+      ];
+
+      // Add expense breakdown section
+      if (financialReport?.records && financialReport.records.length > 0) {
+        // Group expenses by category
+        const expensesByCategory = financialReport.records
+          .filter((record: any) => record.type === 'expense')
+          .reduce((acc: any, record: any) => {
+            const category = record.category || 'Lainnya';
+            acc[category] = (acc[category] || 0) + Number(record.amount || 0);
+            return acc;
+          }, {});
+
+        overviewData.push(['Detail Pengeluaran']);
+        Object.entries(expensesByCategory).forEach(([category, amount]) => {
+          overviewData.push([`  ${category}`, Number(amount)]);
+        });
+        overviewData.push([]);
+      }
+
+      // Add service and inventory data
+      overviewData.push(
         ['Laporan Servis'],
         ['Total Servis', serviceReport?.totalServices || 0],
         ['Revenue Labor', Number(serviceReport?.revenueBreakdown?.laborRevenue || 0)],
@@ -414,7 +438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ['Stok Rendah', inventoryReport?.lowStockCount || 0],
         ['Total Stok', inventoryReport?.totalStockQuantity || 0],
         ['Nilai Aset', Number(inventoryReport?.totalAssetValue || 0)]
-      ];
+      );
       
       const ws = XLSX.utils.aoa_to_sheet(overviewData);
       XLSX.utils.book_append_sheet(wb, ws, 'Overview');
