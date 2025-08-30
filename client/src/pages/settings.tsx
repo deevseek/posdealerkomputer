@@ -67,8 +67,8 @@ export default function Settings() {
       
       const payload = {
         ...data,
-        taxRate: parseFloat(data.taxRate) || 11.0,
-        defaultDiscount: parseFloat(data.defaultDiscount) || 0.0,
+        taxRate: data.taxRate || "11.00",
+        defaultDiscount: data.defaultDiscount || "0.00",
       };
 
       const response = await fetch('/api/store-config', {
