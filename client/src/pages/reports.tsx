@@ -40,17 +40,17 @@ export default function Reports() {
 
   // API queries untuk data reports
   const { data: salesReport, isLoading: salesLoading } = useQuery({
-    queryKey: ["/api/reports/sales", startDate, endDate],
+    queryKey: [`/api/reports/sales/${startDate}/${endDate}`],
     retry: false,
   });
 
   const { data: serviceReport, isLoading: serviceLoading } = useQuery({
-    queryKey: ["/api/reports/services", startDate, endDate],
+    queryKey: [`/api/reports/services/${startDate}/${endDate}`],
     retry: false,
   });
 
   const { data: financialReport, isLoading: financialLoading } = useQuery({
-    queryKey: ["/api/reports/financial", startDate, endDate],
+    queryKey: [`/api/reports/financial/${startDate}/${endDate}`],
     retry: false,
   });
 
