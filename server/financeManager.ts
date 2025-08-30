@@ -302,7 +302,8 @@ export class FinanceManager {
       .from(financialRecords)
       .where(and(
         eq(financialRecords.referenceType, 'service'),
-        eq(financialRecords.reference, serviceId)
+        eq(financialRecords.reference, serviceId),
+        eq(financialRecords.type, 'income')
       ));
     
     if (existingRecord.length === 0) {
@@ -313,6 +314,84 @@ export class FinanceManager {
         amount,
         description,
         referenceType: 'service',
+        reference: serviceId,
+        paymentMethod: 'cash',
+        userId
+      });
+    }
+  }
+
+  async recordPartsCost(serviceId: string, partName: string, quantity: number, modalPrice: string, sellingPrice: string, userId: string): Promise<void> {
+    // Record parts cost (modal/purchase price) as expense
+    const modalAmount = (Number(modalPrice) * quantity).toString();
+    const existingModalRecord = await db
+      .select()
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.referenceType, 'service_parts_cost'),
+        eq(financialRecords.reference, serviceId),
+        eq(financialRecords.description, `Biaya modal ${partName} (${quantity}x)`)
+      ));
+
+    if (existingModalRecord.length === 0) {
+      await this.createTransaction({
+        type: 'expense',
+        category: 'Cost of Goods Sold',
+        subcategory: 'Parts Cost',
+        amount: modalAmount,
+        description: `Biaya modal ${partName} (${quantity}x)`,
+        referenceType: 'service_parts_cost',
+        reference: serviceId,
+        paymentMethod: 'inventory',
+        userId
+      });
+    }
+
+    // Record parts revenue (selling price) as income
+    const sellingAmount = (Number(sellingPrice) * quantity).toString();
+    const existingSellingRecord = await db
+      .select()
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.referenceType, 'service_parts_revenue'),
+        eq(financialRecords.reference, serviceId),
+        eq(financialRecords.description, `Penjualan ${partName} (${quantity}x)`)
+      ));
+
+    if (existingSellingRecord.length === 0) {
+      await this.createTransaction({
+        type: 'income',
+        category: 'Service Revenue',
+        subcategory: 'Parts Sales',
+        amount: sellingAmount,
+        description: `Penjualan ${partName} (${quantity}x)`,
+        referenceType: 'service_parts_revenue',
+        reference: serviceId,
+        paymentMethod: 'cash',
+        userId
+      });
+    }
+  }
+
+  async recordLaborCost(serviceId: string, laborCost: string, description: string, userId: string): Promise<void> {
+    // Check if record already exists
+    const existingRecord = await db
+      .select()
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.referenceType, 'service_labor'),
+        eq(financialRecords.reference, serviceId),
+        eq(financialRecords.type, 'income')
+      ));
+    
+    if (existingRecord.length === 0 && Number(laborCost) > 0) {
+      await this.createTransaction({
+        type: 'income',
+        category: 'Service Revenue',
+        subcategory: 'Labor Charge',
+        amount: laborCost,
+        description: `Ongkos tenaga kerja - ${description}`,
+        referenceType: 'service_labor',
         reference: serviceId,
         paymentMethod: 'cash',
         userId

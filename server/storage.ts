@@ -505,8 +505,9 @@ export class DatabaseStorage implements IStorage {
             throw new Error(`Product dengan ID ${part.productId} tidak ditemukan`);
           }
           
-          if (product.stock < part.quantity) {
-            throw new Error(`Stock ${product.name} tidak cukup. Tersedia: ${product.stock}, Diperlukan: ${part.quantity}`);
+          const currentStock = product.stock || 0;
+          if (currentStock < part.quantity) {
+            throw new Error(`Stock ${product.name} tidak cukup. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
           }
           
           // Use product selling price as default
@@ -525,7 +526,7 @@ export class DatabaseStorage implements IStorage {
           // Update product stock
           await tx.update(products)
             .set({ 
-              stock: product.stock - part.quantity,
+              stock: currentStock - part.quantity,
               updatedAt: new Date()
             })
             .where(eq(products.id, part.productId));
@@ -559,22 +560,40 @@ export class DatabaseStorage implements IStorage {
         ticket.actualCost = newActualCost;
       }
       
-      // Auto-record financial transaction for completed services
+      // Auto-record financial transactions for completed services
       if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
-        const amount = ticket.actualCost || ticket.estimatedCost;
-        
-        if (amount && parseFloat(amount) > 0) {
-          try {
-            const { financeManager } = await import('./financeManager');
-            await financeManager.recordServiceIncome(
+        try {
+          const { financeManager } = await import('./financeManager');
+          
+          // Record labor cost as income if exists
+          if (ticket.laborCost && parseFloat(ticket.laborCost) > 0) {
+            await financeManager.recordLaborCost(
               ticket.id,
-              amount,
-              `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
+              ticket.laborCost,
+              `${ticket.ticketNumber}: ${ticket.problem}`,
               '46332812'
             );
-          } catch (error) {
-            console.error("Error recording service income:", error);
           }
+          
+          // Record parts costs and revenue for each part used
+          if (parts && parts.length > 0) {
+            for (const part of parts) {
+              // Get product details to get modal price
+              const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
+              if (product) {
+                await financeManager.recordPartsCost(
+                  ticket.id,
+                  product.name,
+                  part.quantity,
+                  product.purchasePrice || '0', // modal price
+                  part.unitPrice, // selling price
+                  '46332812'
+                );
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Error recording service financial transactions:", error);
         }
       }
       
@@ -637,7 +656,30 @@ export class DatabaseStorage implements IStorage {
     return movement;
   }
 
-  // Note: Financial Records now handled by FinanceManager
+  // Financial Records (delegated to FinanceManager but interface still needed)
+  async getFinancialRecords(startDate?: Date, endDate?: Date): Promise<FinancialRecord[]> {
+    const { financeManager } = await import('./financeManager');
+    return await financeManager.getTransactions({
+      startDate,
+      endDate
+    });
+  }
+
+  async createFinancialRecord(record: InsertFinancialRecord): Promise<FinancialRecord> {
+    const { financeManager } = await import('./financeManager');
+    return await financeManager.createTransaction({
+      type: record.type,
+      category: record.category,
+      subcategory: record.subcategory,
+      amount: record.amount,
+      description: record.description,
+      referenceType: record.referenceType,
+      reference: record.reference,
+      paymentMethod: record.paymentMethod,
+      tags: record.tags,
+      userId: record.userId
+    });
+  }
 
   // Dashboard Statistics
   // Reports
