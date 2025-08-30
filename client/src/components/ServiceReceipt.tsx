@@ -101,7 +101,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
     try {
       // Ukuran kertas sesuai thermal yang dipilih
       const thermalWidth = paperSizes[paperSize].width;
-      const fontSize = paperSize === '58' ? '8px' : paperSize === '80' ? '10px' : '12px';
+      const fontSize = paperSize === '58' ? '7px' : paperSize === '80' ? '8px' : '10px';
       
       const printStyle = `
         <style id="thermal-print-style">
@@ -124,16 +124,21 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
               max-width: ${thermalWidth}mm;
               font-family: 'Courier New', monospace;
               font-size: ${fontSize};
-              line-height: 1.2;
+              line-height: 1.0;
               color: #000;
               background: #fff;
+              page-break-inside: avoid;
+              page-break-after: avoid;
+              page-break-before: avoid;
+              height: auto;
+              max-height: 250mm;
             }
             .no-print { 
               display: none !important; 
             }
             @page {
-              size: ${thermalWidth}mm auto;
-              margin: 2mm;
+              size: ${thermalWidth}mm 300mm;
+              margin: 1mm;
             }
             .text-center { text-align: center; }
             .font-bold { font-weight: bold; }
@@ -143,17 +148,19 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
             .items-center { align-items: center; }
             .border-t { 
               border-top: 1px dashed #333; 
-              margin: 3px 0 !important; 
+              margin: 1px 0 !important; 
             }
             .border-solid { border-style: solid; }
             .border-gray-800 { border-color: #333; }
             .text-gray-600 { color: #666; }
-            .space-y-1 > * + * { margin-top: 2px !important; }
-            .py-2 { padding: 3px 0 !important; }
-            .my-2 { margin: 3px 0 !important; }
-            .mb-2 { margin-bottom: 3px !important; }
-            .mt-6 { margin-top: 6px !important; }
-            h3 { font-size: ${fontSize}; margin: 3px 0 !important; }
+            .space-y-1 > * + * { margin-top: 1px !important; }
+            .py-2 { padding: 1px 0 !important; }
+            .my-2 { margin: 1px 0 !important; }
+            .mb-2 { margin-bottom: 1px !important; }
+            .mt-6 { margin-top: 2px !important; }
+            h3 { font-size: ${fontSize}; margin: 1px 0 !important; }
+            div { margin: 0 !important; padding: 0 !important; }
+            p { margin: 0 !important; padding: 0 !important; }
           }
           @media screen {
             #thermal-print-style { display: none; }
