@@ -79,8 +79,10 @@ export class FinanceManager {
     netProfit: string;
     transactionCount: number;
     breakdown: {
-      categories: { [key: string]: { income: number; expense: number } };
+      categories: { [key: string]: { income: number; expense: number; count: number } };
       paymentMethods: { [key: string]: number };
+      sources: { [key: string]: { amount: number; count: number } };
+      subcategories: { [key: string]: { amount: number; type: string; count: number } };
     };
   }> {
     const conditions = [];
@@ -106,9 +108,99 @@ export class FinanceManager {
       .select({ count: count() })
       .from(financialRecords)
       .where(whereClause);
+
+    // Breakdown by category
+    const categoryBreakdown = await db
+      .select({
+        category: financialRecords.category,
+        type: financialRecords.type,
+        total: sum(financialRecords.amount),
+        count: count()
+      })
+      .from(financialRecords)
+      .where(whereClause)
+      .groupBy(financialRecords.category, financialRecords.type);
+
+    // Breakdown by subcategory
+    const subcategoryBreakdown = await db
+      .select({
+        subcategory: financialRecords.subcategory,
+        type: financialRecords.type,
+        total: sum(financialRecords.amount),
+        count: count()
+      })
+      .from(financialRecords)
+      .where(whereClause)
+      .groupBy(financialRecords.subcategory, financialRecords.type);
+
+    // Breakdown by payment method
+    const paymentBreakdown = await db
+      .select({
+        paymentMethod: financialRecords.paymentMethod,
+        total: sum(financialRecords.amount)
+      })
+      .from(financialRecords)
+      .where(whereClause)
+      .groupBy(financialRecords.paymentMethod);
+
+    // Breakdown by source/reference type
+    const sourceBreakdown = await db
+      .select({
+        referenceType: financialRecords.referenceType,
+        total: sum(financialRecords.amount),
+        count: count()
+      })
+      .from(financialRecords)
+      .where(whereClause)
+      .groupBy(financialRecords.referenceType);
     
     const totalIncome = Number(incomeResult.total || 0);
     const totalExpense = Number(expenseResult.total || 0);
+
+    // Process category breakdown
+    const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
+    categoryBreakdown.forEach(item => {
+      if (!categories[item.category]) {
+        categories[item.category] = { income: 0, expense: 0, count: 0 };
+      }
+      if (item.type === 'income') {
+        categories[item.category].income = Number(item.total);
+      } else {
+        categories[item.category].expense = Number(item.total);
+      }
+      categories[item.category].count += item.count;
+    });
+
+    // Process subcategory breakdown
+    const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
+    subcategoryBreakdown.forEach(item => {
+      if (item.subcategory) {
+        subcategories[item.subcategory] = {
+          amount: Number(item.total),
+          type: item.type,
+          count: item.count
+        };
+      }
+    });
+
+    // Process payment method breakdown
+    const paymentMethods: { [key: string]: number } = {};
+    paymentBreakdown.forEach(item => {
+      if (item.paymentMethod) {
+        paymentMethods[item.paymentMethod] = Number(item.total);
+      }
+    });
+
+    // Process source breakdown
+    const sources: { [key: string]: { amount: number; count: number } } = {};
+    sourceBreakdown.forEach(item => {
+      if (item.referenceType) {
+        sources[item.referenceType] = {
+          amount: Number(item.total),
+          count: item.count
+        };
+      }
+    });
     
     return {
       totalIncome: totalIncome.toString(),
@@ -116,8 +208,10 @@ export class FinanceManager {
       netProfit: (totalIncome - totalExpense).toString(),
       transactionCount: countResult.count,
       breakdown: {
-        categories: {},
-        paymentMethods: {}
+        categories,
+        paymentMethods,
+        sources,
+        subcategories
       }
     };
   }

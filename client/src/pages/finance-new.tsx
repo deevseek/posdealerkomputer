@@ -37,6 +37,12 @@ interface FinancialSummary {
   totalExpense: string;
   netProfit: string;
   transactionCount: number;
+  breakdown: {
+    categories: { [key: string]: { income: number; expense: number; count: number } };
+    paymentMethods: { [key: string]: number };
+    sources: { [key: string]: { amount: number; count: number } };
+    subcategories: { [key: string]: { amount: number; type: string; count: number } };
+  };
 }
 
 interface Employee {
@@ -402,6 +408,137 @@ export default function FinanceNew() {
         </Card>
       </div>
 
+      {/* Finance Calculation Explanation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Penjelasan Perhitungan Keuangan</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <h4 className="font-medium text-green-600">Sumber Pemasukan:</h4>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>• Ongkos tenaga kerja service</li>
+                <li>• Penjualan spare parts (harga jual)</li>
+                <li>• Transaksi penjualan langsung</li>
+                <li>• Pendapatan lain-lain</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-medium text-red-600">Sumber Pengeluaran:</h4>
+              <ul className="text-sm space-y-1 text-muted-foreground">
+                <li>• Biaya modal spare parts (harga beli)</li>
+                <li>• Gaji karyawan (payroll)</li>
+                <li>• Biaya operasional</li>
+                <li>• Pengeluaran lain-lain</li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Catatan:</strong> Saat service ticket diselesaikan, sistem otomatis mencatat 3 transaksi: 
+              biaya modal parts sebagai pengeluaran, penjualan parts sebagai pemasukan, dan ongkos kerja sebagai pemasukan.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Breakdown Detail */}
+      {summary?.breakdown && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Categories Breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Breakdown per Kategori</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Object.entries(summary.breakdown.categories).map(([category, data]) => (
+                  <div key={category} className="flex flex-col space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">{category}</span>
+                      <span className="text-xs text-muted-foreground">({data.count} transaksi)</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="text-xs text-green-600">
+                        +{formatCurrency(data.income.toString())}
+                      </div>
+                      <div className="text-xs text-red-600">
+                        -{formatCurrency(data.expense.toString())}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Net: {formatCurrency((data.income - data.expense).toString())}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Sources Breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Breakdown per Sumber</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Object.entries(summary.breakdown.sources).map(([source, data]) => (
+                  <div key={source} className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">
+                        {source === 'service' ? 'Service/Repair' :
+                         source === 'service_labor' ? 'Ongkos Kerja' :
+                         source === 'service_parts_cost' ? 'Biaya Parts' :
+                         source === 'service_parts_revenue' ? 'Penjualan Parts' :
+                         source === 'payroll' ? 'Gaji Karyawan' : source}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {data.count} transaksi
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium">
+                      {formatCurrency(data.amount.toString())}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Subcategories Breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Breakdown per Subkategori</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {Object.entries(summary.breakdown.subcategories).map(([subcategory, data]) => (
+                  <div key={subcategory} className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{subcategory}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {data.count} transaksi
+                      </span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <div className={`text-sm font-medium ${
+                        data.type === 'income' ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {data.type === 'income' ? '+' : '-'}{formatCurrency(data.amount.toString())}
+                      </div>
+                      <Badge variant={data.type === 'income' ? 'default' : 'destructive'} className="text-xs">
+                        {data.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <Tabs defaultValue="transactions" className="space-y-4">
         <TabsList>
           <TabsTrigger value="transactions">Transaksi Keuangan</TabsTrigger>
@@ -555,10 +692,33 @@ export default function FinanceNew() {
                         <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}>
                           {transaction.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
                         </Badge>
+                        {transaction.paymentMethod && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {transaction.paymentMethod === 'cash' ? 'Tunai' :
+                             transaction.paymentMethod === 'transfer' ? 'Transfer' :
+                             transaction.paymentMethod === 'bank_transfer' ? 'Transfer Bank' :
+                             transaction.paymentMethod === 'inventory' ? 'Stok/Persediaan' : transaction.paymentMethod}
+                          </div>
+                        )}
                       </TableCell>
-                      <TableCell>{transaction.category}</TableCell>
-                      <TableCell className="max-w-xs truncate">
-                        {transaction.description}
+                      <TableCell>
+                        <div className="font-medium">{transaction.category}</div>
+                        {transaction.subcategory && (
+                          <div className="text-sm text-muted-foreground">{transaction.subcategory}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-xs">
+                        <div className="truncate font-medium">{transaction.description}</div>
+                        {transaction.referenceType && (
+                          <div className="text-xs text-blue-600 mt-1">
+                            Dari: {transaction.referenceType === 'service' ? 'Service Ticket' :
+                                  transaction.referenceType === 'service_labor' ? 'Ongkos Kerja Service' :
+                                  transaction.referenceType === 'service_parts_cost' ? 'Biaya Parts Service' :
+                                  transaction.referenceType === 'service_parts_revenue' ? 'Penjualan Parts Service' :
+                                  transaction.referenceType === 'payroll' ? 'Payroll' : transaction.referenceType}
+                            {transaction.reference && ` (${transaction.reference.slice(0, 8)}...)`}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className={transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}>
                         {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
