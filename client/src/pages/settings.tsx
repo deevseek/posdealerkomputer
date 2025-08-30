@@ -14,12 +14,14 @@ import { Separator } from "@/components/ui/separator";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStoreConfigSchema } from "@shared/schema";
-import { Settings as SettingsIcon, Store, Shield, Bell, Database, Save } from "lucide-react";
+import { Settings as SettingsIcon, Store, Shield, Bell, Database, Save, MessageCircle, Smartphone, QrCode, Wifi, WifiOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { StoreConfig } from "@shared/schema";
 import { z } from "zod";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import type { UploadResult } from "@uppy/core";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const storeConfigFormSchema = insertStoreConfigSchema.omit({
   taxRate: true,
@@ -147,7 +149,7 @@ export default function Settings() {
           </div>
 
           <Tabs defaultValue="store" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="store" data-testid="tab-store">
                 <Store className="w-4 h-4 mr-2" />
                 Toko
@@ -155,6 +157,10 @@ export default function Settings() {
               <TabsTrigger value="system" data-testid="tab-system">
                 <SettingsIcon className="w-4 h-4 mr-2" />
                 Sistem
+              </TabsTrigger>
+              <TabsTrigger value="whatsapp" data-testid="tab-whatsapp">
+                <MessageCircle className="w-4 h-4 mr-2" />
+                WhatsApp
               </TabsTrigger>
               <TabsTrigger value="security" data-testid="tab-security">
                 <Shield className="w-4 h-4 mr-2" />
@@ -462,6 +468,11 @@ export default function Settings() {
               </Card>
             </TabsContent>
 
+            {/* WhatsApp Integration */}
+            <TabsContent value="whatsapp" className="space-y-6">
+              <WhatsAppSettings />
+            </TabsContent>
+
             {/* Security Settings */}
             <TabsContent value="security" className="space-y-6">
               <Card>
@@ -571,5 +582,300 @@ export default function Settings() {
         </main>
       </div>
     </div>
+  );
+}
+
+// WhatsApp Settings Component
+function WhatsAppSettings() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
+  // Fetch store config for WhatsApp settings
+  const { data: storeConfig, isLoading } = useQuery({
+    queryKey: ['/api/store-config'],
+  });
+  
+  // WhatsApp status query
+  const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ['/api/whatsapp/status'],
+    refetchInterval: 3000, // Refresh every 3 seconds
+  });
+
+  // Enable/disable WhatsApp mutation
+  const toggleWhatsAppMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      return await apiRequest(`/api/whatsapp/${enabled ? 'enable' : 'disable'}`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "Pengaturan WhatsApp berhasil diubah",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal mengubah pengaturan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Connect WhatsApp mutation
+  const connectWhatsAppMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/whatsapp/connect', {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "Mencoba menghubungkan ke WhatsApp...",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal menghubungkan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Disconnect WhatsApp mutation
+  const disconnectWhatsAppMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('/api/whatsapp/disconnect', {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      toast({
+        title: "Berhasil",
+        description: "WhatsApp terputus",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal memutuskan WhatsApp",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Test message mutation
+  const [testPhone, setTestPhone] = useState("");
+  const testMessageMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      return await apiRequest('/api/whatsapp/test-message', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: phone }),
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Berhasil",
+        description: "Pesan test berhasil dikirim",
+      });
+      setTestPhone("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Gagal mengirim pesan test",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggleWhatsApp = (enabled: boolean) => {
+    toggleWhatsAppMutation.mutate(enabled);
+  };
+
+  const handleConnect = () => {
+    connectWhatsAppMutation.mutate();
+  };
+
+  const handleDisconnect = () => {
+    disconnectWhatsAppMutation.mutate();
+  };
+
+  const handleTestMessage = () => {
+    if (!testPhone.trim()) {
+      toast({
+        title: "Error",
+        description: "Masukkan nomor WhatsApp untuk test",
+        variant: "destructive",
+      });
+      return;
+    }
+    testMessageMutation.mutate(testPhone);
+  };
+
+  if (isLoading || statusLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div>Memuat pengaturan WhatsApp...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const whatsappEnabled = storeConfig?.whatsappEnabled || false;
+  const whatsappConnected = whatsappStatus?.connected || false;
+  const connectionState = whatsappStatus?.connectionState || 'close';
+  const qrCode = whatsappStatus?.qrCode;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center">
+          <MessageCircle className="w-5 h-5 mr-2" />
+          Integrasi WhatsApp
+        </CardTitle>
+        <CardDescription>
+          Hubungkan WhatsApp untuk mengirim notifikasi otomatis ke pelanggan
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Enable/Disable Toggle */}
+        <div className="flex items-center justify-between p-4 border rounded-lg">
+          <div>
+            <h4 className="font-medium">Aktifkan WhatsApp</h4>
+            <p className="text-sm text-muted-foreground">
+              Nyalakan untuk mengirim notifikasi service otomatis
+            </p>
+          </div>
+          <Switch
+            checked={whatsappEnabled}
+            onCheckedChange={handleToggleWhatsApp}
+            disabled={toggleWhatsAppMutation.isPending}
+            data-testid="switch-whatsapp-enabled"
+          />
+        </div>
+
+        {whatsappEnabled && (
+          <>
+            {/* Connection Status */}
+            <div className="flex items-center justify-between p-4 border rounded-lg">
+              <div>
+                <h4 className="font-medium flex items-center">
+                  {whatsappConnected ? (
+                    <Wifi className="w-4 h-4 mr-2 text-green-600" />
+                  ) : (
+                    <WifiOff className="w-4 h-4 mr-2 text-red-600" />
+                  )}
+                  Status Koneksi
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  {whatsappConnected ? 'Terhubung' : 'Tidak terhubung'}
+                </p>
+              </div>
+              <div className={`text-sm font-medium ${whatsappConnected ? 'text-green-600' : 'text-red-600'}`}>
+                {connectionState}
+              </div>
+            </div>
+
+            {/* Connection Actions */}
+            <div className="flex gap-2">
+              {!whatsappConnected ? (
+                <Button
+                  onClick={handleConnect}
+                  disabled={connectWhatsAppMutation.isPending || connectionState === 'connecting'}
+                  data-testid="button-connect-whatsapp"
+                >
+                  <Smartphone className="w-4 h-4 mr-2" />
+                  {connectionState === 'connecting' ? 'Menghubungkan...' : 'Hubungkan WhatsApp'}
+                </Button>
+              ) : (
+                <Button
+                  variant="destructive"
+                  onClick={handleDisconnect}
+                  disabled={disconnectWhatsAppMutation.isPending}
+                  data-testid="button-disconnect-whatsapp"
+                >
+                  <WifiOff className="w-4 h-4 mr-2" />
+                  Putuskan Koneksi
+                </Button>
+              )}
+            </div>
+
+            {/* QR Code Display */}
+            {qrCode && (
+              <div className="space-y-4">
+                <Alert>
+                  <QrCode className="h-4 w-4" />
+                  <AlertDescription>
+                    Scan QR code berikut dengan aplikasi WhatsApp di ponsel Anda untuk menghubungkan bot
+                  </AlertDescription>
+                </Alert>
+                <div className="flex justify-center p-4 border rounded-lg bg-white">
+                  <img 
+                    src={qrCode} 
+                    alt="WhatsApp QR Code" 
+                    className="w-64 h-64"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Test Message Section */}
+            {whatsappConnected && (
+              <div className="space-y-4">
+                <Separator />
+                <h4 className="font-medium">Test Pesan WhatsApp</h4>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Nomor WhatsApp (contoh: 081234567890)"
+                    value={testPhone}
+                    onChange={(e) => setTestPhone(e.target.value)}
+                    data-testid="input-test-phone"
+                  />
+                  <Button
+                    onClick={handleTestMessage}
+                    disabled={testMessageMutation.isPending}
+                    data-testid="button-test-message"
+                  >
+                    Kirim Test
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Kirim pesan test untuk memastikan koneksi WhatsApp berfungsi dengan baik
+                </p>
+              </div>
+            )}
+
+            {/* Feature Information */}
+            <div className="space-y-4">
+              <Separator />
+              <h4 className="font-medium">Fitur Notifikasi Otomatis</h4>
+              <div className="space-y-2">
+                <div className="flex items-center text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  <span>Service baru diterima</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  <span>Status service berubah (sedang dikerjakan, selesai, dll)</span>
+                </div>
+                <div className="flex items-center text-sm">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                  <span>Service siap diambil</span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

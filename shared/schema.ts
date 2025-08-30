@@ -71,6 +71,11 @@ export const storeConfig = pgTable("store_config", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('11.00'),
   defaultDiscount: decimal("default_discount", { precision: 5, scale: 2 }).default('0.00'),
   logo: varchar("logo"),
+  // WhatsApp settings
+  whatsappEnabled: boolean("whatsapp_enabled").default(false),
+  whatsappSessionData: text("whatsapp_session_data"), // Store session data
+  whatsappQR: text("whatsapp_qr"), // Store QR code
+  whatsappConnected: boolean("whatsapp_connected").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

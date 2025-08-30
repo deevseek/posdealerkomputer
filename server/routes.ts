@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { whatsappService } from "./whatsappService";
 import { setupAuth, isAuthenticated, authenticateUser, hashPassword } from "./auth";
 import {
   ObjectStorageService,
@@ -839,6 +840,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ticketNumber,
       });
       
+      // Send WhatsApp notification for new service (async, don't block response)
+      setImmediate(async () => {
+        try {
+          const config = await storage.getStoreConfig();
+          if (config?.whatsappEnabled && whatsappService.isConnected()) {
+            const customer = await storage.getCustomerById(ticket.customerId);
+            if (customer?.phone) {
+              await whatsappService.sendServiceCreatedNotification(
+                customer.phone,
+                customer.name,
+                ticket.ticketNumber || ticket.id,
+                `${ticket.deviceType} - ${ticket.problem}`
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Error sending WhatsApp notification for new service:', error);
+        }
+      });
+      
       res.json(ticket);
     } catch (error) {
       console.error("Error creating service ticket:", error);
@@ -869,7 +890,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
       
+      // Get old ticket for status comparison
+      const oldTicket = await storage.getServiceTicketById(req.params.id);
       const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts);
+      
+      // Send WhatsApp notification for status change (async, don't block response)
+      if (status !== undefined && oldTicket && status !== oldTicket.status) {
+        setImmediate(async () => {
+          try {
+            const config = await storage.getStoreConfig();
+            if (config?.whatsappEnabled && whatsappService.isConnected()) {
+              const customer = await storage.getCustomerById(ticket.customerId);
+              if (customer?.phone) {
+                await whatsappService.sendServiceStatusNotification(
+                  customer.phone,
+                  customer.name,
+                  ticket.ticketNumber || ticket.id,
+                  status,
+                  `${ticket.deviceType} - ${ticket.problem}`
+                );
+              }
+            }
+          } catch (error) {
+            console.error('Error sending WhatsApp notification for status change:', error);
+          }
+        });
+      }
+      
       res.json(ticket);
     } catch (error) {
       console.error("Error updating service ticket:", error);
@@ -1210,6 +1257,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error setting logo:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // WhatsApp API endpoints
+  
+  // Get WhatsApp status
+  app.get('/api/whatsapp/status', isAuthenticated, async (req, res) => {
+    try {
+      res.json({
+        connected: whatsappService.isConnected(),
+        connectionState: whatsappService.getConnectionState(),
+        qrCode: whatsappService.getQRCode(),
+      });
+    } catch (error) {
+      console.error('Error getting WhatsApp status:', error);
+      res.status(500).json({ message: 'Failed to get WhatsApp status' });
+    }
+  });
+
+  // Enable WhatsApp
+  app.post('/api/whatsapp/enable', isAuthenticated, async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      if (config) {
+        await storage.updateStoreConfig({
+          ...config,
+          whatsappEnabled: true,
+        });
+      }
+      res.json({ message: 'WhatsApp enabled successfully' });
+    } catch (error) {
+      console.error('Error enabling WhatsApp:', error);
+      res.status(500).json({ message: 'Failed to enable WhatsApp' });
+    }
+  });
+
+  // Disable WhatsApp
+  app.post('/api/whatsapp/disable', isAuthenticated, async (req, res) => {
+    try {
+      // Disconnect if currently connected
+      if (whatsappService.isConnected()) {
+        await whatsappService.disconnect();
+      }
+      
+      const config = await storage.getStoreConfig();
+      if (config) {
+        await storage.updateStoreConfig({
+          ...config,
+          whatsappEnabled: false,
+          whatsappConnected: false,
+          whatsappQR: null,
+        });
+      }
+      res.json({ message: 'WhatsApp disabled successfully' });
+    } catch (error) {
+      console.error('Error disabling WhatsApp:', error);
+      res.status(500).json({ message: 'Failed to disable WhatsApp' });
+    }
+  });
+
+  // Connect WhatsApp
+  app.post('/api/whatsapp/connect', isAuthenticated, async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      if (!config?.whatsappEnabled) {
+        return res.status(400).json({ message: 'WhatsApp not enabled in settings' });
+      }
+
+      await whatsappService.initialize();
+      res.json({ message: 'WhatsApp connection initiated' });
+    } catch (error) {
+      console.error('Error connecting WhatsApp:', error);
+      res.status(500).json({ message: 'Failed to connect WhatsApp' });
+    }
+  });
+
+  // Disconnect WhatsApp
+  app.post('/api/whatsapp/disconnect', isAuthenticated, async (req, res) => {
+    try {
+      await whatsappService.disconnect();
+      res.json({ message: 'WhatsApp disconnected successfully' });
+    } catch (error) {
+      console.error('Error disconnecting WhatsApp:', error);
+      res.status(500).json({ message: 'Failed to disconnect WhatsApp' });
+    }
+  });
+
+  // Test message
+  app.post('/api/whatsapp/test-message', isAuthenticated, async (req, res) => {
+    try {
+      const { phoneNumber } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({ message: 'Phone number is required' });
+      }
+
+      if (!whatsappService.isConnected()) {
+        return res.status(400).json({ message: 'WhatsApp not connected' });
+      }
+
+      const testMessage = `🔧 Test pesan dari LaptopPOS Service Center
+
+Ini adalah pesan test untuk memastikan koneksi WhatsApp berfungsi dengan baik.
+
+Terima kasih!
+- LaptopPOS Team`;
+
+      const success = await whatsappService.sendMessage(phoneNumber, testMessage);
+      
+      if (success) {
+        res.json({ message: 'Test message sent successfully' });
+      } else {
+        res.status(500).json({ message: 'Failed to send test message' });
+      }
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      res.status(500).json({ message: 'Failed to send test message' });
     }
   });
 
