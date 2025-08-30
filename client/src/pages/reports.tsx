@@ -167,9 +167,12 @@ export default function Reports() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground">Total Servis</p>
+                        <p className="text-sm font-medium text-muted-foreground">Omset Servis</p>
                         <p className="text-2xl font-bold">
-                          {serviceLoading ? "Loading..." : serviceReport?.totalServices || 0}
+                          {serviceLoading ? "Loading..." : `Rp ${Number(serviceReport?.totalRevenue || 0).toLocaleString('id-ID')}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {serviceReport?.totalServices || 0} servis
                         </p>
                       </div>
                       <BarChart3 className="w-8 h-8 text-blue-600" />
@@ -195,9 +198,12 @@ export default function Reports() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground">Stok Rendah</p>
+                        <p className="text-sm font-medium text-muted-foreground">Nilai Aset Inventory</p>
                         <p className="text-2xl font-bold text-orange-600">
-                          {inventoryLoading ? "Loading..." : inventoryReport?.lowStockCount || 0}
+                          {inventoryLoading ? "Loading..." : `Rp ${Number(inventoryReport?.totalAssetValue || 0).toLocaleString('id-ID')}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {inventoryReport?.totalStockQuantity || 0} stok • {inventoryReport?.lowStockCount || 0} rendah
                         </p>
                       </div>
                       <Package className="w-8 h-8 text-orange-600" />
@@ -252,9 +258,49 @@ export default function Reports() {
 
             {/* Services Tab */}
             <TabsContent value="services" className="space-y-6">
+              {/* Service Financial Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-green-600">Total Omset</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {serviceLoading ? "Loading..." : `Rp ${Number(serviceReport?.totalRevenue || 0).toLocaleString('id-ID')}`}
+                    </p>
+                    <div className="text-sm text-muted-foreground mt-2">
+                      <div>Labor: Rp {Number(serviceReport?.revenueBreakdown?.laborRevenue || 0).toLocaleString('id-ID')}</div>
+                      <div>Parts: Rp {Number(serviceReport?.revenueBreakdown?.partsRevenue || 0).toLocaleString('id-ID')}</div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-red-600">Total Modal Parts</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {serviceLoading ? "Loading..." : `Rp ${Number(serviceReport?.totalCost || 0).toLocaleString('id-ID')}`}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-blue-600">Laba Bersih</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {serviceLoading ? "Loading..." : `Rp ${Number(serviceReport?.totalProfit || 0).toLocaleString('id-ID')}`}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Laporan Servis</CardTitle>
+                  <CardTitle>Detail Tiket Servis</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {serviceLoading ? (
@@ -288,7 +334,14 @@ export default function Reports() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {ticket.estimatedCost ? `Rp ${Number(ticket.estimatedCost).toLocaleString('id-ID')}` : '-'}
+                              <div className="flex flex-col">
+                                <div className="text-sm">
+                                  {ticket.laborCost ? `Labor: Rp ${Number(ticket.laborCost).toLocaleString('id-ID')}` : 'Labor: -'}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {ticket.partsCost ? `Parts: Rp ${Number(ticket.partsCost).toLocaleString('id-ID')}` : 'Parts: -'}
+                                </div>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -325,9 +378,16 @@ export default function Reports() {
                 </Card>
               </div>
 
+              <div className="p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Catatan:</strong> Data keuangan mencakup penjualan produk, biaya modal parts service, 
+                  penjualan parts service, dan ongkos kerja. Sistem otomatis mencatat 3 transaksi saat service diselesaikan.
+                </p>
+              </div>
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Detail Keuangan</CardTitle>
+                  <CardTitle>Detail Transaksi Keuangan</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {financialLoading ? (

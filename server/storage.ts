@@ -722,6 +722,13 @@ export class DatabaseStorage implements IStorage {
 
   async getServiceReport(startDate: Date, endDate: Date): Promise<{
     totalServices: number;
+    totalRevenue: string;
+    totalCost: string;
+    totalProfit: string;
+    revenueBreakdown: {
+      laborRevenue: string;
+      partsRevenue: string;
+    };
     tickets: any[];
   }> {
     const [totalResult] = await db
@@ -729,6 +736,64 @@ export class DatabaseStorage implements IStorage {
       .from(serviceTickets)
       .where(
         and(
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      );
+
+    // Get service financial data
+    const [serviceIncomeResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
+      .where(
+        and(
+          eq(financialRecords.type, 'income'),
+          or(
+            eq(financialRecords.referenceType, 'service_labor'),
+            eq(financialRecords.referenceType, 'service_parts_revenue')
+          ),
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      );
+
+    const [serviceCostResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
+      .where(
+        and(
+          eq(financialRecords.type, 'expense'),
+          eq(financialRecords.referenceType, 'service_parts_cost'),
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      );
+
+    // Get labor revenue
+    const [laborRevenueResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
+      .where(
+        and(
+          eq(financialRecords.type, 'income'),
+          eq(financialRecords.referenceType, 'service_labor'),
+          gte(serviceTickets.createdAt, startDate),
+          lte(serviceTickets.createdAt, endDate)
+        )
+      );
+
+    // Get parts revenue
+    const [partsRevenueResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .innerJoin(serviceTickets, eq(financialRecords.reference, serviceTickets.id))
+      .where(
+        and(
+          eq(financialRecords.type, 'income'),
+          eq(financialRecords.referenceType, 'service_parts_revenue'),
           gte(serviceTickets.createdAt, startDate),
           lte(serviceTickets.createdAt, endDate)
         )
@@ -746,8 +811,19 @@ export class DatabaseStorage implements IStorage {
       )
       .orderBy(desc(serviceTickets.createdAt));
 
+    const totalRevenue = Number(serviceIncomeResult.total || 0);
+    const totalCost = Number(serviceCostResult.total || 0);
+    const totalProfit = totalRevenue - totalCost;
+
     return {
       totalServices: totalResult.count,
+      totalRevenue: totalRevenue.toString(),
+      totalCost: totalCost.toString(),
+      totalProfit: totalProfit.toString(),
+      revenueBreakdown: {
+        laborRevenue: (Number(laborRevenueResult.total || 0)).toString(),
+        partsRevenue: (Number(partsRevenueResult.total || 0)).toString(),
+      },
       tickets: ticketList.map(t => ({
         ...t.service_tickets,
         customer: t.customers
@@ -828,6 +904,8 @@ export class DatabaseStorage implements IStorage {
     lowStockCount: number;
     lowStockProducts: any[];
     totalProducts: number;
+    totalAssetValue: string;
+    totalStockQuantity: number;
   }> {
     const [lowStockResult] = await db
       .select({ count: count() })
@@ -856,13 +934,27 @@ export class DatabaseStorage implements IStorage {
       .from(products)
       .where(eq(products.isActive, true));
 
+    // Calculate total asset value (stock × purchase price)
+    const assetValueResult = await db
+      .select({
+        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.purchasePrice}, 0))`,
+        totalQuantity: sql<number>`SUM(${products.stock})`
+      })
+      .from(products)
+      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
+
+    const totalAssetValue = Number(assetValueResult[0]?.totalValue || 0);
+    const totalStockQuantity = Number(assetValueResult[0]?.totalQuantity || 0);
+
     return {
       lowStockCount: lowStockResult.count,
       lowStockProducts: lowStockProducts.map(p => ({
         ...p.products,
         category: p.categories
       })),
-      totalProducts: totalResult.count
+      totalProducts: totalResult.count,
+      totalAssetValue: totalAssetValue.toString(),
+      totalStockQuantity: totalStockQuantity
     };
   }
 
