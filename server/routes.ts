@@ -1279,13 +1279,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enable WhatsApp
   app.post('/api/whatsapp/enable', isAuthenticated, async (req, res) => {
     try {
-      const config = await storage.getStoreConfig();
-      if (config) {
-        await storage.updateStoreConfig({
-          ...config,
-          whatsappEnabled: true,
-        });
-      }
+      await storage.upsertStoreConfig({
+        whatsappEnabled: true,
+      });
       res.json({ message: 'WhatsApp enabled successfully' });
     } catch (error) {
       console.error('Error enabling WhatsApp:', error);
@@ -1301,15 +1297,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await whatsappService.disconnect();
       }
       
-      const config = await storage.getStoreConfig();
-      if (config) {
-        await storage.updateStoreConfig({
-          ...config,
-          whatsappEnabled: false,
-          whatsappConnected: false,
-          whatsappQR: null,
-        });
-      }
+      await storage.upsertStoreConfig({
+        whatsappEnabled: false,
+      });
       res.json({ message: 'WhatsApp disabled successfully' });
     } catch (error) {
       console.error('Error disabling WhatsApp:', error);

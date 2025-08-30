@@ -155,9 +155,9 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
     testMessageMutation.mutate(testPhone);
   };
 
-  const whatsappConnected = whatsappStatus?.connected || false;
-  const connectionState = whatsappStatus?.state || 'close';
-  const qrCode = whatsappStatus?.qrCode;
+  const whatsappConnected = (whatsappStatus as any)?.connected || false;
+  const connectionState = (whatsappStatus as any)?.state || 'close';
+  const qrCode = (whatsappStatus as any)?.qrCode;
 
   return (
     <Card>
