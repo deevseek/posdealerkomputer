@@ -15,6 +15,7 @@ import Suppliers from "@/pages/suppliers";
 import Financial from "@/pages/financial";
 import FinanceNew from "@/pages/finance-new";
 import Reports from "@/pages/reports";
+import StockMovements from "@/pages/stock-movements";
 import Settings from "@/pages/settings";
 import RolesPage from "@/pages/roles";
 import UsersPage from "@/pages/users";
@@ -39,6 +40,7 @@ function Router() {
           <Route path="/users" component={UsersPage} />
           <Route path="/roles" component={RolesPage} />
           <Route path="/reports" component={Reports} />
+          <Route path="/stock-movements" component={StockMovements} />
           <Route path="/settings" component={Settings} />
         </>
       )}

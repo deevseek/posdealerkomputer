@@ -32,6 +32,7 @@ export const transactionTypeEnum = pgEnum('transaction_type', ['sale', 'service'
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'transfer', 'qris', 'installment']);
 export const serviceStatusEnum = pgEnum('service_status', ['pending', 'in_progress', 'completed', 'delivered', 'cancelled']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
+export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
 
 // User storage table (mandatory for Replit Auth)
 export const users = pgTable("users", {
@@ -188,6 +189,7 @@ export const stockMovements = pgTable("stock_movements", {
   type: stockMovementTypeEnum("type").notNull(),
   quantity: integer("quantity").notNull(),
   reference: varchar("reference"), // Transaction ID or other reference
+  referenceType: stockReferenceTypeEnum("reference_type").notNull(),
   notes: text("notes"),
   userId: varchar("user_id").references(() => users.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),

@@ -9,6 +9,25 @@ import {
 // import htmlPdf from 'html-pdf-node';  // Removed due to Chromium dependencies issues
 import * as XLSX from 'xlsx';
 import { db } from "./db";
+import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
+import {
+  products,
+  categories, 
+  customers,
+  suppliers,
+  transactions,
+  transactionItems,
+  serviceTickets,
+  serviceTicketParts,
+  stockMovements,
+  financialRecords,
+  storeConfig,
+  roles,
+  users,
+  employees,
+  payrollRecords,
+  attendanceRecords
+} from "@shared/schema";
 
 // HTML template generator for PDF reports
 function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
@@ -140,23 +159,7 @@ function generateReportHTML(reportData: any, startDate: string, endDate: string)
   `;
 }
 
-import { 
-  financialRecords,
-  serviceTickets,
-  serviceTicketParts, 
-  transactions,
-  transactionItems,
-  products,
-  categories,
-  customers,
-  suppliers,
-  stockMovements,
-  employees,
-  payrollRecords,
-  attendanceRecords,
-  storeConfig
-} from "@shared/schema";
-import { eq } from "drizzle-orm";
+// Duplicate imports removed - already imported above
 import { 
   insertProductSchema,
   insertCustomerSchema,
@@ -251,6 +254,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching inventory report:", error);
       res.status(500).json({ message: "Failed to fetch inventory report" });
+    }
+  });
+
+  // Stock movements report
+  app.get('/api/reports/stock-movements', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate, productId, referenceType } = req.query;
+      
+      let query = db
+        .select({
+          id: stockMovements.id,
+          productId: stockMovements.productId,
+          productName: products.name,
+          type: stockMovements.type,
+          referenceType: stockMovements.referenceType,
+          quantity: stockMovements.quantity,
+          reference: stockMovements.reference,
+          notes: stockMovements.notes,
+          userId: stockMovements.userId,
+          userName: users.firstName,
+          createdAt: stockMovements.createdAt,
+        })
+        .from(stockMovements)
+        .leftJoin(products, eq(stockMovements.productId, products.id))
+        .leftJoin(users, eq(stockMovements.userId, users.id))
+        .orderBy(desc(stockMovements.createdAt));
+      
+      // Apply filters
+      const conditions = [];
+      
+      if (startDate && endDate) {
+        conditions.push(
+          and(
+            gte(stockMovements.createdAt, new Date(startDate as string)),
+            lte(stockMovements.createdAt, new Date(endDate as string))
+          )
+        );
+      }
+      
+      if (productId) {
+        conditions.push(eq(stockMovements.productId, productId as string));
+      }
+      
+      if (referenceType) {
+        conditions.push(eq(stockMovements.referenceType, referenceType as string));
+      }
+      
+      if (conditions.length > 0) {
+        query = query.where(and(...conditions));
+      }
+      
+      const movements = await query;
+      
+      // Calculate summary
+      const summary = movements.reduce((acc, movement) => {
+        const key = movement.referenceType || 'unknown';
+        if (!acc[key]) {
+          acc[key] = { totalOut: 0, totalIn: 0, count: 0 };
+        }
+        
+        if (movement.type === 'out') {
+          acc[key].totalOut += movement.quantity;
+        } else if (movement.type === 'in') {
+          acc[key].totalIn += movement.quantity;
+        }
+        acc[key].count += 1;
+        
+        return acc;
+      }, {} as Record<string, { totalOut: number; totalIn: number; count: number }>);
+      
+      res.json({
+        movements,
+        summary,
+        totalMovements: movements.length
+      });
+    } catch (error) {
+      console.error('Error fetching stock movements:', error);
+      res.status(500).json({ message: 'Failed to fetch stock movements' });
     }
   });
 

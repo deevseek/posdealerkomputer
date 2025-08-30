@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Laptop,
   Shield,
-  UserCog
+  UserCog,
+  Layers
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -31,6 +32,7 @@ const navigation = [
   { name: "Users", href: "/users", icon: UserCog, roles: ["admin", "owner"] },
   { name: "Roles", href: "/roles", icon: Shield, roles: ["admin", "owner"] },
   { name: "Reports", href: "/reports", icon: FileText, roles: ["admin", "finance", "owner"] },
+  { name: "Stock Movements", href: "/stock-movements", icon: Layers, roles: ["admin", "purchasing", "owner"] },
   { name: "Settings", href: "/settings", icon: Settings, roles: ["admin", "owner"] },
 ];
 

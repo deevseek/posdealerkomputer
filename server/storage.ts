@@ -430,6 +430,7 @@ export class DatabaseStorage implements IStorage {
             type: 'out',
             quantity: item.quantity,
             reference: transaction.id,
+            referenceType: 'sale',
             notes: 'Sale transaction',
             userId: transactionData.userId,
           });
@@ -537,6 +538,7 @@ export class DatabaseStorage implements IStorage {
             type: 'out',
             quantity: part.quantity,
             reference: id,
+            referenceType: 'service',
             notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
             userId: '46332812'
           });
