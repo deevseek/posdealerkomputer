@@ -1279,7 +1279,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Enable WhatsApp
   app.post('/api/whatsapp/enable', isAuthenticated, async (req, res) => {
     try {
+      const existingConfig = await storage.getStoreConfig();
       await storage.upsertStoreConfig({
+        name: existingConfig?.name || "LaptopPOS",
+        address: existingConfig?.address || "",
+        phone: existingConfig?.phone || "",
+        email: existingConfig?.email || "",
+        taxRate: existingConfig?.taxRate || "11.00",
+        defaultDiscount: existingConfig?.defaultDiscount || "0.00",
         whatsappEnabled: true,
       });
       res.json({ message: 'WhatsApp enabled successfully' });
@@ -1297,7 +1304,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await whatsappService.disconnect();
       }
       
+      const existingConfig = await storage.getStoreConfig();
       await storage.upsertStoreConfig({
+        name: existingConfig?.name || "LaptopPOS",
+        address: existingConfig?.address || "",
+        phone: existingConfig?.phone || "",
+        email: existingConfig?.email || "",
+        taxRate: existingConfig?.taxRate || "11.00",
+        defaultDiscount: existingConfig?.defaultDiscount || "0.00",
         whatsappEnabled: false,
       });
       res.json({ message: 'WhatsApp disabled successfully' });
