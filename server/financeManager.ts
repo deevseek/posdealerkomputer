@@ -4,6 +4,7 @@ import {
   employees, 
   payrollRecords, 
   attendanceRecords,
+  products,
   type InsertFinancialRecord,
   type FinancialRecord,
   type InsertEmployee,
@@ -13,7 +14,7 @@ import {
   type InsertAttendanceRecord,
   type AttendanceRecord
 } from "@shared/schema";
-import { eq, and, gte, lte, desc, sum, count } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
 
 export class FinanceManager {
   // Financial Transactions
@@ -78,11 +79,14 @@ export class FinanceManager {
     totalExpense: string;
     netProfit: string;
     transactionCount: number;
+    inventoryValue: string;
+    inventoryCount: number;
     breakdown: {
       categories: { [key: string]: { income: number; expense: number; count: number } };
       paymentMethods: { [key: string]: number };
       sources: { [key: string]: { amount: number; count: number } };
       subcategories: { [key: string]: { amount: number; type: string; count: number } };
+      inventory: { [key: string]: { value: number; stock: number; avgCost: number } };
     };
   }> {
     const conditions = [];
@@ -153,6 +157,21 @@ export class FinanceManager {
       .from(financialRecords)
       .where(whereClause)
       .groupBy(financialRecords.referenceType);
+
+    // Inventory value calculation
+    const inventoryBreakdown = await db
+      .select({
+        name: products.name,
+        stock: products.stock,
+        purchasePrice: products.purchasePrice,
+        sellingPrice: products.sellingPrice,
+        totalValue: sql<number>`${products.stock} * COALESCE(${products.purchasePrice}, 0)`,
+      })
+      .from(products)
+      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
+
+    const totalInventoryValue = inventoryBreakdown.reduce((total, item) => total + Number(item.totalValue), 0);
+    const totalInventoryCount = inventoryBreakdown.reduce((total, item) => total + item.stock, 0);
     
     const totalIncome = Number(incomeResult.total || 0);
     const totalExpense = Number(expenseResult.total || 0);
@@ -201,17 +220,32 @@ export class FinanceManager {
         };
       }
     });
+
+    // Process inventory breakdown
+    const inventory: { [key: string]: { value: number; stock: number; avgCost: number } } = {};
+    inventoryBreakdown.forEach(item => {
+      if (item.name) {
+        inventory[item.name] = {
+          value: Number(item.totalValue),
+          stock: item.stock,
+          avgCost: Number(item.purchasePrice || 0)
+        };
+      }
+    });
     
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
       netProfit: (totalIncome - totalExpense).toString(),
       transactionCount: countResult.count,
+      inventoryValue: totalInventoryValue.toString(),
+      inventoryCount: totalInventoryCount,
       breakdown: {
         categories,
         paymentMethods,
         sources,
-        subcategories
+        subcategories,
+        inventory
       }
     };
   }

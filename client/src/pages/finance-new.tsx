@@ -37,11 +37,14 @@ interface FinancialSummary {
   totalExpense: string;
   netProfit: string;
   transactionCount: number;
+  inventoryValue: string;
+  inventoryCount: number;
   breakdown: {
     categories: { [key: string]: { income: number; expense: number; count: number } };
     paymentMethods: { [key: string]: number };
     sources: { [key: string]: { amount: number; count: number } };
     subcategories: { [key: string]: { amount: number; type: string; count: number } };
+    inventory: { [key: string]: { value: number; stock: number; avgCost: number } };
   };
 }
 
@@ -358,7 +361,7 @@ export default function FinanceNew() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
@@ -391,6 +394,21 @@ export default function FinanceNew() {
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
               {formatCurrency(summary?.netProfit || '0')}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Nilai Aset Inventory</CardTitle>
+            <DollarSign className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">
+              {formatCurrency(summary?.inventoryValue || '0')}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {summary?.inventoryCount || 0} item stok
             </div>
           </CardContent>
         </Card>
@@ -434,18 +452,26 @@ export default function FinanceNew() {
               </ul>
             </div>
           </div>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>Catatan:</strong> Saat service ticket diselesaikan, sistem otomatis mencatat 3 transaksi: 
-              biaya modal parts sebagai pengeluaran, penjualan parts sebagai pemasukan, dan ongkos kerja sebagai pemasukan.
-            </p>
+          <div className="mt-4 space-y-3">
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Catatan:</strong> Saat service ticket diselesaikan, sistem otomatis mencatat 3 transaksi: 
+                biaya modal parts sebagai pengeluaran, penjualan parts sebagai pemasukan, dan ongkos kerja sebagai pemasukan.
+              </p>
+            </div>
+            <div className="p-3 bg-orange-50 rounded-lg">
+              <p className="text-sm text-orange-800">
+                <strong>Nilai Aset Inventory:</strong> Dihitung berdasarkan jumlah stok × harga beli untuk setiap produk aktif. 
+                Total ini menunjukkan berapa nilai modal yang tertanam dalam persediaan barang.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Breakdown Detail */}
       {summary?.breakdown && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {/* Categories Breakdown */}
           <Card>
             <CardHeader>
@@ -533,6 +559,37 @@ export default function FinanceNew() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Inventory Assets Breakdown */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Aset Inventory Detail</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {Object.entries(summary.breakdown.inventory).map(([productName, data]) => (
+                  <div key={productName} className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium truncate max-w-32" title={productName}>
+                        {productName}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {data.stock} stok • {formatCurrency(data.avgCost.toString())} avg
+                      </span>
+                    </div>
+                    <div className="text-sm font-medium text-orange-600">
+                      {formatCurrency(data.value.toString())}
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(summary.breakdown.inventory).length === 0 && (
+                  <div className="text-center py-4 text-muted-foreground">
+                    Tidak ada inventory dengan stok
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
