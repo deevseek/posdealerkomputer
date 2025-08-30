@@ -48,8 +48,9 @@ export default function Settings() {
       });
     },
     onError: (error: any) => {
+      console.error('Store config update error:', error);
       toast({
-        title: "Error",
+        title: "Error", 
         description: error?.message || "Gagal mengupdate pengaturan",
         variant: "destructive",
       });
@@ -60,7 +61,7 @@ export default function Settings() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const data = {
-      storeName: formData.get('storeName'),
+      name: formData.get('storeName'),
       address: formData.get('address'),
       phone: formData.get('phone'),
       email: formData.get('email'),
