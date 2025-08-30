@@ -440,6 +440,8 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
+  sku: true,      // Auto-generated
+  barcode: true,  // Auto-generated
   createdAt: true,
   updatedAt: true,
 });
@@ -526,6 +528,31 @@ export type InsertCategory = z.infer<typeof insertCategorySchema>;
 export type Category = typeof categories.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
+
+// Auto-generation utilities
+export function generateSKU(): string {
+  const date = new Date();
+  const dateString = date.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD
+  const randomNum = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
+  return `SKU-${dateString}-${randomNum}`;
+}
+
+export function generateBarcode(): string {
+  // Generate 13-digit EAN barcode format: Country(2) + Manufacturer(5) + Product(5) + Check(1)
+  const country = '62'; // Indonesia country code for barcodes
+  const manufacturer = Math.floor(Math.random() * 99999).toString().padStart(5, '0');
+  const product = Math.floor(Math.random() * 99999).toString().padStart(5, '0');
+  
+  // Simple check digit calculation (modulo 10)
+  const digits = (country + manufacturer + product).split('').map(Number);
+  let checkSum = 0;
+  for (let i = 0; i < digits.length; i++) {
+    checkSum += digits[i] * (i % 2 === 0 ? 1 : 3);
+  }
+  const checkDigit = (10 - (checkSum % 10)) % 10;
+  
+  return country + manufacturer + product + checkDigit;
+}
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
 export type InsertSupplier = z.infer<typeof insertSupplierSchema>;

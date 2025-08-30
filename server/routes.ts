@@ -35,7 +35,9 @@ import {
   insertFinancialRecordSchema,
   insertCategorySchema,
   insertStoreConfigSchema,
-  insertRoleSchema
+  insertRoleSchema,
+  generateSKU,
+  generateBarcode
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -208,7 +210,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/products', isAuthenticated, async (req, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
-      const product = await storage.createProduct(productData);
+      const productWithCodes = {
+        ...productData,
+        sku: generateSKU(),
+        barcode: generateBarcode(),
+      };
+      const product = await storage.createProduct(productWithCodes);
       res.json(product);
     } catch (error) {
       console.error("Error creating product:", error);

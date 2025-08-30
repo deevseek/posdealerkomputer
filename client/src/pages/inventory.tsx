@@ -88,8 +88,6 @@ export default function Inventory() {
       name: "",
       description: "",
       categoryId: "",
-      sku: "",
-      barcode: "",
       purchasePrice: "",
       sellingPrice: "",
       stock: "0",
@@ -241,8 +239,6 @@ export default function Inventory() {
       name: product.name,
       description: product.description || "",
       categoryId: product.categoryId || "",
-      sku: product.sku || "",
-      barcode: product.barcode || "",
       purchasePrice: product.purchasePrice || "",
       sellingPrice: product.sellingPrice || "",
       stock: product.stock?.toString() || "0",
@@ -264,8 +260,10 @@ export default function Inventory() {
   };
 
   const getStockStatus = (product: Product) => {
-    if (product.stock <= 0) return { text: "Out of Stock", variant: "destructive" as const };
-    if (product.stock <= (product.minStock || 5)) return { text: "Low Stock", variant: "secondary" as const };
+    const stock = product.stock || 0;
+    const minStock = product.minStock || 5;
+    if (stock <= 0) return { text: "Out of Stock", variant: "destructive" as const };
+    if (stock <= minStock) return { text: "Low Stock", variant: "secondary" as const };
     return { text: "In Stock", variant: "default" as const };
   };
 
@@ -351,7 +349,7 @@ export default function Inventory() {
                       <TableBody>
                         {products.map((product: Product) => {
                           const stockStatus = getStockStatus(product);
-                          const category = categories.find((c: Category) => c.id === product.categoryId);
+                          const category = (categories as Category[])?.find((c: Category) => c.id === product.categoryId);
                           
                           return (
                             <TableRow key={product.id}>
@@ -627,33 +625,10 @@ export default function Inventory() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={productForm.control}
-                  name="sku"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>SKU</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Product SKU" {...field} data-testid="input-product-sku" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={productForm.control}
-                  name="barcode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Barcode</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Product barcode" {...field} data-testid="input-product-barcode" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="bg-muted/50 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Auto-generated:</strong> SKU dan Barcode akan dibuat otomatis saat produk disimpan
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
