@@ -36,7 +36,8 @@ interface TransactionItem {
 }
 
 export default function TransactionModal({ open, onClose, onComplete }: TransactionModalProps) {
-  const [customer, setCustomer] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
@@ -47,6 +48,24 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/products"],
   });
+
+  // Fetch customers
+  const { data: customers = [], isLoading: customersLoading } = useQuery({
+    queryKey: ["/api/customers", customerSearch],
+    queryFn: async () => {
+      const url = customerSearch ? `/api/customers?search=${encodeURIComponent(customerSearch)}` : '/api/customers';
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      return response.json();
+    },
+  });
+
+  // Filter customers based on search
+  const filteredCustomers = customers.filter((customer: any) =>
+    customer.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    customer.phone?.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    customer.email?.toLowerCase().includes(customerSearch.toLowerCase())
+  );
 
   // Filter products based on search
   const filteredProducts = products.filter((product: any) =>
@@ -80,11 +99,17 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   });
 
   const resetForm = () => {
-    setCustomer("");
+    setSelectedCustomer(null);
+    setCustomerSearch("");
     setPaymentMethod("cash");
     setItems([]);
     setProductSearch("");
     setSelectedProducts([]);
+  };
+
+  const selectCustomer = (customer: any) => {
+    setSelectedCustomer(customer);
+    setCustomerSearch("");
   };
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -162,12 +187,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     const transactionData = {
       transaction: {
         type: 'sale' as const,
-        customerId: customer || null,
+        customerId: selectedCustomer?.id || null,
         paymentMethod,
         subtotal: Math.round(subtotal),
         tax: Math.round(tax),
         total: Math.round(total),
-        notes: `POS Sale - ${items.length} items`,
+        notes: `POS Sale - ${items.length} items${selectedCustomer ? ` for ${selectedCustomer.name}` : ''}`,
       },
       items: items.map(item => ({
         productId: item.productId,
@@ -192,22 +217,91 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
           <div className="space-y-4">
             <div>
               <Label htmlFor="customer">Customer</Label>
-              <div className="relative">
-                <Input
-                  id="customer"
-                  placeholder="Search customer..."
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
-                  data-testid="input-customer"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  data-testid="button-add-customer"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
+              <div className="space-y-2">
+                {selectedCustomer ? (
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-md">
+                    <div>
+                      <div className="font-medium">{selectedCustomer.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {selectedCustomer.phone} • {selectedCustomer.email}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCustomer(null)}
+                      data-testid="button-remove-customer"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Input
+                        id="customer"
+                        placeholder="Search customer by name, phone, or email..."
+                        value={customerSearch}
+                        onChange={(e) => setCustomerSearch(e.target.value)}
+                        data-testid="input-customer-search"
+                      />
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    </div>
+                    
+                    {/* Customer Search Results */}
+                    {customerSearch && (
+                      <Card className="max-h-48 overflow-y-auto">
+                        <CardContent className="p-2">
+                          {customersLoading ? (
+                            <div className="text-center py-4">Loading customers...</div>
+                          ) : filteredCustomers.length > 0 ? (
+                            <div className="space-y-1">
+                              {filteredCustomers.slice(0, 8).map((customer: any) => (
+                                <Button
+                                  key={customer.id}
+                                  variant="ghost"
+                                  className="w-full justify-start h-auto p-3"
+                                  onClick={() => selectCustomer(customer)}
+                                  data-testid={`button-select-customer-${customer.id}`}
+                                >
+                                  <div className="text-left">
+                                    <div className="font-medium">{customer.name}</div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {customer.phone} • {customer.email}
+                                    </div>
+                                  </div>
+                                </Button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 space-y-2">
+                              <div className="text-muted-foreground">No customers found</div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  // TODO: Add new customer modal
+                                  toast({
+                                    title: "Feature Coming Soon",
+                                    description: "Add new customer functionality will be added",
+                                  });
+                                }}
+                                data-testid="button-add-new-customer"
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Add New Customer
+                              </Button>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
+                    
+                    <div className="text-xs text-muted-foreground">
+                      Optional: Leave empty for walk-in customer
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
