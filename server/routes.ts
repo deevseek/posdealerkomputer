@@ -325,7 +325,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/service-tickets', isAuthenticated, async (req, res) => {
     try {
-      const ticketData = insertServiceTicketSchema.parse(req.body);
+      console.log("Raw request body:", JSON.stringify(req.body, null, 2));
+      
+      // Manual validation and transformation
+      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost } = req.body;
+      
+      const ticketData = {
+        customerId: customerId || "",
+        deviceType: deviceType || "",
+        deviceBrand: deviceBrand || null,
+        deviceModel: deviceModel || null,
+        problem: problem || "",
+        diagnosis: diagnosis || null,
+        solution: solution || null,
+        status: status || 'pending',
+        technicianId: technicianId || null,
+        estimatedCost: estimatedCost ? String(estimatedCost) : null,
+        actualCost: null,
+        estimatedCompletion: null,
+        completedAt: null,
+      };
+      
+      console.log("Processed ticket data:", JSON.stringify(ticketData, null, 2));
       
       // Generate ticket number
       const ticketNumber = `SVC-${Date.now()}`;
