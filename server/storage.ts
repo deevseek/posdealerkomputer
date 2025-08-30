@@ -988,6 +988,7 @@ export class DatabaseStorage implements IStorage {
 
   async getDashboardStats(): Promise<{
     todaySales: string;
+    todayRevenue: string;
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
@@ -997,14 +998,25 @@ export class DatabaseStorage implements IStorage {
     
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    // Today's sales
-    const [todaySalesResult] = await db
+    // Today's product sales (POS transactions only)
+    const [todayProductSalesResult] = await db
       .select({ total: sum(transactions.total) })
       .from(transactions)
       .where(
         and(
           eq(transactions.type, 'sale'),
           gte(transactions.createdAt, today)
+        )
+      );
+    
+    // Today's total revenue (all income including services)
+    const [todayRevenueResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(
+        and(
+          eq(financialRecords.type, 'income'),
+          gte(financialRecords.createdAt, today)
         )
       );
     
@@ -1060,7 +1072,8 @@ export class DatabaseStorage implements IStorage {
     }
     
     return {
-      todaySales: todaySalesResult.total || '0',
+      todaySales: todayProductSalesResult.total || '0',
+      todayRevenue: todayRevenueResult.total || '0',
       activeServices: activeServicesResult.count,
       lowStockCount: lowStockResult.count,
       monthlyProfit: monthlyProfit.toString(),
