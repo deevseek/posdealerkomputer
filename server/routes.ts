@@ -6,7 +6,139 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
+import htmlPdf from 'html-pdf-node';
 import { db } from "./db";
+
+// HTML template generator for PDF reports
+function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
+  const { salesReport, serviceReport, financialReport, inventoryReport } = reportData;
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Laporan Bisnis</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #333; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #4F46E5; padding-bottom: 20px; }
+        .header h1 { color: #4F46E5; margin: 0; font-size: 28px; }
+        .header p { margin: 5px 0; color: #666; }
+        .period { background: #F3F4F6; padding: 15px; border-radius: 8px; margin-bottom: 25px; text-align: center; }
+        .section { margin-bottom: 30px; }
+        .section h2 { color: #4F46E5; border-bottom: 1px solid #E5E7EB; padding-bottom: 8px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin: 20px 0; }
+        .stat-card { background: #F9FAFB; padding: 15px; border-radius: 8px; border-left: 4px solid #4F46E5; }
+        .stat-card h3 { margin: 0 0 8px 0; color: #6B7280; font-size: 14px; }
+        .stat-card .value { font-size: 24px; font-weight: bold; color: #111827; }
+        .breakdown { margin: 15px 0; }
+        .breakdown-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #E5E7EB; }
+        .table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        .table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #E5E7EB; }
+        .table th { background: #F9FAFB; font-weight: 600; color: #374151; }
+        .income { color: #059669; }
+        .expense { color: #DC2626; }
+        .footer { margin-top: 40px; text-align: center; color: #6B7280; font-size: 12px; border-top: 1px solid #E5E7EB; padding-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>LaptopPOS - Laporan Bisnis</h1>
+        <p>Sistem Manajemen Penjualan & Servis Laptop</p>
+      </div>
+      
+      <div class="period">
+        <strong>Periode Laporan: ${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}</strong>
+      </div>
+      
+      <div class="section">
+        <h2>📊 Ringkasan Keuangan</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Penjualan</h3>
+            <div class="value">Rp ${Number(salesReport?.totalSales || 0).toLocaleString('id-ID')}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Omset Servis</h3>
+            <div class="value">Rp ${Number(serviceReport?.totalRevenue || 0).toLocaleString('id-ID')}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Total Pemasukan</h3>
+            <div class="value income">Rp ${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Total Pengeluaran</h3>
+            <div class="value expense">Rp ${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+        
+        <div class="stat-card" style="margin-top: 20px;">
+          <h3>Laba Bersih</h3>
+          <div class="value income">Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}</div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>🔧 Laporan Servis</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Servis</h3>
+            <div class="value">${serviceReport?.totalServices || 0} tiket</div>
+          </div>
+          <div class="stat-card">
+            <h3>Modal Parts</h3>
+            <div class="value expense">Rp ${Number(serviceReport?.totalCost || 0).toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+        
+        <div class="breakdown">
+          <h3>Breakdown Revenue Servis:</h3>
+          <div class="breakdown-item">
+            <span>Revenue Labor:</span>
+            <span class="income">Rp ${Number(serviceReport?.revenueBreakdown?.laborRevenue || 0).toLocaleString('id-ID')}</span>
+          </div>
+          <div class="breakdown-item">
+            <span>Revenue Parts:</span>
+            <span class="income">Rp ${Number(serviceReport?.revenueBreakdown?.partsRevenue || 0).toLocaleString('id-ID')}</span>
+          </div>
+          <div class="breakdown-item" style="font-weight: bold;">
+            <span>Laba Servis:</span>
+            <span class="income">Rp ${Number(serviceReport?.totalProfit || 0).toLocaleString('id-ID')}</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>📦 Laporan Inventory</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <h3>Total Produk</h3>
+            <div class="value">${inventoryReport?.totalProducts || 0}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Stok Rendah</h3>
+            <div class="value expense">${inventoryReport?.lowStockCount || 0}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Total Stok</h3>
+            <div class="value">${inventoryReport?.totalStockQuantity || 0}</div>
+          </div>
+          <div class="stat-card">
+            <h3>Nilai Aset</h3>
+            <div class="value">Rp ${Number(inventoryReport?.totalAssetValue || 0).toLocaleString('id-ID')}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="footer">
+        <p>Laporan digenerate otomatis oleh LaptopPOS System pada ${new Date().toLocaleString('id-ID')}</p>
+        <p>© 2025 LaptopPOS - Sistem Manajemen Bisnis Laptop</p>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 import { 
   financialRecords,
   serviceTickets,
@@ -118,6 +250,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching inventory report:", error);
       res.status(500).json({ message: "Failed to fetch inventory report" });
+    }
+  });
+
+  // Export PDF endpoint
+  app.post('/api/reports/export-pdf', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate, reportData } = req.body;
+      
+      // Generate HTML template for PDF
+      const htmlContent = generateReportHTML(reportData, startDate, endDate);
+      
+      // Generate PDF from HTML
+      const options = { 
+        format: 'A4', 
+        margin: { top: '20mm', bottom: '20mm', left: '20mm', right: '20mm' }
+      };
+      
+      const file = { content: htmlContent };
+      const pdfBuffer = await htmlPdf.generatePdf(file, options);
+      
+      // Set proper headers and send PDF
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="laporan-bisnis-${startDate}-${endDate}.pdf"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      
+      // Send PDF buffer
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error exporting PDF:", error);
+      res.status(500).json({ message: "Failed to export PDF" });
     }
   });
 

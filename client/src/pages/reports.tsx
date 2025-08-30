@@ -27,7 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Calendar, DollarSign, TrendingUp, TrendingDown, BarChart3, Package, FileText, Download } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState("this-month");
@@ -58,6 +60,72 @@ export default function Reports() {
     queryKey: ["/api/reports/inventory"],
     retry: false,
   });
+
+  const { toast } = useToast();
+
+  // PDF Export mutation
+  const exportMutation = useMutation({
+    mutationFn: async () => {
+      const reportData = {
+        salesReport,
+        serviceReport,
+        financialReport,
+        inventoryReport
+      };
+
+      const response = await apiRequest('/api/reports/export-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          startDate,
+          endDate,
+          reportData
+        })
+      });
+
+      // Handle file download
+      const blob = new Blob([response], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `laporan-bisnis-${startDate}-${endDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return response;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Export Berhasil",
+        description: "Laporan PDF berhasil didownload",
+      });
+    },
+    onError: (error) => {
+      console.error('Export error:', error);
+      toast({
+        title: "Export Gagal",
+        description: "Terjadi kesalahan saat mengexport laporan",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleExportPDF = () => {
+    if (!salesReport || !serviceReport || !financialReport || !inventoryReport) {
+      toast({
+        title: "Data Belum Siap",
+        description: "Tunggu hingga semua data selesai dimuat",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    exportMutation.mutate();
+  };
 
   const handlePeriodChange = (period: string) => {
     setSelectedPeriod(period);
@@ -130,9 +198,14 @@ export default function Reports() {
                   disabled={selectedPeriod !== "custom"}
                 />
                 
-                <Button className="flex items-center gap-2">
+                <Button 
+                  className="flex items-center gap-2"
+                  onClick={handleExportPDF}
+                  disabled={exportMutation.isPending || salesLoading || serviceLoading || financialLoading || inventoryLoading}
+                  data-testid="button-export-pdf"
+                >
                   <Download className="w-4 h-4" />
-                  Export PDF
+                  {exportMutation.isPending ? "Mengexport..." : "Export PDF"}
                 </Button>
               </div>
             </CardContent>
