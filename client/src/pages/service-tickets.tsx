@@ -40,6 +40,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
 import { serviceTickets, type ServiceTicket, type Customer } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +51,12 @@ const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   ticketNumber: true,
   createdAt: true,
   updatedAt: true,
+  estimatedCost: true,
+  actualCost: true,
+  completedAt: true,
+  estimatedCompletion: true,
+}).extend({
+  estimatedCost: z.string().optional(),
 });
 
 type ServiceTicketStatus = "pending" | "in_progress" | "completed" | "delivered" | "cancelled";
