@@ -34,13 +34,13 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
   const [paperSize, setPaperSize] = useState<PaperSize>('80');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  if (!transaction) return null;
-
-  // Get store config for receipt header
+  // Get store config for receipt header - must be called before any conditional returns
   const { data: storeConfig } = useQuery({
     queryKey: ['/api/store-config'],
     retry: false,
   });
+
+  if (!transaction) return null;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
