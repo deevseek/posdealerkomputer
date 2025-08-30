@@ -242,10 +242,13 @@ function WhatsAppSettings() {
     queryKey: ['/api/store-config'],
   });
   
-  // WhatsApp status query
+  const whatsappEnabled = (storeConfig as any)?.whatsappEnabled || false;
+  
+  // WhatsApp status query - only when WhatsApp is enabled
   const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['/api/whatsapp/status'],
-    refetchInterval: 3000, // Refresh every 3 seconds for real-time updates
+    refetchInterval: whatsappEnabled ? 3000 : false, // Only refresh when enabled
+    enabled: whatsappEnabled, // Only run query when WhatsApp is enabled
   });
 
   // Enable/disable WhatsApp mutation
@@ -377,7 +380,7 @@ function WhatsAppSettings() {
     testMessageMutation.mutate(testPhone);
   };
 
-  if (configLoading || statusLoading) {
+  if (configLoading) {
     return (
       <Card>
         <CardContent className="p-6">
@@ -386,8 +389,6 @@ function WhatsAppSettings() {
       </Card>
     );
   }
-
-  const whatsappEnabled = (storeConfig as any)?.whatsappEnabled || false;
   const whatsappConnected = (whatsappStatus as any)?.connected || false;
   const connectionState = (whatsappStatus as any)?.connectionState || 'close';
   const qrCode = (whatsappStatus as any)?.qrCode;

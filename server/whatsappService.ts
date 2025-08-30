@@ -7,7 +7,7 @@ export class WhatsAppService {
   private socket: any = null;
   private isConnecting = false;
   private qrCode: string | null = null;
-  private connectionState: ConnectionState = 'close';
+  private connectionState: string = 'close';
 
   async initialize() {
     if (this.isConnecting || this.socket) {
@@ -120,7 +120,7 @@ export class WhatsAppService {
     try {
       const config = await storage.getStoreConfig();
       if (config) {
-        await storage.updateStoreConfig({
+        await storage.upsertStoreConfig({
           ...config,
           whatsappConnected: connected,
         });
@@ -134,7 +134,7 @@ export class WhatsAppService {
     try {
       const config = await storage.getStoreConfig();
       if (config && this.qrCode) {
-        await storage.updateStoreConfig({
+        await storage.upsertStoreConfig({
           ...config,
           whatsappQR: this.qrCode,
         });
@@ -148,7 +148,7 @@ export class WhatsAppService {
     try {
       const config = await storage.getStoreConfig();
       if (config) {
-        await storage.updateStoreConfig({
+        await storage.upsertStoreConfig({
           ...config,
           whatsappQR: null,
         });
