@@ -462,6 +462,8 @@ export class DatabaseStorage implements IStorage {
   async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>): Promise<ServiceTicket> {
     // Get the current ticket to check status change
     const currentTicket = await this.getServiceTicketById(id);
+    console.log("Current ticket status:", currentTicket?.status);
+    console.log("New ticket data status:", ticketData.status);
     
     const [ticket] = await db
       .update(serviceTickets)
@@ -469,22 +471,39 @@ export class DatabaseStorage implements IStorage {
       .where(eq(serviceTickets.id, id))
       .returning();
     
+    console.log("Updated ticket status:", ticket.status);
+    console.log("Estimated cost:", ticket.estimatedCost);
+    console.log("Actual cost:", ticket.actualCost);
+    
     // If status changed to completed or delivered, create financial record
     if (ticket && currentTicket && 
         (ticket.status === 'completed' || ticket.status === 'delivered') &&
         currentTicket.status !== 'completed' && currentTicket.status !== 'delivered') {
       
+      console.log("Creating financial record for service completion");
       const amount = ticket.estimatedCost || ticket.actualCost;
+      console.log("Amount to record:", amount);
+      
       if (amount && parseFloat(amount) > 0) {
-        await this.createFinancialRecord({
-          type: 'income',
-          category: 'Servis Repair',
-          amount: amount,
-          description: `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
-          reference: ticket.id,
-          userId: '46332812', // TODO: Get from authenticated user
-        });
+        console.log("Creating financial record with amount:", amount);
+        try {
+          await this.createFinancialRecord({
+            type: 'income',
+            category: 'Servis Repair',
+            amount: amount,
+            description: `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
+            reference: ticket.id,
+            userId: '46332812', // TODO: Get from authenticated user
+          });
+          console.log("Financial record created successfully");
+        } catch (error) {
+          console.error("Error creating financial record:", error);
+        }
+      } else {
+        console.log("No amount to record or amount is 0");
       }
+    } else {
+      console.log("No status change to completed/delivered or already completed");
     }
     
     return ticket;
