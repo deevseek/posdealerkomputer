@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { WhatsAppSettings as WhatsAppSettingsComponent } from "@/components/WhatsAppSettings";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("store");
@@ -74,13 +76,18 @@ export default function Settings() {
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">Pengaturan</h1>
-        <p className="text-muted-foreground">
-          Kelola pengaturan toko dan sistem Anda
-        </p>
-      </div>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Settings" breadcrumb="Home / Settings" />
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">Pengaturan</h1>
+              <p className="text-muted-foreground">
+                Kelola pengaturan toko dan sistem Anda
+              </p>
+            </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-5">
@@ -231,6 +238,9 @@ export default function Settings() {
           </Card>
         </TabsContent>
       </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
