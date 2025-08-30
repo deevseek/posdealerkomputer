@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,12 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Get store config for app name
+  const { data: storeConfig } = useQuery({
+    queryKey: ['/api/store-config'],
+    retry: false,
+  });
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -67,7 +73,7 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-            LaptopPOS
+            {(storeConfig as any)?.name || 'LaptopPOS'}
           </CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
             Sistem Manajemen Penjualan & Servis Laptop

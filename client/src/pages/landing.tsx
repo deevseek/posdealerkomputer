@@ -1,8 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Laptop, Wrench, BarChart3, Package } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Landing() {
+  // Get store config for app name
+  const { data: storeConfig } = useQuery({
+    queryKey: ['/api/store-config'],
+    retry: false,
+  });
+  
   const handleLogin = () => {
     window.location.href = "/api/login";
   };
@@ -16,7 +23,7 @@ export default function Landing() {
               <Laptop className="w-8 h-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="text-4xl font-bold text-foreground mb-4">LaptopPOS</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-4">{(storeConfig as any)?.name || 'LaptopPOS'}</h1>
           <p className="text-xl text-muted-foreground mb-8">
             Complete POS System for Laptop Sales & Service Management
           </p>

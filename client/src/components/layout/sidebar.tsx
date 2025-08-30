@@ -22,7 +22,7 @@ import {
   User
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -46,6 +46,12 @@ export default function Sidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Get store config for app name
+  const { data: storeConfig } = useQuery({
+    queryKey: ['/api/store-config'],
+    retry: false,
+  });
 
   const userRole = (user as any)?.role || "kasir";
 
@@ -93,7 +99,7 @@ export default function Sidebar() {
           </div>
           {!isCollapsed && (
             <div className="transition-opacity duration-300">
-              <h1 className="text-lg font-semibold text-foreground">LaptopPOS</h1>
+              <h1 className="text-lg font-semibold text-foreground">{(storeConfig as any)?.name || 'LaptopPOS'}</h1>
               <p className="text-xs text-muted-foreground">Service & Sales</p>
             </div>
           )}

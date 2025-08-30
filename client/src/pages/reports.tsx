@@ -40,6 +40,12 @@ export default function Reports() {
   const [endDate, setEndDate] = useState(
     new Date().toISOString().split('T')[0]
   );
+  
+  // Get store config for app name
+  const { data: storeConfig } = useQuery({
+    queryKey: ['/api/store-config'],
+    retry: false,
+  });
 
   // API queries untuk data reports
   const { data: salesReport, isLoading: salesLoading } = useQuery({
@@ -76,7 +82,7 @@ export default function Reports() {
         // Add header
         doc.setFontSize(20);
         doc.setTextColor(79, 70, 229);
-        doc.text('LaptopPOS - Laporan Bisnis', 20, 30);
+        doc.text(`${(storeConfig as any)?.name || 'LaptopPOS'} - Laporan Bisnis`, 20, 30);
         
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
@@ -142,7 +148,7 @@ export default function Reports() {
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text(`Generated on ${new Date().toLocaleString('id-ID')}`, 20, 280);
-        doc.text('© 2025 LaptopPOS - Sistem Manajemen Bisnis Laptop', 20, 290);
+        doc.text(`© 2025 ${(storeConfig as any)?.name || 'LaptopPOS'} - Sistem Manajemen Bisnis Laptop`, 20, 290);
         
         // Save PDF
         doc.save(`laporan-bisnis-${startDate}-${endDate}.pdf`);
