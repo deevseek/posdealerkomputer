@@ -69,11 +69,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reports API endpoints
-  app.get('/api/reports/sales', isAuthenticated, async (req, res) => {
+  app.get('/api/reports/sales/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const end = endDate ? new Date(endDate as string) : new Date();
+      const { startDate, endDate } = req.params;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       
       const report = await storage.getSalesReport(start, end);
       res.json(report);
@@ -83,11 +83,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/reports/services', isAuthenticated, async (req, res) => {
+  app.get('/api/reports/services/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const end = endDate ? new Date(endDate as string) : new Date();
+      const { startDate, endDate } = req.params;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       
       const report = await storage.getServiceReport(start, end);
       res.json(report);
@@ -97,11 +97,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/reports/financial', isAuthenticated, async (req, res) => {
+  app.get('/api/reports/financial/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
-      const start = startDate ? new Date(startDate as string) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-      const end = endDate ? new Date(endDate as string) : new Date();
+      const { startDate, endDate } = req.params;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
       
       const report = await storage.getFinancialReport(start, end);
       res.json(report);
