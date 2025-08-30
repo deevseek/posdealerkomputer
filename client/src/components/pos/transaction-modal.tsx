@@ -68,18 +68,15 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   );
 
   // Filter products based on search
-  const filteredProducts = products.filter((product: any) =>
+  const filteredProducts = Array.isArray(products) ? products.filter((product: any) =>
     product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
     product.barcode?.toLowerCase().includes(productSearch.toLowerCase())
-  );
+  ) : [];
 
   // Create transaction mutation
   const createTransactionMutation = useMutation({
     mutationFn: async (data: any) => {
-      return await apiRequest('/api/transactions', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+      return await apiRequest('POST', '/api/transactions', data);
     },
     onSuccess: (data) => {
       toast({
