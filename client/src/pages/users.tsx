@@ -121,7 +121,7 @@ export default function UsersPage() {
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       email: user.email || "",
-      role: user.role || "kasir",
+      role: (user.role as any) || "kasir",
       isActive: user.isActive ?? true,
     });
     setShowDialog(true);
@@ -303,11 +303,11 @@ export default function UsersPage() {
             Daftar User
           </CardTitle>
           <CardDescription>
-            Total {users.length} user terdaftar dalam sistem
+            Total {(users as any[]).length} user terdaftar dalam sistem
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {users.length === 0 ? (
+          {(users as any[]).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="empty-state">
               Belum ada user yang terdaftar.
             </div>
@@ -325,7 +325,7 @@ export default function UsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user: User) => (
+                  {(users as User[]).map((user: User) => (
                     <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
                       <TableCell>
                         <div className="flex items-center space-x-3">

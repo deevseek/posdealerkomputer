@@ -24,27 +24,189 @@ const roleFormSchema = insertRoleSchema.extend({
   permissions: z.array(z.string()).optional(),
 });
 
+// Permission definitions for all system features
 const availablePermissions = [
-  "dashboard:view",
-  "pos:use", 
-  "service:create",
-  "service:manage",
-  "inventory:view",
-  "inventory:manage",
-  "financial:view", 
-  "financial:manage",
-  "customers:view",
-  "customers:manage",
-  "suppliers:view",
-  "suppliers:manage",
-  "reports:view",
-  "settings:view",
-  "settings:manage",
-  "users:view",
-  "users:manage",
-  "roles:view",
-  "roles:manage"
+  // Core system access
+  "dashboard:view",              // View dashboard statistics and metrics
+  
+  // Point of Sale system
+  "pos:use",                    // Access POS system for sales transactions
+  "pos:print",                  // Print thermal receipts for purchases
+  
+  // Service ticket management  
+  "service:create",             // Create new service tickets
+  "service:manage",             // View, edit, update service tickets
+  "service:print",              // Print thermal service receipts
+  "service:whatsapp",           // Send WhatsApp notifications to customers
+  
+  // Inventory & Stock management
+  "inventory:view",             // View product inventory levels
+  "inventory:manage",           // Add, edit, delete products
+  "inventory:adjust",           // Adjust stock quantities manually
+  "stock:movements",            // View stock movement history
+  
+  // Financial management
+  "financial:view",             // View financial data and transactions
+  "financial:manage",           // Manage financial records and calculations
+  "financial:reports",          // Generate financial reports and analytics
+  
+  // Customer relationship
+  "customers:view",             // View customer information
+  "customers:manage",           // Add, edit, delete customers
+  
+  // Supplier management
+  "suppliers:view",             // View supplier information
+  "suppliers:manage",           // Add, edit, delete suppliers
+  
+  // Reporting system
+  "reports:view",               // View business reports
+  "reports:export",             // Export reports to Excel/PDF
+  
+  // System configuration
+  "settings:view",              // View system settings
+  "settings:manage",            // Change system configuration
+  "settings:whatsapp",          // Configure WhatsApp integration
+  
+  // User & Role management
+  "users:view",                 // View user accounts
+  "users:manage",               // Create, edit, delete users
+  "roles:view",                 // View roles and permissions
+  "roles:manage",               // Create, edit, delete roles
+  
+  // Transaction management
+  "transactions:view",          // View transaction history
+  "transactions:create",        // Process new transactions
+  
+  // Product catalog
+  "products:view",              // View product catalog
+  "products:manage",            // Add, edit, delete products
+  "categories:manage"           // Manage product categories
 ];
+
+// Helper functions for permission display
+const getPermissionDescription = (permission: string): string => {
+  const descriptions: { [key: string]: string } = {
+    "dashboard:view": "Lihat statistik dan metrik dashboard",
+    "pos:use": "Akses sistem POS untuk transaksi penjualan", 
+    "pos:print": "Cetak nota thermal untuk pembelian",
+    "service:create": "Buat tiket service baru",
+    "service:manage": "Kelola dan update tiket service",
+    "service:print": "Cetak nota service thermal",
+    "service:whatsapp": "Kirim notifikasi WhatsApp ke pelanggan",
+    "inventory:view": "Lihat level stok inventory",
+    "inventory:manage": "Tambah, edit, hapus produk",
+    "inventory:adjust": "Sesuaikan jumlah stok manual",
+    "stock:movements": "Lihat riwayat pergerakan stok",
+    "financial:view": "Lihat data keuangan dan transaksi",
+    "financial:manage": "Kelola catatan keuangan",
+    "financial:reports": "Generate laporan keuangan",
+    "customers:view": "Lihat informasi pelanggan",
+    "customers:manage": "Kelola data pelanggan",
+    "suppliers:view": "Lihat informasi supplier",
+    "suppliers:manage": "Kelola data supplier",
+    "reports:view": "Lihat laporan bisnis",
+    "reports:export": "Export laporan ke Excel/PDF",
+    "settings:view": "Lihat pengaturan sistem",
+    "settings:manage": "Ubah konfigurasi sistem",
+    "settings:whatsapp": "Konfigurasi integrasi WhatsApp",
+    "users:view": "Lihat akun pengguna",
+    "users:manage": "Kelola akun pengguna",
+    "roles:view": "Lihat peran dan izin",
+    "roles:manage": "Kelola peran dan izin",
+    "transactions:view": "Lihat riwayat transaksi",
+    "transactions:create": "Proses transaksi baru",
+    "products:view": "Lihat katalog produk",
+    "products:manage": "Kelola produk",
+    "categories:manage": "Kelola kategori produk"
+  };
+  return descriptions[permission] || permission;
+};
+
+const formatPermissionLabel = (permission: string): string => {
+  const labels: { [key: string]: string } = {
+    "dashboard:view": "Dashboard",
+    "pos:use": "POS System", 
+    "pos:print": "Print POS",
+    "service:create": "Buat Service",
+    "service:manage": "Kelola Service",
+    "service:print": "Print Service",
+    "service:whatsapp": "WhatsApp Service",
+    "inventory:view": "Lihat Inventory",
+    "inventory:manage": "Kelola Inventory",
+    "inventory:adjust": "Adjust Stok",
+    "stock:movements": "Pergerakan Stok",
+    "financial:view": "Lihat Keuangan",
+    "financial:manage": "Kelola Keuangan",
+    "financial:reports": "Laporan Keuangan",
+    "customers:view": "Lihat Customer",
+    "customers:manage": "Kelola Customer",
+    "suppliers:view": "Lihat Supplier",
+    "suppliers:manage": "Kelola Supplier",
+    "reports:view": "Lihat Laporan",
+    "reports:export": "Export Laporan",
+    "settings:view": "Lihat Settings",
+    "settings:manage": "Kelola Settings",
+    "settings:whatsapp": "WhatsApp Config",
+    "users:view": "Lihat Users",
+    "users:manage": "Kelola Users",
+    "roles:view": "Lihat Roles",
+    "roles:manage": "Kelola Roles",
+    "transactions:view": "Lihat Transaksi",
+    "transactions:create": "Buat Transaksi",
+    "products:view": "Lihat Produk",
+    "products:manage": "Kelola Produk",
+    "categories:manage": "Kelola Kategori"
+  };
+  return labels[permission] || permission.replace(":", ": ");
+};
+
+// Default role configurations for easy setup
+const defaultRoleConfigs = {
+  admin: {
+    displayName: "Administrator",
+    description: "Akses penuh ke seluruh sistem",
+    permissions: availablePermissions
+  },
+  owner: {
+    displayName: "Pemilik",
+    description: "Akses penuh untuk owner bisnis",
+    permissions: availablePermissions
+  },
+  kasir: {
+    displayName: "Kasir",
+    description: "Operator POS dan customer service",
+    permissions: [
+      "dashboard:view", "pos:use", "pos:print", "customers:view", 
+      "customers:manage", "transactions:view", "transactions:create",
+      "products:view", "inventory:view"
+    ]
+  },
+  teknisi: {
+    displayName: "Teknisi",
+    description: "Pengelola service dan perbaikan",
+    permissions: [
+      "dashboard:view", "service:create", "service:manage", "service:print",
+      "service:whatsapp", "customers:view", "inventory:view", "products:view"
+    ]
+  },
+  purchasing: {
+    displayName: "Purchasing",
+    description: "Pengelola inventory dan supplier",
+    permissions: [
+      "dashboard:view", "inventory:view", "inventory:manage", "inventory:adjust",
+      "stock:movements", "suppliers:view", "suppliers:manage", "products:view",
+      "products:manage", "categories:manage"
+    ]
+  },
+  finance: {
+    displayName: "Finance",
+    description: "Pengelola keuangan dan laporan",
+    permissions: [
+      "dashboard:view", "financial:view", "financial:manage", "financial:reports",
+      "reports:view", "reports:export", "transactions:view"
+    ]
+  }
+};
 
 export default function RolesPage() {
   const [showDialog, setShowDialog] = useState(false);
@@ -156,7 +318,7 @@ export default function RolesPage() {
       displayName: role.displayName,
       description: role.description || "",
       permissions: role.permissions || [],
-      isActive: role.isActive,
+      isActive: role.isActive !== null ? role.isActive : true,
     });
     setShowDialog(true);
   };
@@ -181,7 +343,10 @@ export default function RolesPage() {
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold" data-testid="page-title">Management Role</h1>
-                <p className="text-muted-foreground">Kelola peran dan izin pengguna</p>
+                <p className="text-muted-foreground">
+                  Kelola peran dan izin pengguna untuk sistem POS dengan fitur lengkap: 
+                  POS, Service, Inventory, Finance, WhatsApp, dan Thermal Printing
+                </p>
               </div>
 
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
@@ -294,8 +459,9 @@ export default function RolesPage() {
                             <label 
                               htmlFor={`permission-${permission}`}
                               className="text-sm cursor-pointer"
+                              title={getPermissionDescription(permission)}
                             >
-                              {permission.replace(":", " ")}
+                              {formatPermissionLabel(permission)}
                             </label>
                           </div>
                         ))}
@@ -361,11 +527,11 @@ export default function RolesPage() {
             Daftar Role
           </CardTitle>
           <CardDescription>
-            Total {roles.length} role tersedia
+            Total {(roles as any[]).length} role tersedia
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {roles.length === 0 ? (
+          {(roles as any[]).length === 0 ? (
             <div className="text-center py-8 text-muted-foreground" data-testid="empty-state">
               Belum ada role yang dibuat. Mulai dengan membuat role baru.
             </div>
@@ -383,7 +549,7 @@ export default function RolesPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {roles.map((role: Role) => (
+                  {(roles as Role[]).map((role: Role) => (
                     <TableRow key={role.id} data-testid={`role-row-${role.id}`}>
                       <TableCell>
                         <span className="font-mono text-sm bg-muted px-2 py-1 rounded">
