@@ -431,7 +431,7 @@ export class DatabaseStorage implements IStorage {
             quantity: item.quantity,
             reference: transaction.id,
             referenceType: 'sale',
-            notes: 'Sale transaction',
+            notes: `Penjualan - ${transaction.transactionNumber}`,
             userId: transactionData.userId,
           });
         }
