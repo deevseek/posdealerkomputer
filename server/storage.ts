@@ -421,16 +421,93 @@ export class DatabaseStorage implements IStorage {
 
   // Transactions
   async getTransactions(limit: number = 50): Promise<Transaction[]> {
-    return await db
+    const transactionList = await db
       .select()
       .from(transactions)
+      .leftJoin(customers, eq(transactions.customerId, customers.id))
+      .leftJoin(users, eq(transactions.userId, users.id))
       .orderBy(desc(transactions.createdAt))
       .limit(limit);
+    
+    // For each transaction, get its items with product details
+    const transactionsWithItems = await Promise.all(
+      transactionList.map(async (row) => {
+        const transaction = row.transactions;
+        
+        const items = await db
+          .select({
+            id: transactionItems.id,
+            quantity: transactionItems.quantity,
+            unitPrice: transactionItems.unitPrice,
+            totalPrice: transactionItems.totalPrice,
+            product: {
+              id: products.id,
+              name: products.name,
+              sku: products.sku,
+            }
+          })
+          .from(transactionItems)
+          .leftJoin(products, eq(transactionItems.productId, products.id))
+          .where(eq(transactionItems.transactionId, transaction.id));
+        
+        const { password: _, ...userWithoutPassword } = row.users || {};
+        
+        return {
+          ...transaction,
+          items,
+          customer: row.customers,
+          user: userWithoutPassword
+        };
+      })
+    );
+    
+    return transactionsWithItems as any;
   }
 
   async getTransactionById(id: string): Promise<Transaction | undefined> {
     const [transaction] = await db.select().from(transactions).where(eq(transactions.id, id));
-    return transaction;
+    if (!transaction) return undefined;
+    
+    // Get transaction items with product details
+    const items = await db
+      .select({
+        id: transactionItems.id,
+        quantity: transactionItems.quantity,
+        unitPrice: transactionItems.unitPrice,
+        totalPrice: transactionItems.totalPrice,
+        product: {
+          id: products.id,
+          name: products.name,
+          sku: products.sku,
+        }
+      })
+      .from(transactionItems)
+      .leftJoin(products, eq(transactionItems.productId, products.id))
+      .where(eq(transactionItems.transactionId, id));
+    
+    // Get customer details if exists
+    let customer = null;
+    if (transaction.customerId) {
+      const [customerData] = await db.select().from(customers).where(eq(customers.id, transaction.customerId));
+      customer = customerData;
+    }
+    
+    // Get user details
+    let user = null;
+    if (transaction.userId) {
+      const [userData] = await db.select().from(users).where(eq(users.id, transaction.userId));
+      if (userData) {
+        const { password, ...userWithoutPassword } = userData;
+        user = userWithoutPassword;
+      }
+    }
+    
+    return {
+      ...transaction,
+      items,
+      customer,
+      user
+    } as any;
   }
 
   async createTransaction(transactionData: InsertTransaction, items: InsertTransactionItem[]): Promise<Transaction> {
