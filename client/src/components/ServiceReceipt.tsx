@@ -98,57 +98,95 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
   };
 
   const handlePrint = () => {
-    const element = document.getElementById('service-receipt-content');
-    if (!element) return;
+    try {
+      const element = document.getElementById('service-receipt-content');
+      if (!element) {
+        console.error('Element service-receipt-content not found');
+        return;
+      }
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        console.error('Failed to open print window');
+        return;
+      }
 
-    const thermalWidth = paperSizes[paperSize].width;
-    const fontSize = paperSize === '58' ? '10px' : paperSize === '80' ? '12px' : '14px';
-    const headerSize = paperSize === '58' ? '14px' : paperSize === '80' ? '16px' : '18px';
+      const thermalWidth = paperSizes[paperSize].width;
+      const fontSize = paperSize === '58' ? '10px' : paperSize === '80' ? '12px' : '14px';
+      const headerSize = paperSize === '58' ? '14px' : paperSize === '80' ? '16px' : '18px';
 
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Nota Service - ${serviceData.serviceNumber}</title>
-          <style>
-            @page { size: ${thermalWidth}mm auto; margin: 5mm 2mm; }
-            body { 
-              font-family: 'Courier New', monospace; 
-              margin: 0; 
-              padding: 0;
-              font-size: ${fontSize};
-              line-height: 1.3;
-              width: ${thermalWidth - 4}mm;
-            }
-            .receipt-header { text-align: center; margin-bottom: 10px; }
-            .store-name { font-size: ${headerSize}; font-weight: bold; margin-bottom: 2px; }
-            .store-info { font-size: ${fontSize}; margin-bottom: 1px; }
-            .receipt-title { font-size: ${fontSize}; font-weight: bold; margin: 10px 0; text-align: center; }
-            .info-row { display: flex; justify-content: space-between; margin: 2px 0; }
-            .info-label { font-weight: bold; }
-            .separator { border-top: 1px dashed #333; margin: 8px 0; }
-            .parts-table { width: 100%; margin: 8px 0; }
-            .parts-row { display: flex; justify-content: space-between; margin: 2px 0; }
-            .total-row { font-weight: bold; margin-top: 8px; border-top: 1px solid #333; padding-top: 4px; }
-            @media print { 
-              body { margin: 0; padding: 2mm; }
-              .no-print { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          ${element.outerHTML}
-        </body>
-      </html>
-    `);
+      // Create a cleaned version of the element content
+      const clonedElement = element.cloneNode(true) as HTMLElement;
+      
+      // Remove any problematic elements or classes that might cause issues
+      const problematicElements = clonedElement.querySelectorAll('.no-print, script, style');
+      problematicElements.forEach(el => el.remove());
 
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
-    };
+      const printContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Nota Service - ${serviceData.serviceNumber}</title>
+            <style>
+              @page { 
+                size: ${thermalWidth}mm auto; 
+                margin: 2mm; 
+              }
+              * { 
+                box-sizing: border-box; 
+                margin: 0; 
+                padding: 0;
+              }
+              body { 
+                font-family: 'Courier New', monospace; 
+                font-size: ${fontSize};
+                line-height: 1.4;
+                width: ${thermalWidth - 4}mm;
+                margin: 0 auto;
+                color: #000;
+                background: #fff;
+              }
+              .text-center { text-align: center; }
+              .text-left { text-align: left; }
+              .text-right { text-align: right; }
+              .font-bold { font-weight: bold; }
+              .space-y-1 > * + * { margin-top: 4px; }
+              .space-y-2 > * + * { margin-top: 8px; }
+              .flex { display: flex; }
+              .flex-col { flex-direction: column; }
+              .justify-between { justify-content: space-between; }
+              .border-t { border-top: 1px dashed #333; margin: 8px 0; }
+              .border-solid { border-style: solid; }
+              .border-gray-800 { border-color: #333; }
+              .text-gray-600 { color: #666; }
+              .py-2 { padding-top: 8px; padding-bottom: 8px; }
+              .my-2 { margin-top: 8px; margin-bottom: 8px; }
+              @media print { 
+                body { margin: 0; padding: 2mm; }
+                .no-print { display: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            ${clonedElement.innerHTML}
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      };
+    } catch (error) {
+      console.error('Print error:', error);
+      alert('Terjadi kesalahan saat mencetak. Silakan coba lagi.');
+    }
   };
 
   const getReceiptWidth = () => {
