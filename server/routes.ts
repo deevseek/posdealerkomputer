@@ -298,11 +298,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (referenceType) {
-        conditions.push(eq(stockMovements.referenceType, referenceType as string));
+        conditions.push(eq(stockMovements.referenceType, referenceType as any));
       }
       
       if (conditions.length > 0) {
-        query = query.where(and(...conditions));
+        query = query.where(and(...conditions)) as any;
       }
       
       const movements = await query;
