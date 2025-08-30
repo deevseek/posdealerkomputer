@@ -385,14 +385,14 @@ INSERT INTO roles (name, display_name, description, permissions, is_active) VALU
 ('owner', 'Owner', 'Business overview and management', ARRAY['all', 'reports', 'settings'], true);
 
 -- Insert initial users (password: 'password123' for all users)
--- Password hash: $2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG
+-- Password hash: $2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe
 INSERT INTO users (username, password, email, first_name, last_name, role, is_active) VALUES
-('admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'admin@laptoppos.com', 'Admin', 'System', 'admin', true),
-('kasir1', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'kasir@laptoppos.com', 'Kasir', 'Utama', 'kasir', true),
-('teknisi1', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'teknisi@laptoppos.com', 'Teknisi', 'Service', 'teknisi', true),
-('purchasing1', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'purchasing@laptoppos.com', 'Staff', 'Purchasing', 'purchasing', true),
-('finance1', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'finance@laptoppos.com', 'Staff', 'Finance', 'finance', true),
-('owner', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjLQvyDROTJt0wJQMZtjXDPd/C9k6DG', 'owner@laptoppos.com', 'Owner', 'Bisnis', 'owner', true);
+('admin', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'admin@laptoppos.com', 'Admin', 'System', 'admin', true),
+('kasir1', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'kasir@laptoppos.com', 'Kasir', 'Utama', 'kasir', true),
+('teknisi1', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'teknisi@laptoppos.com', 'Teknisi', 'Service', 'teknisi', true),
+('purchasing1', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'purchasing@laptoppos.com', 'Staff', 'Purchasing', 'purchasing', true),
+('finance1', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'finance@laptoppos.com', 'Staff', 'Finance', 'finance', true),
+('owner', '$2b$10$OdJqu2YLlFzgvosl4PtXpukpTgugDV7bEjw2MPr6xq9pDNj4PMloe', 'owner@laptoppos.com', 'Owner', 'Bisnis', 'owner', true);
 
 -- Insert basic store configuration
 INSERT INTO store_config (name, address, phone, email, tax_rate, default_discount, whatsapp_enabled, whatsapp_connected) VALUES
