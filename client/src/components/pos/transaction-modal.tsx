@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Minus, X, Search, Barcode } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface TransactionModalProps {
   open: boolean;
@@ -25,57 +28,156 @@ interface TransactionModalProps {
 }
 
 interface TransactionItem {
-  id: string;
+  productId: string;
   name: string;
-  price: number;
+  sellingPrice: number;
   quantity: number;
+  stock?: number;
 }
 
 export default function TransactionModal({ open, onClose, onComplete }: TransactionModalProps) {
   const [customer, setCustomer] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const { toast } = useToast();
 
-  const updateQuantity = (id: string, delta: number) => {
-    setItems(prev => prev.map(item => 
-      item.id === id 
-        ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-        : item
-    ).filter(item => item.quantity > 0));
+  // Fetch products
+  const { data: products = [], isLoading: productsLoading } = useQuery({
+    queryKey: ["/api/products"],
+  });
+
+  // Filter products based on search
+  const filteredProducts = products.filter((product: any) =>
+    product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+    product.barcode?.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  // Create transaction mutation
+  const createTransactionMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await apiRequest('/api/transactions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Success",
+        description: "Transaction completed successfully",
+      });
+      onComplete(data);
+      resetForm();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process transaction",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetForm = () => {
+    setCustomer("");
+    setPaymentMethod("cash");
+    setItems([]);
+    setProductSearch("");
+    setSelectedProducts([]);
   };
 
-  const removeItem = (id: string) => {
-    setItems(prev => prev.filter(item => item.id !== id));
+  const updateQuantity = (productId: string, delta: number) => {
+    setItems(prev => prev.map(item => {
+      if (item.productId === productId) {
+        const newQuantity = Math.max(0, item.quantity + delta);
+        // Check stock limit
+        if (newQuantity > (item.stock || 0)) {
+          toast({
+            title: "Stock Insufficient",
+            description: `Only ${item.stock} units available`,
+            variant: "destructive",
+          });
+          return item;
+        }
+        return { ...item, quantity: newQuantity };
+      }
+      return item;
+    }).filter(item => item.quantity > 0));
   };
 
-  const addSampleItem = () => {
-    const sampleItem: TransactionItem = {
-      id: `item-${Date.now()}`,
-      name: "ASUS VivoBook 15",
-      price: 8500000,
-      quantity: 1,
-    };
-    setItems(prev => [...prev, sampleItem]);
+  const removeItem = (productId: string) => {
+    setItems(prev => prev.filter(item => item.productId !== productId));
   };
 
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const addProductToCart = (product: any) => {
+    if (product.stock <= 0) {
+      toast({
+        title: "Out of Stock",
+        description: `${product.name} is out of stock`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const existingItem = items.find(item => item.productId === product.id);
+    if (existingItem) {
+      updateQuantity(product.id, 1);
+    } else {
+      const newItem: TransactionItem = {
+        productId: product.id,
+        name: product.name,
+        sellingPrice: product.sellingPrice,
+        quantity: 1,
+        stock: product.stock,
+      };
+      setItems(prev => [...prev, newItem]);
+    }
+    setProductSearch("");
+  };
+
+  const subtotal = items.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
   const tax = subtotal * 0.11;
   const total = subtotal + tax;
 
   const handleProcessTransaction = () => {
-    const transaction = {
-      id: `TRX-${Date.now()}`,
-      customer,
-      paymentMethod,
-      items,
-      subtotal,
-      tax,
-      total,
-      date: new Date(),
+    if (items.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one item to the transaction",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!paymentMethod) {
+      toast({
+        title: "Error",
+        description: "Please select a payment method",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const transactionData = {
+      transaction: {
+        type: 'sale' as const,
+        customerId: customer || null,
+        paymentMethod,
+        subtotal: Math.round(subtotal),
+        tax: Math.round(tax),
+        total: Math.round(total),
+        notes: `POS Sale - ${items.length} items`,
+      },
+      items: items.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.sellingPrice,
+        subtotal: item.sellingPrice * item.quantity,
+      })),
     };
-    
-    onComplete(transaction);
+
+    createTransactionMutation.mutate(transactionData);
   };
 
   return (
@@ -109,38 +211,17 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                variant={paymentMethod === "sale" ? "default" : "outline"}
-                onClick={() => setPaymentMethod("sale")}
-                className="p-4 h-auto flex-col"
-                data-testid="button-product-sale"
-              >
-                <Search className="w-5 h-5 mb-2" />
-                <span className="text-sm">Product Sale</span>
-              </Button>
-              <Button 
-                variant={paymentMethod === "service" ? "default" : "outline"}
-                onClick={() => setPaymentMethod("service")}
-                className="p-4 h-auto flex-col"
-                data-testid="button-service"
-              >
-                <Barcode className="w-5 h-5 mb-2" />
-                <span className="text-sm">Service</span>
-              </Button>
-            </div>
-
             <div>
               <Label htmlFor="payment">Payment Method</Label>
-              <Select onValueChange={setPaymentMethod}>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger data-testid="select-payment-method">
                   <SelectValue placeholder="Select payment method" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cash">Cash</SelectItem>
                   <SelectItem value="transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="qris">QRIS</SelectItem>
-                  <SelectItem value="installment">Installment</SelectItem>
+                  <SelectItem value="credit">Credit Card</SelectItem>
+                  <SelectItem value="debit">Debit Card</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -158,50 +239,83 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                   onChange={(e) => setProductSearch(e.target.value)}
                   data-testid="input-product-search"
                 />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-2 top-1/2 -translate-y-1/2"
-                  onClick={addSampleItem}
-                  data-testid="button-add-sample-product"
-                >
-                  <Barcode className="w-4 h-4" />
-                </Button>
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               </div>
+              
+              {/* Product Search Results */}
+              {productSearch && (
+                <Card className="max-h-64 overflow-y-auto">
+                  <CardContent className="p-2">
+                    {productsLoading ? (
+                      <div className="text-center py-4">Loading products...</div>
+                    ) : filteredProducts.length > 0 ? (
+                      <div className="space-y-1">
+                        {filteredProducts.slice(0, 10).map((product: any) => (
+                          <Button
+                            key={product.id}
+                            variant="ghost"
+                            className="w-full justify-between h-auto p-3"
+                            onClick={() => addProductToCart(product)}
+                            disabled={product.stock <= 0}
+                            data-testid={`button-add-product-${product.id}`}
+                          >
+                            <div className="text-left">
+                              <div className="font-medium">{product.name}</div>
+                              <div className="text-sm text-muted-foreground">
+                                Stock: {product.stock} | Rp {product.sellingPrice?.toLocaleString('id-ID')}
+                              </div>
+                            </div>
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-muted-foreground">
+                        No products found
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Selected Items */}
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {items.map((item) => (
-                <Card key={item.id} className="p-3">
+                <Card key={item.productId} className="p-3">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="font-medium">{item.name}</span>
+                    <div className="flex-1">
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Rp {item.sellingPrice.toLocaleString('id-ID')} × {item.quantity} = Rp {(item.sellingPrice * item.quantity).toLocaleString('id-ID')}
+                      </div>
+                    </div>
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => updateQuantity(item.id, -1)}
-                        data-testid={`button-decrease-${item.id}`}
+                        onClick={() => updateQuantity(item.productId, -1)}
+                        data-testid={`button-decrease-${item.productId}`}
                       >
                         <Minus className="w-3 h-3" />
                       </Button>
-                      <span data-testid={`text-quantity-${item.id}`}>{item.quantity}</span>
+                      <span data-testid={`text-quantity-${item.productId}`} className="w-8 text-center">
+                        {item.quantity}
+                      </span>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => updateQuantity(item.id, 1)}
-                        data-testid={`button-increase-${item.id}`}
+                        onClick={() => updateQuantity(item.productId, 1)}
+                        data-testid={`button-increase-${item.productId}`}
+                        disabled={item.quantity >= (item.stock || 0)}
                       >
                         <Plus className="w-3 h-3" />
                       </Button>
-                      <span className="font-medium ml-2" data-testid={`text-total-${item.id}`}>
-                        Rp {(item.price * item.quantity).toLocaleString('id-ID')}
-                      </span>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeItem(item.id)}
-                        data-testid={`button-remove-${item.id}`}
+                        onClick={() => removeItem(item.productId)}
+                        data-testid={`button-remove-${item.productId}`}
                       >
                         <X className="w-3 h-3" />
                       </Button>
@@ -209,6 +323,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                   </div>
                 </Card>
               ))}
+              
+              {items.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No items added yet. Search and add products above.
+                </div>
+              )}
             </div>
 
             {/* Transaction Summary */}
@@ -233,15 +353,20 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-3 pt-6 border-t">
-          <Button variant="outline" onClick={onClose} data-testid="button-cancel">
+          <Button 
+            variant="outline" 
+            onClick={onClose} 
+            disabled={createTransactionMutation.isPending}
+            data-testid="button-cancel"
+          >
             Cancel
           </Button>
           <Button 
             onClick={handleProcessTransaction}
-            disabled={items.length === 0 || !paymentMethod}
+            disabled={createTransactionMutation.isPending || items.length === 0}
             data-testid="button-process-transaction"
           >
-            Process Transaction
+            {createTransactionMutation.isPending ? "Processing..." : "Process Transaction"}
           </Button>
         </div>
       </DialogContent>
