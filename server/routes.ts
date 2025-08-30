@@ -658,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'Quantity must be greater than 0' });
       }
 
-      const userId = req.user.claims.sub;
+      const userId = req.session.user.id;
       const updatedProduct = await storage.adjustStock(req.params.id, Number(quantity), notes, userId);
       
       res.json(updatedProduct);
@@ -782,7 +782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactionNumber = `TRX-${Date.now()}`;
       
       const transaction = await storage.createTransaction(
-        { ...transactionData, transactionNumber, userId: req.user.claims.sub },
+        { ...transactionData, transactionNumber, userId: req.session.user.id },
         items
       );
       
@@ -972,7 +972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const movementData = insertStockMovementSchema.parse(req.body);
       const movement = await storage.createStockMovement({
         ...movementData,
-        userId: req.user.claims.sub,
+        userId: req.session.user.id,
       });
       res.json(movement);
     } catch (error) {
