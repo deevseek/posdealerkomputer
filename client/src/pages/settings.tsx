@@ -470,6 +470,7 @@ export default function Settings() {
 
             {/* WhatsApp Integration */}
             <TabsContent value="whatsapp" className="space-y-6">
+              <div className="text-xs text-muted-foreground mb-4">Debug: WhatsApp tab clicked</div>
               <WhatsAppSettings />
             </TabsContent>
 
@@ -587,19 +588,25 @@ export default function Settings() {
 
 // WhatsApp Settings Component
 function WhatsAppSettings() {
+  console.log('WhatsAppSettings component rendering...');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   // Fetch store config for WhatsApp settings
-  const { data: storeConfig, isLoading } = useQuery({
+  const { data: storeConfig, isLoading, error: configError } = useQuery({
     queryKey: ['/api/store-config'],
   });
   
   // WhatsApp status query
-  const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
+  const { data: whatsappStatus, isLoading: statusLoading, error: statusError } = useQuery({
     queryKey: ['/api/whatsapp/status'],
     refetchInterval: 3000, // Refresh every 3 seconds
   });
+
+  console.log('Store config:', storeConfig);
+  console.log('WhatsApp status:', whatsappStatus);
+  console.log('Config error:', configError);
+  console.log('Status error:', statusError);
 
   // Enable/disable WhatsApp mutation
   const toggleWhatsAppMutation = useMutation({
@@ -744,10 +751,28 @@ function WhatsAppSettings() {
   };
 
   if (isLoading || statusLoading) {
+    console.log('Loading state:', { isLoading, statusLoading });
     return (
       <Card>
         <CardContent className="p-6">
           <div>Memuat pengaturan WhatsApp...</div>
+          <div className="text-xs text-muted-foreground mt-2">
+            Config: {isLoading ? 'Loading...' : 'Loaded'} | 
+            Status: {statusLoading ? 'Loading...' : 'Loaded'}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (configError || statusError) {
+    console.log('Error state:', { configError, statusError });
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-red-600">
+            Error loading WhatsApp settings: {(configError as any)?.message || (statusError as any)?.message}
+          </div>
         </CardContent>
       </Card>
     );
