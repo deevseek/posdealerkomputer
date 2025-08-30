@@ -108,6 +108,7 @@ export interface IStorage {
   getActiveServiceTickets(): Promise<ServiceTicket[]>;
   createServiceTicket(ticket: InsertServiceTicket): Promise<ServiceTicket>;
   updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>): Promise<ServiceTicket>;
+  deleteServiceTicket(id: string): Promise<void>;
   
   // Stock Movements
   getStockMovements(productId?: string): Promise<StockMovement[]>;
@@ -578,6 +579,24 @@ export class DatabaseStorage implements IStorage {
       }
       
       return ticket;
+    });
+  }
+
+  async deleteServiceTicket(id: string): Promise<void> {
+    return await db.transaction(async (tx) => {
+      // First get the ticket to check if it has financial records
+      const [ticket] = await tx.select().from(serviceTickets).where(eq(serviceTickets.id, id));
+      
+      if (ticket) {
+        // Delete related service ticket parts
+        await tx.delete(serviceTicketParts).where(eq(serviceTicketParts.serviceTicketId, id));
+        
+        // Delete related financial records if any
+        await tx.delete(financialRecords).where(eq(financialRecords.reference, id));
+      }
+      
+      // Delete the service ticket
+      await tx.delete(serviceTickets).where(eq(serviceTickets.id, id));
     });
   }
 

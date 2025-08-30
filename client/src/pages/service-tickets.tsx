@@ -232,7 +232,11 @@ export default function ServiceTickets() {
       return apiRequest('DELETE', `/api/service-tickets/${id}`);
     },
     onSuccess: () => {
+      // Invalidate multiple related queries
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/finance/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
       toast({ title: "Sukses", description: "Tiket servis berhasil dihapus" });
     },
     onError: (error) => {
@@ -298,6 +302,25 @@ export default function ServiceTickets() {
 
   const handleEdit = (ticket: ServiceTicket) => {
     setEditingTicket(ticket);
+    
+    // Load existing parts for this ticket
+    if (ticket.id) {
+      fetch(`/api/service-tickets/${ticket.id}/parts`)
+        .then(res => res.json())
+        .then(parts => {
+          const partsData = parts.map((part: any) => ({
+            productId: part.productId,
+            productName: part.productName,
+            quantity: part.quantity,
+            unitPrice: part.unitPrice,
+            totalPrice: part.totalPrice,
+            stock: 999 // Will be updated when component loads
+          }));
+          setSelectedParts(partsData);
+        })
+        .catch(console.error);
+    }
+    
     form.reset({
       customerId: ticket.customerId,
       deviceType: ticket.deviceType,
@@ -311,8 +334,6 @@ export default function ServiceTickets() {
       laborCost: ticket.laborCost ? ticket.laborCost.toString() : "",
     });
     
-    // Reset parts when editing
-    setSelectedParts([]);
     setShowDialog(true);
   };
 
