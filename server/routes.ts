@@ -533,11 +533,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add PATCH method for store config updates
   app.patch('/api/store-config', isAuthenticated, async (req, res) => {
     try {
+      console.log('PATCH store-config received:', req.body);
       const configData = insertStoreConfigSchema.parse(req.body);
+      console.log('Parsed config data:', configData);
       const config = await storage.upsertStoreConfig(configData);
+      console.log('Config updated successfully:', config);
       res.json(config);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating store config:", error);
+      if (error.issues) {
+        console.error("Zod validation errors:", error.issues);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: error.issues 
+        });
+      }
       res.status(500).json({ message: "Failed to update store config" });
     }
   });
