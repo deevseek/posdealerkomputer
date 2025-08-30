@@ -72,7 +72,7 @@ export default function RolesPage() {
         ...data,
         permissions: data.permissions || [],
       };
-      return apiRequest('/api/roles', 'POST', payload);
+      return apiRequest('POST', '/api/roles', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/roles'] });
@@ -98,7 +98,7 @@ export default function RolesPage() {
         ...data,
         permissions: data.permissions || [],
       };
-      return apiRequest(`/api/roles/${editingRole?.id}`, 'PUT', payload);
+      return apiRequest('PUT', `/api/roles/${editingRole?.id}`, payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/roles'] });
@@ -121,7 +121,7 @@ export default function RolesPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/roles/${id}`, 'DELETE');
+      return apiRequest('DELETE', `/api/roles/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/roles'] });

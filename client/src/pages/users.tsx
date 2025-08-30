@@ -68,7 +68,7 @@ export default function UsersPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest(`/api/users/${editingUser?.id}`, 'PUT', data);
+      return apiRequest('PUT', `/api/users/${editingUser?.id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
@@ -91,7 +91,7 @@ export default function UsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/users/${id}`, 'DELETE');
+      return apiRequest('DELETE', `/api/users/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });

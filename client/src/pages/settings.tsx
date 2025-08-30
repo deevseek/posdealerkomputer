@@ -64,18 +64,28 @@ export default function Settings() {
   const updateConfigMutation = useMutation({
     mutationFn: async (data: any) => {
       console.log('Submitting config data:', data);
-      try {
-        const result = await apiRequest('/api/store-config', 'POST', {
-          ...data,
-          taxRate: parseFloat(data.taxRate) || 11.0,
-          defaultDiscount: parseFloat(data.defaultDiscount) || 0.0,
-        });
-        console.log('Config update result:', result);
-        return result;
-      } catch (error) {
-        console.error('Config update error:', error);
-        throw error;
+      
+      const payload = {
+        ...data,
+        taxRate: parseFloat(data.taxRate) || 11.0,
+        defaultDiscount: parseFloat(data.defaultDiscount) || 0.0,
+      };
+
+      const response = await fetch('/api/store-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
+
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
