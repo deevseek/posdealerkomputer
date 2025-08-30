@@ -17,9 +17,14 @@ import {
   Laptop,
   Shield,
   UserCog,
-  Layers
+  Layers,
+  LogOut,
+  User
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: ChartLine, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
@@ -40,8 +45,34 @@ export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [location] = useLocation();
   const { user } = useAuth();
+  const { toast } = useToast();
 
   const userRole = (user as any)?.role || "kasir";
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/auth/logout');
+    },
+    onSuccess: () => {
+      toast({
+        title: "Logout Successful",
+        description: "You have been logged out successfully.",
+      });
+      // Reload to trigger authentication state update
+      window.location.href = "/";
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Logout Error",
+        description: error.message || "Failed to logout",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
 
   const filteredNavigation = navigation.filter(item => 
     item.roles.includes(userRole)
@@ -94,7 +125,43 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-2">
+        {/* User Info */}
+        {!isCollapsed && (
+          <div className="flex items-center space-x-3 px-3 py-2 rounded-md bg-muted/50">
+            <User className="w-4 h-4 text-muted-foreground" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">
+                {(user as any)?.username || (user as any)?.firstName || "User"}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {userRole}
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Logout Button */}
+        <Button
+          variant="ghost" 
+          size="sm"
+          onClick={handleLogout}
+          disabled={logoutMutation.isPending}
+          className={cn(
+            "w-full flex items-center text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950",
+            isCollapsed ? "justify-center" : "justify-start space-x-3 px-3"
+          )}
+          data-testid="button-logout"
+        >
+          <LogOut className="w-4 h-4" />
+          {!isCollapsed && (
+            <span className="transition-opacity duration-300">
+              {logoutMutation.isPending ? "Logging out..." : "Logout"}
+            </span>
+          )}
+        </Button>
+        
+        {/* Collapse Button */}
         <Button
           variant="ghost"
           size="sm"

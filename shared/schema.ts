@@ -34,9 +34,11 @@ export const serviceStatusEnum = pgEnum('service_status', ['pending', 'in_progre
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
 export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
 
-// User storage table (mandatory for Replit Auth)
+// User storage table
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: varchar("username"),
+  password: varchar("password"),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
@@ -525,8 +527,12 @@ export const insertRoleSchema = createInsertSchema(roles).omit({
 });
 
 // Types
-export type UpsertUser = typeof users.$inferInsert;
+export type InsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type LoginUser = {
+  username: string;
+  password: string;
+};
 export type InsertStoreConfig = z.infer<typeof insertStoreConfigSchema>;
 export type StoreConfig = typeof storeConfig.$inferSelect;
 export type InsertCategory = z.infer<typeof insertCategorySchema>;

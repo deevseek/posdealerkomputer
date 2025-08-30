@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, authenticateUser, hashPassword } from "./auth";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -182,11 +182,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
 
   // Auth routes
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: 'Username and password are required' });
+      }
+
+      const user = await authenticateUser({ username, password });
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid username or password' });
+      }
+
+      // Store user in session
+      req.session.user = user;
+      
+      res.json({ user, message: 'Login successful' });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({ message: 'Failed to logout' });
+      }
+      res.clearCookie('connect.sid');
+      res.json({ message: 'Logout successful' });
+    });
+  });
+
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
+      // User is already available in session
+      res.json(req.session.user);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
