@@ -39,8 +39,8 @@ export default function StockMovements() {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
-      if (productFilter) params.append('productId', productFilter);
-      if (referenceTypeFilter) params.append('referenceType', referenceTypeFilter);
+      if (productFilter && productFilter !== 'all') params.append('productId', productFilter);
+      if (referenceTypeFilter && referenceTypeFilter !== 'all') params.append('referenceType', referenceTypeFilter);
       
       const response = await fetch(`/api/reports/stock-movements?${params}`);
       if (!response.ok) throw new Error('Failed to fetch stock movements');
@@ -203,7 +203,7 @@ export default function StockMovements() {
                   <SelectValue placeholder="Semua produk" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Semua produk</SelectItem>
+                  <SelectItem value="all">Semua produk</SelectItem>
                   {(products as any[])?.map((product: any) => (
                     <SelectItem key={product.id} value={product.id}>
                       {product.name}
@@ -219,7 +219,7 @@ export default function StockMovements() {
                   <SelectValue placeholder="Semua jenis" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Semua jenis</SelectItem>
+                  <SelectItem value="all">Semua jenis</SelectItem>
                   <SelectItem value="service">Servis</SelectItem>
                   <SelectItem value="sale">Penjualan</SelectItem>
                   <SelectItem value="purchase">Pembelian</SelectItem>
