@@ -365,7 +365,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/service-tickets/:id', isAuthenticated, async (req, res) => {
     try {
-      const ticketData = insertServiceTicketSchema.partial().parse(req.body);
+      console.log("Raw update body:", JSON.stringify(req.body, null, 2));
+      
+      // Manual validation and transformation for update
+      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost } = req.body;
+      
+      const ticketData: any = {};
+      
+      if (customerId !== undefined) ticketData.customerId = customerId;
+      if (deviceType !== undefined) ticketData.deviceType = deviceType;
+      if (deviceBrand !== undefined) ticketData.deviceBrand = deviceBrand || null;
+      if (deviceModel !== undefined) ticketData.deviceModel = deviceModel || null;
+      if (problem !== undefined) ticketData.problem = problem;
+      if (diagnosis !== undefined) ticketData.diagnosis = diagnosis || null;
+      if (solution !== undefined) ticketData.solution = solution || null;
+      if (status !== undefined) ticketData.status = status;
+      if (technicianId !== undefined) ticketData.technicianId = technicianId || null;
+      if (estimatedCost !== undefined) ticketData.estimatedCost = estimatedCost ? String(estimatedCost) : null;
+      
+      console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
+      
       const ticket = await storage.updateServiceTicket(req.params.id, ticketData);
       res.json(ticket);
     } catch (error) {
