@@ -25,7 +25,7 @@ const navigation = [
   { name: "POS", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
   { name: "Service", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
   { name: "Inventory", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
-  { name: "Financial", href: "/financial", icon: PieChart, roles: ["admin", "finance", "owner"] },
+  { name: "Finance & Payroll", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
   { name: "Customers", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
   { name: "Suppliers", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
   { name: "Users", href: "/users", icon: UserCog, roles: ["admin", "owner"] },

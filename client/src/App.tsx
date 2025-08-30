@@ -13,6 +13,7 @@ import Inventory from "@/pages/inventory";
 import Customers from "@/pages/customers";
 import Suppliers from "@/pages/suppliers";
 import Financial from "@/pages/financial";
+import FinanceNew from "@/pages/finance-new";
 import Reports from "@/pages/reports";
 import Settings from "@/pages/settings";
 import RolesPage from "@/pages/roles";
@@ -34,6 +35,7 @@ function Router() {
           <Route path="/customers" component={Customers} />
           <Route path="/suppliers" component={Suppliers} />
           <Route path="/financial" component={Financial} />
+          <Route path="/finance-new" component={FinanceNew} />
           <Route path="/users" component={UsersPage} />
           <Route path="/roles" component={RolesPage} />
           <Route path="/reports" component={Reports} />

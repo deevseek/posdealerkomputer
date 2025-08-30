@@ -580,6 +580,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New Finance Management Routes
+  const { financeManager } = await import('./financeManager');
+
+  // Financial Transactions
+  app.get('/api/finance/transactions', isAuthenticated, async (req, res) => {
+    try {
+      const { type, category, startDate, endDate, referenceType } = req.query;
+      const filters = {
+        type: type as string,
+        category: category as string,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        referenceType: referenceType as string
+      };
+      const transactions = await financeManager.getTransactions(filters);
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ message: "Failed to fetch transactions" });
+    }
+  });
+
+  app.post('/api/finance/transactions', isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.claims?.sub || '46332812';
+      const transaction = await financeManager.createTransaction({
+        ...req.body,
+        userId
+      });
+      res.json(transaction);
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      res.status(500).json({ message: "Failed to create transaction" });
+    }
+  });
+
+  app.get('/api/finance/summary', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const summary = await financeManager.getSummary(
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching summary:", error);
+      res.status(500).json({ message: "Failed to fetch summary" });
+    }
+  });
+
+  // Employee Management
+  app.get('/api/employees', isAuthenticated, async (req, res) => {
+    try {
+      const { includeInactive } = req.query;
+      const employees = await financeManager.getEmployees(includeInactive === 'true');
+      res.json(employees);
+    } catch (error) {
+      console.error("Error fetching employees:", error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
+  app.post('/api/employees', isAuthenticated, async (req, res) => {
+    try {
+      const employee = await financeManager.createEmployee(req.body);
+      res.json(employee);
+    } catch (error) {
+      console.error("Error creating employee:", error);
+      res.status(500).json({ message: "Failed to create employee" });
+    }
+  });
+
+  app.put('/api/employees/:id', isAuthenticated, async (req, res) => {
+    try {
+      const employee = await financeManager.updateEmployee(req.params.id, req.body);
+      res.json(employee);
+    } catch (error) {
+      console.error("Error updating employee:", error);
+      res.status(500).json({ message: "Failed to update employee" });
+    }
+  });
+
+  // Payroll Management
+  app.get('/api/payroll', isAuthenticated, async (req, res) => {
+    try {
+      const { employeeId } = req.query;
+      const payrolls = await financeManager.getPayrollRecords(employeeId as string);
+      res.json(payrolls);
+    } catch (error) {
+      console.error("Error fetching payroll records:", error);
+      res.status(500).json({ message: "Failed to fetch payroll records" });
+    }
+  });
+
+  app.post('/api/payroll', isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req.user as any)?.claims?.sub || '46332812';
+      const payroll = await financeManager.createPayroll({
+        ...req.body,
+        userId
+      });
+      res.json(payroll);
+    } catch (error) {
+      console.error("Error creating payroll:", error);
+      res.status(500).json({ message: "Failed to create payroll" });
+    }
+  });
+
+  app.put('/api/payroll/:id/status', isAuthenticated, async (req, res) => {
+    try {
+      const { status } = req.body;
+      const payroll = await financeManager.updatePayrollStatus(req.params.id, status);
+      res.json(payroll);
+    } catch (error) {
+      console.error("Error updating payroll status:", error);
+      res.status(500).json({ message: "Failed to update payroll status" });
+    }
+  });
+
   // Object storage routes
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;

@@ -180,24 +180,159 @@ export const stockMovements = pgTable("stock_movements", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Financial Records
+// Financial Records - Complete rebuild
 export const financialRecords = pgTable("financial_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  type: varchar("type").notNull(), // 'income', 'expense', 'asset', 'liability'
-  category: varchar("category").notNull(),
-  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  type: varchar("type", { length: 20 }).notNull(), // income, expense, transfer
+  category: varchar("category", { length: 100 }).notNull(),
+  subcategory: varchar("subcategory", { length: 100 }),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   description: text("description").notNull(),
-  reference: varchar("reference"), // Transaction ID or other reference
+  reference: varchar("reference"), // Reference to transaction, service ticket, payroll, etc.
+  referenceType: varchar("reference_type", { length: 50 }), // sale, service, payroll, expense, etc.
+  accountId: varchar("account_id").references(() => accounts.id),
+  paymentMethod: varchar("payment_method", { length: 50 }), // cash, bank_transfer, credit_card, etc.
+  status: varchar("status", { length: 20 }).default("confirmed"), // pending, confirmed, cancelled
+  tags: text("tags").array(), // For better categorization
   userId: varchar("user_id").references(() => users.id).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Relations
+// Chart of Accounts
+export const accounts = pgTable("accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 20 }).unique().notNull(),
+  name: varchar("name", { length: 100 }).notNull(),
+  type: varchar("type", { length: 30 }).notNull(), // asset, liability, equity, income, expense
+  subtype: varchar("subtype", { length: 50 }), // current_asset, fixed_asset, etc.
+  parentId: varchar("parent_id").references(() => accounts.id),
+  balance: decimal("balance", { precision: 15, scale: 2 }).default("0"),
+  isActive: boolean("is_active").default(true),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Employees for Payroll
+export const employees = pgTable("employees", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeNumber: varchar("employee_number", { length: 50 }).unique().notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  position: varchar("position", { length: 100 }).notNull(),
+  department: varchar("department", { length: 100 }),
+  salary: decimal("salary", { precision: 12, scale: 2 }).notNull(),
+  salaryType: varchar("salary_type", { length: 20 }).default("monthly"), // monthly, weekly, daily, hourly
+  joinDate: timestamp("join_date").notNull(),
+  endDate: timestamp("end_date"),
+  status: varchar("status", { length: 20 }).default("active"), // active, inactive, terminated
+  bankAccount: varchar("bank_account", { length: 50 }),
+  taxId: varchar("tax_id", { length: 50 }),
+  address: text("address"),
+  phone: varchar("phone", { length: 20 }),
+  emergencyContact: jsonb("emergency_contact"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Payroll Records
+export const payrollRecords = pgTable("payroll_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").references(() => employees.id).notNull(),
+  payrollNumber: varchar("payroll_number", { length: 50 }).unique().notNull(),
+  periodStart: timestamp("period_start").notNull(),
+  periodEnd: timestamp("period_end").notNull(),
+  baseSalary: decimal("base_salary", { precision: 12, scale: 2 }).notNull(),
+  overtime: decimal("overtime", { precision: 12, scale: 2 }).default("0"),
+  bonus: decimal("bonus", { precision: 12, scale: 2 }).default("0"),
+  allowances: decimal("allowances", { precision: 12, scale: 2 }).default("0"),
+  grossPay: decimal("gross_pay", { precision: 12, scale: 2 }).notNull(),
+  taxDeduction: decimal("tax_deduction", { precision: 12, scale: 2 }).default("0"),
+  socialSecurity: decimal("social_security", { precision: 12, scale: 2 }).default("0"),
+  healthInsurance: decimal("health_insurance", { precision: 12, scale: 2 }).default("0"),
+  otherDeductions: decimal("other_deductions", { precision: 12, scale: 2 }).default("0"),
+  netPay: decimal("net_pay", { precision: 12, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("draft"), // draft, approved, paid
+  paidDate: timestamp("paid_date"),
+  notes: text("notes"),
+  userId: varchar("user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Attendance Records
+export const attendanceRecords = pgTable("attendance_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").references(() => employees.id).notNull(),
+  date: timestamp("date").notNull(),
+  clockIn: timestamp("clock_in"),
+  clockOut: timestamp("clock_out"),
+  breakStart: timestamp("break_start"),
+  breakEnd: timestamp("break_end"),
+  hoursWorked: decimal("hours_worked", { precision: 4, scale: 2 }).default("0"),
+  overtimeHours: decimal("overtime_hours", { precision: 4, scale: 2 }).default("0"),
+  status: varchar("status", { length: 20 }).default("present"), // present, absent, late, half_day
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Relations  
 export const usersRelations = relations(users, ({ many }) => ({
   transactions: many(transactions),
   serviceTickets: many(serviceTickets),
   stockMovements: many(stockMovements),
   financialRecords: many(financialRecords),
+  employees: many(employees),
+  payrollRecords: many(payrollRecords),
+}));
+
+export const accountsRelations = relations(accounts, ({ one, many }) => ({
+  parent: one(accounts, {
+    fields: [accounts.parentId],
+    references: [accounts.id],
+  }),
+  children: many(accounts),
+  financialRecords: many(financialRecords),
+}));
+
+export const employeesRelations = relations(employees, ({ one, many }) => ({
+  user: one(users, {
+    fields: [employees.userId],
+    references: [users.id],
+  }),
+  payrollRecords: many(payrollRecords),
+  attendanceRecords: many(attendanceRecords),
+}));
+
+export const payrollRecordsRelations = relations(payrollRecords, ({ one }) => ({
+  employee: one(employees, {
+    fields: [payrollRecords.employeeId],
+    references: [employees.id],
+  }),
+  user: one(users, {
+    fields: [payrollRecords.userId],
+    references: [users.id],
+  }),
+}));
+
+export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({
+  employee: one(employees, {
+    fields: [attendanceRecords.employeeId],
+    references: [employees.id],
+  }),
+}));
+
+export const financialRecordsRelations = relations(financialRecords, ({ one }) => ({
+  account: one(accounts, {
+    fields: [financialRecords.accountId],
+    references: [accounts.id],
+  }),
+  user: one(users, {
+    fields: [financialRecords.userId],
+    references: [users.id],
+  }),
 }));
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
@@ -271,12 +406,6 @@ export const stockMovementsRelations = relations(stockMovements, ({ one }) => ({
   }),
 }));
 
-export const financialRecordsRelations = relations(financialRecords, ({ one }) => ({
-  user: one(users, {
-    fields: [financialRecords.userId],
-    references: [users.id],
-  }),
-}));
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -337,6 +466,31 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements).omit
 export const insertFinancialRecordSchema = createInsertSchema(financialRecords).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAccountSchema = createInsertSchema(accounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEmployeeSchema = createInsertSchema(employees).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPayrollRecordSchema = createInsertSchema(payrollRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const insertRoleSchema = createInsertSchema(roles).omit({
@@ -368,5 +522,13 @@ export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
 export type FinancialRecord = typeof financialRecords.$inferSelect;
+export type InsertAccount = z.infer<typeof insertAccountSchema>;
+export type Account = typeof accounts.$inferSelect;
+export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
+export type Employee = typeof employees.$inferSelect;
+export type InsertPayrollRecord = z.infer<typeof insertPayrollRecordSchema>;
+export type PayrollRecord = typeof payrollRecords.$inferSelect;
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;

@@ -466,41 +466,22 @@ export class DatabaseStorage implements IStorage {
       .where(eq(serviceTickets.id, id))
       .returning();
     
-    // If service is now completed or delivered, check if financial record exists
+    // Auto-record financial transaction for completed services
     if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
-      console.log("Service ticket is completed/delivered, checking financial record");
+      const amount = ticket.actualCost || ticket.estimatedCost;
       
-      // Check if financial record already exists for this service
-      const [existingRecord] = await db
-        .select()
-        .from(financialRecords)
-        .where(eq(financialRecords.reference, ticket.id));
-      
-      if (!existingRecord) {
-        console.log("No existing financial record found, creating new one");
-        const amount = ticket.estimatedCost || ticket.actualCost;
-        console.log("Amount to record:", amount);
-        
-        if (amount && parseFloat(amount) > 0) {
-          console.log("Creating financial record with amount:", amount);
-          try {
-            await this.createFinancialRecord({
-              type: 'income',
-              category: 'Servis Repair',
-              amount: amount,
-              description: `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
-              reference: ticket.id,
-              userId: '46332812', // TODO: Get from authenticated user
-            });
-            console.log("Financial record created successfully");
-          } catch (error) {
-            console.error("Error creating financial record:", error);
-          }
-        } else {
-          console.log("No amount to record or amount is 0");
+      if (amount && parseFloat(amount) > 0) {
+        try {
+          const { financeManager } = await import('./financeManager');
+          await financeManager.recordServiceIncome(
+            ticket.id,
+            amount,
+            `Pendapatan servis - ${ticket.ticketNumber}: ${ticket.problem}`,
+            '46332812'
+          );
+        } catch (error) {
+          console.error("Error recording service income:", error);
         }
-      } else {
-        console.log("Financial record already exists for this service");
       }
     }
     
