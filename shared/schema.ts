@@ -222,13 +222,13 @@ export const financialRecords = pgTable("financial_records", {
 });
 
 // Chart of Accounts
-export const accounts = pgTable("accounts", {
+export const accounts: any = pgTable("accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   code: varchar("code", { length: 20 }).unique().notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 30 }).notNull(), // asset, liability, equity, income, expense
   subtype: varchar("subtype", { length: 50 }), // current_asset, fixed_asset, etc.
-  parentId: varchar("parent_id").references(() => accounts.id),
+  parentId: varchar("parent_id").references((): any => accounts.id),
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0"),
   isActive: boolean("is_active").default(true),
   description: text("description"),
