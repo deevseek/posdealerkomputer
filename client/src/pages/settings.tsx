@@ -188,7 +188,15 @@ export default function Settings() {
 
         {/* WhatsApp Integration */}
         <TabsContent value="whatsapp" className="space-y-6">
-          <WhatsAppSettings />
+          {storeConfig ? (
+            <WhatsAppSettings storeConfig={storeConfig} />
+          ) : (
+            <Card>
+              <CardContent className="p-6">
+                <div>Memuat pengaturan WhatsApp...</div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Security Settings */}
@@ -235,34 +243,13 @@ export default function Settings() {
   );
 }
 
-// WhatsApp Settings Component - Simplified and stable
-function WhatsAppSettings() {
+// WhatsApp Settings Component - Very simple version
+function WhatsAppSettings({ storeConfig }: { storeConfig: any }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [testPhone, setTestPhone] = useState("");
-  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   
-  // Use store config from parent component instead of fetching again
-  const { data: storeConfig } = useQuery({
-    queryKey: ['/api/store-config'],
-    staleTime: 60000,
-  });
-  
-  // Update local state when config changes
-  React.useEffect(() => {
-    if (storeConfig) {
-      setWhatsappEnabled((storeConfig as any)?.whatsappEnabled || false);
-    }
-  }, [storeConfig]);
-  
-  // WhatsApp status query - simple fetch
-  const { data: whatsappStatus } = useQuery({
-    queryKey: ['/api/whatsapp/status'],
-    enabled: whatsappEnabled,
-    refetchInterval: whatsappEnabled ? 10000 : false, // 10 second refresh
-    staleTime: 5000,
-    refetchOnWindowFocus: false,
-  });
+  const whatsappEnabled = storeConfig?.whatsappEnabled || false;
 
   // Enable/disable WhatsApp mutation
   const toggleWhatsAppMutation = useMutation({
@@ -393,19 +380,10 @@ function WhatsAppSettings() {
     testMessageMutation.mutate(testPhone);
   };
 
-  // Show WhatsApp UI immediately since config is fetched by parent
-  // if (!storeConfig) {
-  //   return (
-  //     <Card>
-  //       <CardContent className="p-6">
-  //         <div>Memuat pengaturan WhatsApp...</div>
-  //       </CardContent>
-  //     </Card>
-  //   );
-  // }
-  const whatsappConnected = (whatsappStatus as any)?.connected || false;
-  const connectionState = (whatsappStatus as any)?.connectionState || 'close';
-  const qrCode = (whatsappStatus as any)?.qrCode;
+  // Simplified status - no automatic queries for now
+  const whatsappConnected = false;
+  const connectionState = 'close';
+  const qrCode = null;
 
   return (
     <Card>
