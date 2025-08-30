@@ -40,7 +40,7 @@ import {
   type InsertFinancialRecord,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, gte, lte, like, count, sum, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, count, sum, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
