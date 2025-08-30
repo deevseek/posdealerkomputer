@@ -6,6 +6,9 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "./objectStorage";
+import { db } from "./db";
+import { financialRecords } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { 
   insertProductSchema,
   insertCustomerSchema,
@@ -613,6 +616,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching summary:", error);
       res.status(500).json({ message: "Failed to fetch summary" });
+    }
+  });
+
+  app.delete('/api/finance/service-records/:serviceId', isAuthenticated, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      
+      // Delete all financial records related to this service
+      await db.delete(financialRecords).where(eq(financialRecords.reference, serviceId));
+      
+      res.json({ message: "Service financial records cleared" });
+    } catch (error) {
+      console.error("Error clearing service financial records:", error);
+      res.status(500).json({ message: "Failed to clear records" });
     }
   });
 

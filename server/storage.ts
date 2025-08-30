@@ -668,15 +668,15 @@ export class DatabaseStorage implements IStorage {
   async createFinancialRecord(record: InsertFinancialRecord): Promise<FinancialRecord> {
     const { financeManager } = await import('./financeManager');
     return await financeManager.createTransaction({
-      type: record.type,
+      type: record.type as 'income' | 'expense' | 'transfer',
       category: record.category,
-      subcategory: record.subcategory,
+      subcategory: record.subcategory || undefined,
       amount: record.amount,
       description: record.description,
-      referenceType: record.referenceType,
-      reference: record.reference,
-      paymentMethod: record.paymentMethod,
-      tags: record.tags,
+      referenceType: record.referenceType || undefined,
+      reference: record.reference || undefined,
+      paymentMethod: record.paymentMethod || undefined,
+      tags: record.tags || undefined,
       userId: record.userId
     });
   }
