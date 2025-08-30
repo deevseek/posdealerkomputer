@@ -48,26 +48,34 @@ export default function Settings() {
 
   // Update form values when storeConfig data loads
   React.useEffect(() => {
-    if (storeConfig) {
+    if (storeConfig && typeof storeConfig === 'object' && 'name' in storeConfig) {
       form.reset({
-        name: storeConfig.name || "",
-        address: storeConfig.address || "",
-        phone: storeConfig.phone || "",
-        email: storeConfig.email || "",
-        taxRate: storeConfig.taxRate?.toString() || "11.0",
-        defaultDiscount: storeConfig.defaultDiscount?.toString() || "0.0",
-        logo: storeConfig.logo || "",
+        name: (storeConfig as StoreConfig).name || "",
+        address: (storeConfig as StoreConfig).address || "",
+        phone: (storeConfig as StoreConfig).phone || "",
+        email: (storeConfig as StoreConfig).email || "",
+        taxRate: (storeConfig as StoreConfig).taxRate?.toString() || "11.0",
+        defaultDiscount: (storeConfig as StoreConfig).defaultDiscount?.toString() || "0.0",
+        logo: (storeConfig as StoreConfig).logo || "",
       });
     }
   }, [storeConfig, form]);
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('/api/store-config', 'POST', {
-        ...data,
-        taxRate: parseFloat(data.taxRate) || 11.0,
-        defaultDiscount: parseFloat(data.defaultDiscount) || 0.0,
-      });
+      console.log('Submitting config data:', data);
+      try {
+        const result = await apiRequest('/api/store-config', 'POST', {
+          ...data,
+          taxRate: parseFloat(data.taxRate) || 11.0,
+          defaultDiscount: parseFloat(data.defaultDiscount) || 0.0,
+        });
+        console.log('Config update result:', result);
+        return result;
+      } catch (error) {
+        console.error('Config update error:', error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
@@ -76,16 +84,18 @@ export default function Settings() {
         description: "Konfigurasi toko berhasil disimpan",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      console.error('Mutation error:', error);
       toast({
         title: "Error", 
-        description: "Gagal menyimpan konfigurasi toko",
+        description: error?.message || "Gagal menyimpan konfigurasi toko",
         variant: "destructive",
       });
     },
   });
 
   const handleSubmit = (data: any) => {
+    console.log('Form submit data:', data);
     updateConfigMutation.mutate(data);
   };
 
