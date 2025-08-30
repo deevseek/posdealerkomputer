@@ -61,6 +61,21 @@ const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
 }).extend({
   estimatedCost: z.string().optional(),
   laborCost: z.string().optional(),
+}).refine((data) => {
+  return data.customerId && data.customerId.trim() !== "";
+}, {
+  message: "Customer harus dipilih",
+  path: ["customerId"]
+}).refine((data) => {
+  return data.deviceType && data.deviceType.trim() !== "";
+}, {
+  message: "Jenis perangkat harus diisi",
+  path: ["deviceType"]
+}).refine((data) => {
+  return data.problem && data.problem.trim() !== "";
+}, {
+  message: "Deskripsi masalah harus diisi",
+  path: ["problem"]
 });
 
 interface ServicePart {
@@ -122,6 +137,7 @@ export default function ServiceTickets() {
       solution: "",
       status: "pending",
       estimatedCost: "",
+      laborCost: "",
     },
   });
 
@@ -137,7 +153,19 @@ export default function ServiceTickets() {
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       setShowDialog(false);
       setEditingTicket(null);
-      form.reset();
+      setSelectedParts([]);
+      form.reset({
+        customerId: "",
+        deviceType: "",
+        deviceBrand: "",
+        deviceModel: "",
+        problem: "",
+        diagnosis: "",
+        solution: "",
+        status: "pending",
+        estimatedCost: "",
+        laborCost: "",
+      });
       toast({ title: "Sukses", description: "Tiket servis berhasil dibuat" });
     },
     onError: (error) => {
@@ -168,7 +196,19 @@ export default function ServiceTickets() {
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       setShowDialog(false);
       setEditingTicket(null);
-      form.reset();
+      setSelectedParts([]);
+      form.reset({
+        customerId: "",
+        deviceType: "",
+        deviceBrand: "",
+        deviceModel: "",
+        problem: "",
+        diagnosis: "",
+        solution: "",
+        status: "pending",
+        estimatedCost: "",
+        laborCost: "",
+      });
       toast({ title: "Sukses", description: "Tiket servis berhasil diperbarui" });
     },
     onError: (error) => {
@@ -212,6 +252,34 @@ export default function ServiceTickets() {
   });
 
   const handleSubmit = (data: any) => {
+    // Validate required fields
+    if (!data.customerId || data.customerId.trim() === "") {
+      toast({
+        title: "Error",
+        description: "Customer harus dipilih",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!data.deviceType || data.deviceType.trim() === "") {
+      toast({
+        title: "Error", 
+        description: "Jenis perangkat harus diisi",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!data.problem || data.problem.trim() === "") {
+      toast({
+        title: "Error",
+        description: "Deskripsi masalah harus diisi", 
+        variant: "destructive"
+      });
+      return;
+    }
+
     const submitData = {
       ...data,
       parts: selectedParts.map(part => ({
@@ -256,7 +324,18 @@ export default function ServiceTickets() {
 
   const handleNew = () => {
     setEditingTicket(null);
-    form.reset();
+    form.reset({
+      customerId: "",
+      deviceType: "",
+      deviceBrand: "",
+      deviceModel: "",
+      problem: "",
+      diagnosis: "",
+      solution: "",
+      status: "pending",
+      estimatedCost: "",
+      laborCost: "",
+    });
     setSelectedParts([]);
     setShowDialog(true);
   };
