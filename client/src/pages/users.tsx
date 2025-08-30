@@ -17,6 +17,8 @@ import { Trash2, Edit, Users, Mail, UserCheck, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@shared/schema";
 import { z } from "zod";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 const userUpdateSchema = z.object({
   firstName: z.string().min(1, "Nama depan harus diisi"),
@@ -142,13 +144,18 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold" data-testid="page-title">Management User</h1>
-          <p className="text-muted-foreground">Kelola akun pengguna dan peran mereka</p>
-        </div>
-      </div>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Management User" breadcrumb="Home / Users" />
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold" data-testid="page-title">Management User</h1>
+                <p className="text-muted-foreground">Kelola akun pengguna dan peran mereka</p>
+              </div>
+            </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md">
@@ -403,6 +410,9 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

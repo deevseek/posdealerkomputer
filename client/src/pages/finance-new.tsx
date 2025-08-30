@@ -14,6 +14,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, TrendingUp, TrendingDown, DollarSign, Users, Calendar, Eye } from "lucide-react";
 import { format } from "date-fns";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 interface FinancialTransaction {
   id: string;
@@ -329,9 +331,13 @@ export default function FinanceNew() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Sistem Keuangan & Payroll</h1>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Finance & Payroll" breadcrumb="Home / Finance & Payroll" />
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
         <div className="flex gap-2">
           <Input
             type="date"
@@ -1181,8 +1187,11 @@ export default function FinanceNew() {
               </Table>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+          </TabsContent>
+        </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

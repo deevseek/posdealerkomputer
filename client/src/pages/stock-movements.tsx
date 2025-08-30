@@ -21,6 +21,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Package, Filter, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 export default function StockMovements() {
   const [startDate, setStartDate] = useState(
@@ -115,13 +117,18 @@ export default function StockMovements() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold" data-testid="page-title">Laporan Pergerakan Stok</h1>
-          <p className="text-gray-600">Pantau semua pergerakan stok produk</p>
-        </div>
-      </div>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="Stock Movements" breadcrumb="Home / Stock Movements" />
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold" data-testid="page-title">Laporan Pergerakan Stok</h1>
+                <p className="text-gray-600">Pantau semua pergerakan stok produk</p>
+              </div>
+            </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -308,6 +315,9 @@ export default function StockMovements() {
           </div>
         </CardContent>
       </Card>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
