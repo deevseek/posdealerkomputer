@@ -5,17 +5,22 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings } from "lucide-react";
+import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings, TestTube, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const statusConfig = {
-  pending: { label: 'Menunggu', color: 'bg-yellow-500', icon: Clock },
-  'in-progress': { label: 'Dikerjakan', color: 'bg-blue-500', icon: AlertCircle },
+  pending: { label: 'Belum Cek', color: 'bg-yellow-500', icon: Clock },
+  checking: { label: 'Sedang Cek', color: 'bg-sky-500', icon: AlertCircle },
+  'in-progress': { label: 'Sedang Dikerjakan', color: 'bg-blue-500', icon: Settings },
+  'waiting-technician': { label: 'Ditunggu MITRA Teknik', color: 'bg-gray-500', icon: AlertCircle },
+  testing: { label: 'Sedang Tes', color: 'bg-indigo-500', icon: TestTube },
+  'waiting-confirmation': { label: 'Menunggu Konfirmasi', color: 'bg-red-500', icon: FileText },
   'waiting-parts': { label: 'Menunggu Sparepart', color: 'bg-orange-500', icon: Package },
   'waiting-payment': { label: 'Menunggu Pembayaran', color: 'bg-purple-500', icon: Receipt },
   completed: { label: 'Selesai', color: 'bg-green-500', icon: CheckCircle },
+  delivered: { label: 'Sudah Diambil', color: 'bg-emerald-500', icon: CheckCircle },
   cancelled: { label: 'Dibatalkan', color: 'bg-red-500', icon: AlertCircle },
 };
 

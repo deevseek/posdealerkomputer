@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -90,21 +90,31 @@ interface ServicePart {
   stock: number;
 }
 
-type ServiceTicketStatus = "pending" | "in_progress" | "completed" | "delivered" | "cancelled";
+type ServiceTicketStatus = "pending" | "checking" | "in-progress" | "waiting-technician" | "testing" | "waiting-confirmation" | "waiting-parts" | "completed" | "delivered" | "cancelled";
 
 const statusColors = {
   pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: Clock },
-  in_progress: { bg: "bg-blue-100", text: "text-blue-800", icon: AlertCircle },
+  checking: { bg: "bg-sky-100", text: "text-sky-800", icon: AlertCircle },
+  "in-progress": { bg: "bg-blue-100", text: "text-blue-800", icon: Settings },
+  "waiting-technician": { bg: "bg-gray-100", text: "text-gray-800", icon: AlertCircle },
+  testing: { bg: "bg-indigo-100", text: "text-indigo-800", icon: TestTube },
+  "waiting-confirmation": { bg: "bg-red-100", text: "text-red-800", icon: FileText },
+  "waiting-parts": { bg: "bg-orange-100", text: "text-orange-800", icon: Package },
   completed: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
   delivered: { bg: "bg-purple-100", text: "text-purple-800", icon: CheckCircle },
   cancelled: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
 };
 
 const statusLabels = {
-  pending: "Menunggu",
-  in_progress: "Dalam Proses",
+  pending: "Belum Cek",
+  checking: "Sedang Cek", 
+  "in-progress": "Sedang Dikerjakan",
+  "waiting-technician": "Ditunggu MITRA Teknik",
+  testing: "Sedang Tes",
+  "waiting-confirmation": "Menunggu Konfirmasi",
+  "waiting-parts": "Menunggu Sparepart",
   completed: "Selesai",
-  delivered: "Dikirim",
+  delivered: "Sudah Diambil",
   cancelled: "Dibatalkan",
 };
 
@@ -467,10 +477,15 @@ export default function ServiceTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua Status</SelectItem>
-                    <SelectItem value="pending">Menunggu</SelectItem>
-                    <SelectItem value="in_progress">Dalam Proses</SelectItem>
+                    <SelectItem value="pending">Belum Cek</SelectItem>
+                    <SelectItem value="checking">Sedang Cek</SelectItem>
+                    <SelectItem value="in-progress">Sedang Dikerjakan</SelectItem>
+                    <SelectItem value="waiting-technician">Ditunggu MITRA Teknik</SelectItem>
+                    <SelectItem value="testing">Sedang Tes</SelectItem>
+                    <SelectItem value="waiting-confirmation">Menunggu Konfirmasi</SelectItem>
+                    <SelectItem value="waiting-parts">Menunggu Sparepart</SelectItem>
                     <SelectItem value="completed">Selesai</SelectItem>
-                    <SelectItem value="delivered">Dikirim</SelectItem>
+                    <SelectItem value="delivered">Sudah Diambil</SelectItem>
                     <SelectItem value="cancelled">Dibatalkan</SelectItem>
                   </SelectContent>
                 </Select>
@@ -824,10 +839,15 @@ export default function ServiceTickets() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="pending">Menunggu</SelectItem>
-                          <SelectItem value="in_progress">Dalam Proses</SelectItem>
+                          <SelectItem value="pending">Belum Cek</SelectItem>
+                          <SelectItem value="checking">Sedang Cek</SelectItem>
+                          <SelectItem value="in-progress">Sedang Dikerjakan</SelectItem>
+                          <SelectItem value="waiting-technician">Ditunggu MITRA Teknik</SelectItem>
+                          <SelectItem value="testing">Sedang Tes</SelectItem>
+                          <SelectItem value="waiting-confirmation">Menunggu Konfirmasi</SelectItem>
+                          <SelectItem value="waiting-parts">Menunggu Sparepart</SelectItem>
                           <SelectItem value="completed">Selesai</SelectItem>
-                          <SelectItem value="delivered">Dikirim</SelectItem>
+                          <SelectItem value="delivered">Sudah Diambil</SelectItem>
                           <SelectItem value="cancelled">Dibatalkan</SelectItem>
                         </SelectContent>
                       </Select>
