@@ -34,13 +34,18 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
   const [paperSize, setPaperSize] = useState<PaperSize>('80');
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Get store config for receipt header - must be called before any conditional returns
+  // Get store config for receipt header - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
-    queryKey: ['/api/store-config'],
-    retry: false,
+    queryKey: ['store-config-receipt'],
+    queryFn: async () => {
+      const response = await fetch('/api/store-config', { credentials: 'include' });
+      if (!response.ok) return { name: 'LaptopPOS', address: '', phone: '' };
+      return response.json();
+    },
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
     refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
   if (!transaction) return null;

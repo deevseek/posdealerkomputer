@@ -22,13 +22,18 @@ export default function Login() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   
-  // Get store config for app name
+  // Get store config for app name - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
-    queryKey: ['/api/store-config'],
-    retry: false,
+    queryKey: ['store-config-login'], // Unique key
+    queryFn: async () => {
+      const response = await fetch('/api/store-config', { credentials: 'include' });
+      if (!response.ok) return { name: 'LaptopPOS' };
+      return response.json();
+    },
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
     refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
   const form = useForm<LoginFormData>({

@@ -53,13 +53,19 @@ export default function Sidebar() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Get store config for app name
+  // Get store config for app name - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
-    queryKey: ['/api/store-config'],
-    retry: false,
+    queryKey: ['store-config'], // Changed key format
+    queryFn: async () => {
+      const response = await fetch('/api/store-config', { credentials: 'include' });
+      if (!response.ok) return { name: 'LaptopPOS' };
+      return response.json();
+    },
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
     refetchInterval: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
   });
 
   const userRole = (user as any)?.role || "kasir";

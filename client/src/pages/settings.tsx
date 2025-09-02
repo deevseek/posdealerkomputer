@@ -18,13 +18,18 @@ export default function Settings() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch store config with proper caching
+  // Fetch store config with better caching
   const { data: storeConfig, isLoading: configLoading } = useQuery({
-    queryKey: ['/api/store-config'],
-    staleTime: Infinity, // Cache indefinitely
+    queryKey: ['store-config-settings'], // Unique key
+    queryFn: async () => {
+      const response = await fetch('/api/store-config', { credentials: 'include' });
+      if (!response.ok) return null;
+      return response.json();
+    },
+    staleTime: Infinity,
+    refetchInterval: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
-    refetchInterval: false, // No automatic refetch
     retry: false,
   });
 

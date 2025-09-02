@@ -129,11 +129,16 @@ export default function ServiceTickets() {
   });
 
   const { data: storeConfig = {} } = useQuery({
-    queryKey: ['/api/store-config'],
-    retry: false,
+    queryKey: ['store-config-service'],
+    queryFn: async () => {
+      const response = await fetch('/api/store-config', { credentials: 'include' });
+      if (!response.ok) return { name: 'LaptopPOS' };
+      return response.json();
+    },
     staleTime: Infinity,
-    refetchOnWindowFocus: false,
     refetchInterval: false,
+    refetchOnWindowFocus: false,
+    retry: false,
   });
 
   const form = useForm({
