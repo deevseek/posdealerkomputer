@@ -126,6 +126,7 @@ export interface IStorage {
   createPurchaseOrderItem(item: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
+  recalculatePurchaseOrderTotal(poId: string): Promise<void>;
   
   // Inventory Adjustments
   getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
@@ -507,20 +508,75 @@ export class DatabaseStorage implements IStorage {
 
   async createPurchaseOrderItem(itemData: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
     const [item] = await db.insert(purchaseOrderItems).values(itemData).returning();
+    
+    // Auto recalculate PO total and update status
+    await this.recalculatePurchaseOrderTotal(itemData.purchaseOrderId);
+    
     return item;
   }
 
+  async recalculatePurchaseOrderTotal(poId: string): Promise<void> {
+    // Calculate total from all items
+    const result = await db
+      .select({
+        total: sql<number>`COALESCE(SUM(${purchaseOrderItems.quantity} * CAST(${purchaseOrderItems.unitCost} AS NUMERIC)), 0)`,
+        count: sql<number>`COUNT(${purchaseOrderItems.id})`
+      })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, poId));
+    
+    const calculatedTotal = result[0]?.total || 0;
+    const itemCount = result[0]?.count || 0;
+    
+    // Update PO with new total and status
+    const updateData: any = {
+      totalAmount: calculatedTotal.toString(),
+      updatedAt: new Date()
+    };
+    
+    // Change status from draft to pending if there are items
+    if (itemCount > 0) {
+      updateData.status = 'pending';
+    }
+    
+    await db
+      .update(purchaseOrders)
+      .set(updateData)
+      .where(eq(purchaseOrders.id, poId));
+  }
+
   async updatePurchaseOrderItem(id: string, itemData: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem> {
+    // Get PO ID for recalculation
+    const [existingItem] = await db.select({ purchaseOrderId: purchaseOrderItems.purchaseOrderId })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id));
+    
     const [item] = await db
       .update(purchaseOrderItems)
       .set(itemData)
       .where(eq(purchaseOrderItems.id, id))
       .returning();
+    
+    // Recalculate total after update
+    if (existingItem) {
+      await this.recalculatePurchaseOrderTotal(existingItem.purchaseOrderId);
+    }
+    
     return item;
   }
 
   async deletePurchaseOrderItem(id: string): Promise<void> {
+    // Get PO ID before deleting item
+    const [item] = await db.select({ purchaseOrderId: purchaseOrderItems.purchaseOrderId })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, id));
+    
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
+    
+    // Recalculate total after deletion
+    if (item) {
+      await this.recalculatePurchaseOrderTotal(item.purchaseOrderId);
+    }
   }
 
   // Inventory Adjustments
