@@ -15,8 +15,103 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { queryClient } from "@/lib/queryClient";
+
+const pricingSchema = z.object({
+  sellingPrice: z.string().min(1, "Harga jual harus diisi"),
+  marginPercent: z.string().optional(),
+});
+
+type PricingFormData = z.infer<typeof pricingSchema>;
+
+function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () => void }) {
+  const form = useForm<PricingFormData>({
+    resolver: zodResolver(pricingSchema),
+    defaultValues: {
+      sellingPrice: product.sellingPrice?.toString() || "",
+      marginPercent: "",
+    },
+  });
+
+  const updatePricingMutation = useMutation({
+    mutationFn: async (data: { sellingPrice: string }) => {
+      const response = await fetch(`/api/products/${product.id}/pricing`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ sellingPrice: data.sellingPrice }),
+      });
+      if (!response.ok) throw new Error('Failed to update pricing');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      onSuccess();
+    },
+  });
+
+  const onSubmit = (data: PricingFormData) => {
+    updatePricingMutation.mutate({ sellingPrice: data.sellingPrice });
+  };
+
+  const hpp = Number(product.averageCost || 0);
+  const currentSellingPrice = form.watch("sellingPrice");
+  const calculatedMargin = hpp > 0 && currentSellingPrice ? 
+    ((Number(currentSellingPrice) - hpp) / hpp * 100).toFixed(1) : "0";
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+          <div>
+            <p className="text-sm font-medium">Current HPP:</p>
+            <p className="text-lg font-bold text-blue-600">Rp {hpp.toLocaleString('id-ID')}</p>
+          </div>
+          <div>
+            <p className="text-sm font-medium">Calculated Margin:</p>
+            <p className="text-lg font-bold text-green-600">{calculatedMargin}%</p>
+          </div>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="sellingPrice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Harga Jual (Selling Price)</FormLabel>
+              <FormControl>
+                <Input 
+                  placeholder="Masukkan harga jual" 
+                  type="number"
+                  step="0.01"
+                  {...field} 
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="submit" 
+            disabled={updatePricingMutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            {updatePricingMutation.isPending ? "Saving..." : "Update Pricing"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
 
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -352,17 +447,28 @@ export default function Inventory() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                data-testid={`edit-pricing-${product.id}`}
-                                onClick={() => {
-                                  // TODO: Open pricing edit dialog
-                                  alert(`Edit pricing for ${product.name} - Coming soon!`);
-                                }}
-                              >
-                                Edit
-                              </Button>
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    data-testid={`edit-pricing-${product.id}`}
+                                  >
+                                    Edit
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-[425px]">
+                                  <DialogHeader>
+                                    <DialogTitle>Edit Pricing - {product.name}</DialogTitle>
+                                  </DialogHeader>
+                                  <PricingEditForm 
+                                    product={product} 
+                                    onSuccess={() => {
+                                      toast({ title: "Pricing berhasil diupdate!" });
+                                    }} 
+                                  />
+                                </DialogContent>
+                              </Dialog>
                             </TableCell>
                           </TableRow>
                         );
