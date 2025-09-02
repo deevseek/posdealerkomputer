@@ -45,6 +45,7 @@ export default function PurchasingPage() {
   const [selectedPO, setSelectedPO] = useState<any>(null);
   const [isAddPOOpen, setIsAddPOOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [poItems, setPOItems] = useState<any[]>([]);
   const [viewPOOpen, setViewPOOpen] = useState(false);
 
   const queryClient = useQueryClient();
@@ -94,8 +95,9 @@ export default function PurchasingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
       setIsAddPOOpen(false);
+      setPOItems([]);
       poForm.reset();
-      toast({ title: "Purchase order berhasil dibuat" });
+      toast({ title: "Purchase order berhasil dibuat dengan items" });
     },
     onError: (error) => {
       toast({ title: "Gagal membuat purchase order", description: error.message, variant: "destructive" });
@@ -127,13 +129,26 @@ export default function PurchasingPage() {
   });
 
   const onSubmitPO = (data: any) => {
-    createPOMutation.mutate(data);
+    createPOMutation.mutate({
+      ...data,
+      items: poItems
+    });
+  };
+
+  const addItemToPO = (item: any) => {
+    setPOItems([...poItems, { ...item, id: Date.now() }]);
+  };
+
+  const removeItemFromPO = (itemId: any) => {
+    setPOItems(poItems.filter(item => item.id !== itemId));
   };
 
   const onSubmitItem = (data: any) => {
     addItemMutation.mutate({
       ...data,
-      unitCost: parseFloat(data.unitCost),
+      quantity: parseInt(data.quantity) || 1,
+      orderedQuantity: parseInt(data.quantity) || 1,
+      unitCost: parseFloat(data.unitCost) || 0,
     });
   };
 
@@ -230,11 +245,112 @@ export default function PurchasingPage() {
                       </FormItem>
                     )}
                   />
+                  
+                  {/* Items Section */}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Items</h3>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          const product = products?.[0];
+                          if (product) {
+                            addItemToPO({
+                              productId: product.id,
+                              productName: product.name,
+                              quantity: 1,
+                              unitCost: 0
+                            });
+                          }
+                        }}
+                        data-testid="button-add-item-to-po"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Tambah Item
+                      </Button>
+                    </div>
+                    
+                    {poItems.length > 0 ? (
+                      <div className="space-y-2">
+                        {poItems.map((item, index) => (
+                          <div key={item.id} className="border p-3 rounded-md">
+                            <div className="grid grid-cols-4 gap-3 items-center">
+                              <div>
+                                <Label className="text-sm">Produk</Label>
+                                <Select 
+                                  value={item.productId} 
+                                  onValueChange={(value) => {
+                                    const product = products?.find(p => p.id === value);
+                                    setPOItems(poItems.map((it, i) => 
+                                      i === index ? { ...it, productId: value, productName: product?.name } : it
+                                    ));
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {products?.map((product: any) => (
+                                      <SelectItem key={product.id} value={product.id}>
+                                        {product.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label className="text-sm">Kuantitas</Label>
+                                <Input 
+                                  type="number" 
+                                  value={item.quantity}
+                                  onChange={(e) => {
+                                    setPOItems(poItems.map((it, i) => 
+                                      i === index ? { ...it, quantity: parseInt(e.target.value) || 1 } : it
+                                    ));
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-sm">Harga Satuan</Label>
+                                <Input 
+                                  type="number" 
+                                  value={item.unitCost}
+                                  onChange={(e) => {
+                                    setPOItems(poItems.map((it, i) => 
+                                      i === index ? { ...it, unitCost: parseFloat(e.target.value) || 0 } : it
+                                    ));
+                                  }}
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <Button 
+                                  type="button" 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => removeItemFromPO(item.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">Belum ada item. Klik "Tambah Item" untuk menambahkan.</p>
+                    )}
+                  </div>
+                  
                   <div className="flex gap-2 pt-4">
-                    <Button type="submit" disabled={createPOMutation.isPending} data-testid="button-save-po">
+                    <Button type="submit" disabled={createPOMutation.isPending || poItems.length === 0} data-testid="button-save-po">
                       {createPOMutation.isPending ? "Menyimpan..." : "Buat Purchase Order"}
                     </Button>
-                    <Button type="button" variant="outline" onClick={() => setIsAddPOOpen(false)}>
+                    <Button type="button" variant="outline" onClick={() => {
+                      setIsAddPOOpen(false);
+                      setPOItems([]);
+                    }}>
                       Batal
                     </Button>
                   </div>

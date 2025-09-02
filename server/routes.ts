@@ -704,11 +704,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/purchase-orders', isAuthenticated, async (req: any, res) => {
     try {
+      const { items, ...poData } = req.body;
       const orderData = {
-        ...req.body,
+        ...poData,
         requestedBy: req.session.user.id
       };
       const order = await storage.createPurchaseOrder(orderData);
+      
+      // Create items if provided
+      if (items && items.length > 0) {
+        for (const item of items) {
+          await storage.createPurchaseOrderItem({
+            ...item,
+            purchaseOrderId: order.id,
+            orderedQuantity: item.quantity
+          });
+        }
+      }
+      
       res.json(order);
     } catch (error) {
       console.error("Error creating purchase order:", error);
