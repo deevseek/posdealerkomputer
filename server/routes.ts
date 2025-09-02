@@ -1032,9 +1032,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (customer?.phone) {
               await whatsappService.sendServiceCreatedNotification(
                 customer.phone,
-                customer.name,
-                ticket.serviceNumber,
-                `${ticket.device} - ${ticket.problem}`
+                ticket,
+                customer,
+                config
               );
             }
           }
@@ -1089,10 +1089,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (customer?.phone) {
                 await whatsappService.sendServiceStatusNotification(
                   customer.phone,
-                  customer.name,
-                  ticket.serviceNumber,
-                  status,
-                  `${ticket.deviceType} - ${ticket.problem}`
+                  ticket,
+                  customer,
+                  config
                 );
               }
             }
