@@ -166,6 +166,34 @@ export default function PurchasingPage() {
     setPOItems(poItems.filter(item => item.id !== itemId));
   };
 
+  // Mutation to delete item from existing purchase order
+  const deleteItemMutation = useMutation({
+    mutationFn: ({ poId, itemId }: { poId: string; itemId: string }) => 
+      apiRequest(`/api/purchase-orders/${poId}/items/${itemId}`, {
+        method: 'DELETE'
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders'] });
+      if (selectedPO) {
+        queryClient.invalidateQueries({ queryKey: [`/api/purchase-orders/${selectedPO.id}/items`] });
+      }
+      toast({ title: "Item berhasil dihapus" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Gagal menghapus item",
+        variant: "destructive" 
+      });
+    }
+  });
+
+  // Function to remove item from existing purchase order
+  const removeItemFromExistingPO = (itemId: string) => {
+    if (!selectedPO) return;
+    deleteItemMutation.mutate({ poId: selectedPO.id, itemId });
+  };
+
   const onSubmitItem = (data: any) => {
     addItemMutation.mutate({
       ...data,
@@ -783,7 +811,12 @@ export default function PurchasingPage() {
                       <TableCell>Rp {Number(item.unitCost).toLocaleString()}</TableCell>
                       <TableCell>Rp {(item.quantity * Number(item.unitCost)).toLocaleString()}</TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => removeItemFromExistingPO(item.id)}
+                          disabled={selectedPO?.status !== 'pending'}
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </TableCell>

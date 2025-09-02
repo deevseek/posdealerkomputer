@@ -757,6 +757,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete purchase order item
+  app.delete('/api/purchase-orders/:poId/items/:itemId', isAuthenticated, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      await storage.deletePurchaseOrderItem(itemId);
+      res.json({ message: "Item berhasil dihapus" });
+    } catch (error) {
+      console.error("Error deleting purchase order item:", error);
+      res.status(500).json({ message: "Gagal menghapus item", error: error.message });
+    }
+  });
+
   // Receiving routes
   app.post('/api/purchase-orders/items/:itemId/receive', isAuthenticated, async (req, res) => {
     try {
