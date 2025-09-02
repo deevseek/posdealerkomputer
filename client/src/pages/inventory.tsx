@@ -14,15 +14,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign } from "lucide-react";
+import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign, Plus, Tag } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient } from "@/lib/queryClient";
+import { insertProductSchema, insertCategorySchema } from "@shared/schema";
 
 const pricingSchema = z.object({
   sellingPrice: z.string().min(1, "Harga jual harus diisi"),
@@ -30,6 +33,312 @@ const pricingSchema = z.object({
 });
 
 type PricingFormData = z.infer<typeof pricingSchema>;
+type ProductFormData = z.infer<typeof insertProductSchema>;
+type CategoryFormData = z.infer<typeof insertCategorySchema>;
+
+// Add Category Form Component
+function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
+  const { toast } = useToast();
+  const form = useForm<CategoryFormData>({
+    resolver: zodResolver(insertCategorySchema),
+    defaultValues: {
+      name: "",
+      description: "",
+    },
+  });
+
+  const addCategoryMutation = useMutation({
+    mutationFn: async (data: CategoryFormData) => {
+      const response = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to add category');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+      toast({ title: "Success", description: "Category berhasil ditambahkan!" });
+      form.reset();
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Gagal menambah category", variant: "destructive" });
+    },
+  });
+
+  const onSubmit = (data: CategoryFormData) => {
+    addCategoryMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nama Kategori *</FormLabel>
+              <FormControl>
+                <Input {...field} placeholder="Masukkan nama kategori" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Deskripsi</FormLabel>
+              <FormControl>
+                <Textarea {...field} value={field.value || ""} placeholder="Deskripsi kategori (opsional)" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="submit" 
+            disabled={addCategoryMutation.isPending}
+            data-testid="button-add-category-submit"
+          >
+            {addCategoryMutation.isPending ? "Adding..." : "Tambah Kategori"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
+// Add Product Form Component  
+function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
+  const { toast } = useToast();
+  
+  // Get categories for dropdown
+  const { data: categories = [] } = useQuery({
+    queryKey: ["/api/categories"],
+    retry: false,
+  });
+  
+  const form = useForm<ProductFormData>({
+    resolver: zodResolver(insertProductSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      categoryId: undefined,
+      brand: "",
+      model: "",
+      unit: "pcs",
+      specifications: "",
+      sellingPrice: "0",
+      minStock: 5,
+      maxStock: 100,
+    },
+  });
+
+  const addProductMutation = useMutation({
+    mutationFn: async (data: ProductFormData) => {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to add product');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({ title: "Success", description: "Produk berhasil ditambahkan!" });
+      form.reset();
+      onSuccess();
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Gagal menambah produk", variant: "destructive" });
+    },
+  });
+
+  const onSubmit = (data: ProductFormData) => {
+    addProductMutation.mutate(data);
+  };
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nama Produk *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Masukkan nama produk" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="categoryId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Kategori</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Pilih kategori" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {(categories as any[]).map((category: any) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="description"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Deskripsi</FormLabel>
+              <FormControl>
+                <Textarea {...field} value={field.value || ""} placeholder="Deskripsi produk" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        <div className="grid grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="brand"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Brand</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value || ""} placeholder="Brand produk" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="model"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Model</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value || ""} placeholder="Model produk" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="unit"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unit</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value || "pcs"}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="pcs">Pcs</SelectItem>
+                    <SelectItem value="box">Box</SelectItem>
+                    <SelectItem value="set">Set</SelectItem>
+                    <SelectItem value="meter">Meter</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <FormField
+            control={form.control}
+            name="sellingPrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Harga Jual</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value || ""} type="number" placeholder="0" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="minStock"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Min Stock</FormLabel>
+                <FormControl>
+                  <Input {...field} type="number" placeholder="5" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          
+          <FormField
+            control={form.control}
+            name="maxStock"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Max Stock</FormLabel>
+                <FormControl>
+                  <Input {...field} type="number" placeholder="100" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <div className="flex justify-end space-x-2">
+          <Button 
+            type="submit" 
+            disabled={addProductMutation.isPending}
+            data-testid="button-add-product-submit"
+          >
+            {addProductMutation.isPending ? "Adding..." : "Tambah Produk"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
 
 function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () => void }) {
   const form = useForm<PricingFormData>({
@@ -285,7 +594,7 @@ export default function Inventory() {
 
             {/* Products Tab */}
             <TabsContent value="products" className="space-y-6">
-              {/* Search Bar */}
+              {/* Search Bar with Action Buttons */}
               <Card>
                 <CardContent className="p-4">
                   <div className="flex space-x-4">
@@ -298,6 +607,43 @@ export default function Inventory() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         data-testid="input-product-search"
                       />
+                    </div>
+                    
+                    {/* Action Buttons */}
+                    <div className="flex space-x-2">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" data-testid="button-add-category">
+                            <Tag className="w-4 h-4 mr-2" />
+                            Add Category
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                          <DialogHeader>
+                            <DialogTitle>Tambah Kategori Baru</DialogTitle>
+                          </DialogHeader>
+                          <AddCategoryForm onSuccess={() => {
+                            // Dialog akan tertutup otomatis karena form reset
+                          }} />
+                        </DialogContent>
+                      </Dialog>
+                      
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button data-testid="button-add-product">
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Product
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>Tambah Produk Baru</DialogTitle>
+                          </DialogHeader>
+                          <AddProductForm onSuccess={() => {
+                            // Dialog akan tertutup otomatis karena form reset
+                          }} />
+                        </DialogContent>
+                      </Dialog>
                     </div>
                   </div>
                 </CardContent>
