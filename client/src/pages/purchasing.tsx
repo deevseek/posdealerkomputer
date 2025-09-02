@@ -854,23 +854,29 @@ export default function PurchasingPage() {
                 onClick={() => {
                   // Process receiving
                   const itemsToReceive = receivingItems.filter(item => item.quantity > 0);
+                  console.log("Items to receive:", itemsToReceive);
+                  
                   if (itemsToReceive.length > 0) {
                     // Call receiving API
                     Promise.all(
-                      itemsToReceive.map(item => 
-                        apiRequest(`/api/purchase-orders/items/${item.itemId}/receive`, {
+                      itemsToReceive.map(item => {
+                        console.log("Sending receive request for:", item);
+                        return apiRequest(`/api/purchase-orders/items/${item.itemId}/receive`, {
                           method: 'POST',
                           data: { receivedQuantity: item.quantity }
-                        })
-                      )
+                        });
+                      })
                     ).then(() => {
                       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
                       setReceivingPOOpen(false);
                       setReceivingItems([]);
                       toast({ title: "Items received successfully" });
                     }).catch((error) => {
+                      console.error("Failed to receive items:", error);
                       toast({ title: "Failed to receive items", description: error.message, variant: "destructive" });
                     });
+                  } else {
+                    toast({ title: "No items to receive", description: "Please enter quantities to receive", variant: "destructive" });
                   }
                 }}
                 disabled={!receivingItems.some(item => item.quantity > 0)}
