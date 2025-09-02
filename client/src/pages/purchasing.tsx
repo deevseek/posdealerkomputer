@@ -1,4 +1,6 @@
 import { useState } from "react";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -234,13 +236,20 @@ export default function PurchasingPage() {
   );
 
   return (
-    <div className="container mx-auto p-6 space-y-6" data-testid="purchasing-page">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Purchasing Management</h1>
-          <p className="text-muted-foreground">Kelola purchase order, supplier, dan penerimaan barang</p>
-        </div>
-        <div className="flex gap-2">
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header 
+          title="Purchasing Management" 
+          breadcrumb="Beranda / Purchasing"
+        />
+        <main className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6" data-testid="purchasing-page">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-muted-foreground">Kelola purchase order, supplier, dan penerimaan barang</p>
+              </div>
+              <div className="flex gap-2">
           <Dialog open={isAddPOOpen} onOpenChange={setIsAddPOOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-po">
@@ -926,6 +935,9 @@ export default function PurchasingPage() {
           </div>
         </DialogContent>
       </Dialog>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
