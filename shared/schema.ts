@@ -109,6 +109,7 @@ export const products = pgTable("products", {
   marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }),
   
   // Stock management
+  stock: integer("stock").default(0), // Main stock field for purchasing integration
   totalStock: integer("total_stock").default(0),
   availableStock: integer("available_stock").default(0), // total - reserved
   reservedStock: integer("reserved_stock").default(0),
