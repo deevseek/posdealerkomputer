@@ -163,9 +163,9 @@ export class FinanceManager {
       .select({
         name: products.name,
         stock: products.stock,
-        purchasePrice: products.purchasePrice,
+        averageCost: products.averageCost,
         sellingPrice: products.sellingPrice,
-        totalValue: sql<number>`${products.stock} * COALESCE(${products.purchasePrice}, 0)`,
+        totalValue: sql<number>`${products.stock} * COALESCE(${products.averageCost}, 0)`,
       })
       .from(products)
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
