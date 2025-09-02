@@ -380,11 +380,11 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
           <div>
-            <p className="text-sm font-medium">Current HPP:</p>
+            <p className="text-sm font-medium">HPP Saat Ini:</p>
             <p className="text-lg font-bold text-blue-600">Rp {hpp.toLocaleString('id-ID')}</p>
           </div>
           <div>
-            <p className="text-sm font-medium">Calculated Margin:</p>
+            <p className="text-sm font-medium">Margin Terhitung:</p>
             <p className="text-lg font-bold text-green-600">{calculatedMargin}%</p>
           </div>
         </div>
@@ -394,7 +394,7 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
           name="sellingPrice"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Harga Jual (Selling Price)</FormLabel>
+              <FormLabel>Harga Jual</FormLabel>
               <FormControl>
                 <Input 
                   placeholder="Masukkan harga jual" 
@@ -414,7 +414,7 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
             disabled={updatePricingMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            {updatePricingMutation.isPending ? "Saving..." : "Update Pricing"}
+            {updatePricingMutation.isPending ? "Menyimpan..." : "Update Harga"}
           </Button>
         </div>
       </form>
@@ -670,8 +670,8 @@ export default function Inventory() {
                           <TableHead>SKU</TableHead>
                           <TableHead className="text-right">Current Stock</TableHead>
                           <TableHead className="text-right">Min Stock</TableHead>
-                          <TableHead className="text-right">HPP (Average Cost)</TableHead>
-                          <TableHead className="text-right">Selling Price</TableHead>
+                          <TableHead className="text-right">HPP (Harga Pokok)</TableHead>
+                          <TableHead className="text-right">Harga Jual</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -750,8 +750,8 @@ export default function Inventory() {
                         <TableHead>Product</TableHead>
                         <TableHead className="text-right">Stock</TableHead>
                         <TableHead className="text-right">Last Purchase Price</TableHead>
-                        <TableHead className="text-right">HPP (Average Cost)</TableHead>
-                        <TableHead className="text-right">Selling Price</TableHead>
+                        <TableHead className="text-right">HPP (Harga Pokok)</TableHead>
+                        <TableHead className="text-right">Harga Jual</TableHead>
                         <TableHead className="text-right">Margin %</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
@@ -828,26 +828,26 @@ export default function Inventory() {
               {/* HPP Calculation Info */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">HPP Calculation Info</CardTitle>
+                  <CardTitle className="text-lg">Info Perhitungan HPP</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                     <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
-                      <h4 className="font-semibold text-blue-700 dark:text-blue-300">HPP (Average Cost)</h4>
+                      <h4 className="font-semibold text-blue-700 dark:text-blue-300">HPP (Harga Pokok Penjualan)</h4>
                       <p className="text-blue-600 dark:text-blue-400">
-                        Calculated from weighted average of purchase prices over time
+                        Dihitung dari rata-rata tertimbang harga pembelian dari waktu ke waktu
                       </p>
                     </div>
                     <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg">
-                      <h4 className="font-semibold text-green-700 dark:text-green-300">Selling Price</h4>
+                      <h4 className="font-semibold text-green-700 dark:text-green-300">Harga Jual</h4>
                       <p className="text-green-600 dark:text-green-400">
-                        Set by admin based on market research and margin targets
+                        Ditentukan oleh admin berdasarkan riset pasar dan target margin
                       </p>
                     </div>
                     <div className="bg-amber-50 dark:bg-amber-950 p-4 rounded-lg">
                       <h4 className="font-semibold text-amber-700 dark:text-amber-300">Margin %</h4>
                       <p className="text-amber-600 dark:text-amber-400">
-                        Formula: (Selling Price - HPP) / HPP × 100%
+                        Rumus: (Harga Jual - HPP) / HPP × 100%
                       </p>
                     </div>
                   </div>
@@ -861,19 +861,19 @@ export default function Inventory() {
                 <CardHeader>
                   <CardTitle className="flex items-center">
                     <History className="w-5 h-5 mr-2" />
-                    Stock Movement History
+                    Riwayat Pergerakan Stok
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="text-right">Quantity</TableHead>
-                        <TableHead>Reference</TableHead>
-                        <TableHead>Notes</TableHead>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead>Produk</TableHead>
+                        <TableHead>Jenis</TableHead>
+                        <TableHead className="text-right">Jumlah</TableHead>
+                        <TableHead>Referensi</TableHead>
+                        <TableHead>Catatan</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
