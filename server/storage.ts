@@ -612,7 +612,7 @@ export class DatabaseStorage implements IStorage {
       productId: item.productId,
       movementType: 'in',
       quantity: receivedQuantity,
-      unitCost: item.unitCost,
+      unitCost: item.unitCost.toString(),
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
