@@ -948,6 +948,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete service ticket
+  app.delete('/api/service-tickets/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteServiceTicket(id);
+      res.json({ message: "Service ticket deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting service ticket:", error);
+      res.status(500).json({ message: "Failed to delete service ticket" });
+    }
+  });
+
   // Get parts for a service ticket
   app.get('/api/service-tickets/:id/parts', isAuthenticated, async (req, res) => {
     try {
