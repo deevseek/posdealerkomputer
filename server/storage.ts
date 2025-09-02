@@ -1115,18 +1115,13 @@ export class DatabaseStorage implements IStorage {
         
         let totalPartsCost = 0;
         
-        // Add new parts and update stock
+        // Add new parts and handle stock based on status
         for (const part of parts) {
-          // Check if product has enough stock
+          // Check if product exists
           const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
           
           if (!product) {
             throw new Error(`Product dengan ID ${part.productId} tidak ditemukan`);
-          }
-          
-          const currentStock = product.totalStock || 0;
-          if (currentStock < part.quantity) {
-            throw new Error(`Stock ${product.name} tidak cukup. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
           }
           
           // Use product selling price as default
@@ -1142,24 +1137,45 @@ export class DatabaseStorage implements IStorage {
             totalPrice: totalPrice
           });
           
-          // Update product stock
-          await tx.update(products)
-            .set({ 
-              stock: currentStock - part.quantity,
-              updatedAt: new Date()
-            })
-            .where(eq(products.id, part.productId));
-          
-          // Record stock movement
-          await tx.insert(stockMovements).values({
-            productId: part.productId,
-            type: 'out',
-            quantity: part.quantity,
-            reference: id,
-            referenceType: 'service',
-            notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
-            userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
-          });
+          // Only update stock and record movement for completed/delivered status
+          if (ticket.status === 'completed' || ticket.status === 'delivered') {
+            const currentStock = product.totalStock || 0;
+            
+            // Check stock only for completed services
+            if (currentStock < part.quantity) {
+              throw new Error(`Stock ${product.name} tidak cukup untuk menyelesaikan servis. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
+            }
+            
+            // Update product stock
+            await tx.update(products)
+              .set({ 
+                totalStock: currentStock - part.quantity,
+                availableStock: (product.availableStock || 0) - part.quantity,
+                updatedAt: new Date()
+              })
+              .where(eq(products.id, part.productId));
+            
+            // Record stock movement
+            await tx.insert(stockMovements).values({
+              productId: part.productId,
+              type: 'out',
+              quantity: part.quantity,
+              reference: id,
+              referenceType: 'service',
+              notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
+              userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+            });
+          } else {
+            // For non-completed status, just reserve stock (optional - estimate only)
+            const currentReserved = product.reservedStock || 0;
+            await tx.update(products)
+              .set({ 
+                reservedStock: currentReserved + part.quantity,
+                availableStock: (product.totalStock || 0) - (currentReserved + part.quantity),
+                updatedAt: new Date()
+              })
+              .where(eq(products.id, part.productId));
+          }
           
           totalPartsCost += parseFloat(totalPrice);
         }
