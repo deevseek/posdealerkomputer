@@ -127,6 +127,7 @@ export interface IStorage {
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
   recalculatePurchaseOrderTotal(poId: string): Promise<void>;
+  receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void>;
   
   // Inventory Adjustments
   getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
@@ -577,6 +578,96 @@ export class DatabaseStorage implements IStorage {
     if (item) {
       await this.recalculatePurchaseOrderTotal(item.purchaseOrderId);
     }
+  }
+
+  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void> {
+    // Get item details
+    const [item] = await db
+      .select({
+        id: purchaseOrderItems.id,
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        productId: purchaseOrderItems.productId,
+        quantity: purchaseOrderItems.quantity,
+        receivedQuantity: purchaseOrderItems.receivedQuantity,
+        unitCost: purchaseOrderItems.unitCost
+      })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, itemId));
+
+    if (!item) throw new Error("Purchase order item not found");
+
+    const newReceivedQuantity = (item.receivedQuantity || 0) + receivedQuantity;
+    
+    // Update received quantity
+    await db
+      .update(purchaseOrderItems)
+      .set({ 
+        receivedQuantity: newReceivedQuantity,
+        updatedAt: new Date()
+      })
+      .where(eq(purchaseOrderItems.id, itemId));
+
+    // Create stock movement
+    await db.insert(stockMovements).values({
+      productId: item.productId,
+      movementType: 'in',
+      quantity: receivedQuantity,
+      unitCost: item.unitCost,
+      referenceId: item.purchaseOrderId,
+      referenceType: 'purchase',
+      notes: `Received from PO`,
+      userId: 'system', // Should be current user
+    });
+
+    // Update product stock
+    const [product] = await db
+      .select({ currentStock: products.currentStock })
+      .from(products)
+      .where(eq(products.id, item.productId));
+
+    if (product) {
+      await db
+        .update(products)
+        .set({ 
+          currentStock: (product.currentStock || 0) + receivedQuantity,
+          updatedAt: new Date()
+        })
+        .where(eq(products.id, item.productId));
+    }
+
+    // Check if PO should be updated to received status
+    await this.updatePurchaseOrderStatus(item.purchaseOrderId);
+  }
+
+  async updatePurchaseOrderStatus(poId: string): Promise<void> {
+    // Get all items for this PO
+    const items = await db
+      .select({
+        quantity: purchaseOrderItems.quantity,
+        receivedQuantity: purchaseOrderItems.receivedQuantity
+      })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.purchaseOrderId, poId));
+
+    if (items.length === 0) return;
+
+    const totalOrdered = items.reduce((sum, item) => sum + item.quantity, 0);
+    const totalReceived = items.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0);
+
+    let newStatus = 'confirmed';
+    if (totalReceived === totalOrdered) {
+      newStatus = 'received';
+    } else if (totalReceived > 0) {
+      newStatus = 'partial_received';
+    }
+
+    await db
+      .update(purchaseOrders)
+      .set({ 
+        status: newStatus as any,
+        updatedAt: new Date()
+      })
+      .where(eq(purchaseOrders.id, poId));
   }
 
   // Inventory Adjustments

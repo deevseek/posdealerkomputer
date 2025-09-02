@@ -772,6 +772,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Receiving routes
+  app.post('/api/purchase-orders/items/:itemId/receive', isAuthenticated, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { receivedQuantity } = req.body;
+      
+      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity));
+      res.json({ message: "Items received successfully" });
+    } catch (error) {
+      console.error("Error receiving items:", error);
+      res.status(500).json({ message: "Failed to receive items" });
+    }
+  });
+
   // Product Batch routes
   app.get('/api/product-batches', isAuthenticated, async (req, res) => {
     try {

@@ -46,6 +46,8 @@ export default function PurchasingPage() {
   const [isAddPOOpen, setIsAddPOOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [poItems, setPOItems] = useState<any[]>([]);
+  const [receivingPOOpen, setReceivingPOOpen] = useState(false);
+  const [receivingItems, setReceivingItems] = useState<any[]>([]);
   const [viewPOOpen, setViewPOOpen] = useState(false);
 
   const queryClient = useQueryClient();
@@ -160,6 +162,10 @@ export default function PurchasingPage() {
         return <Badge variant="outline" data-testid={`badge-status-pending`}>Pending</Badge>;
       case "confirmed":
         return <Badge variant="default" data-testid={`badge-status-confirmed`}>Confirmed</Badge>;
+      case "partial_received":
+        return <Badge variant="default" className="bg-orange-500" data-testid={`badge-status-partial_received`}>Partial Received</Badge>;
+      case "received":
+        return <Badge variant="default" className="bg-green-500" data-testid={`badge-status-received`}>Received</Badge>;
       case "delivered":
         return <Badge variant="default" className="bg-green-500" data-testid={`badge-status-delivered`}>Delivered</Badge>;
       case "cancelled":
@@ -476,16 +482,78 @@ export default function PurchasingPage() {
         </TabsContent>
 
         <TabsContent value="receiving" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">Goods Receiving</h2>
+              <p className="text-muted-foreground">Terima barang dari purchase order yang sudah dikonfirmasi</p>
+            </div>
+          </div>
+
           <Card>
             <CardHeader>
-              <CardTitle>Goods Receiving</CardTitle>
+              <CardTitle>Purchase Orders Ready for Receiving</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Goods Receiving</h3>
-                <p className="text-muted-foreground">Fitur penerimaan barang akan segera hadir</p>
-              </div>
+              {ordersLoading ? (
+                <div className="space-y-3">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-200 rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>PO Number</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Order Date</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Total Amount</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {purchaseOrders?.filter((order: any) => order.status === 'confirmed').map((order: any) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="font-medium">{order.poNumber}</TableCell>
+                        <TableCell>{(order as any).supplierName || order.supplierId}</TableCell>
+                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{getStatusBadge(order.status)}</TableCell>
+                        <TableCell>Rp {Number(order.totalAmount || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              setSelectedPO(order);
+                              // Fetch items for this PO
+                              try {
+                                const items = await apiRequest(`/api/purchase-orders/${order.id}/items`);
+                                setSelectedPOItems(items);
+                                setReceivingPOOpen(true);
+                                setReceivingItems([]);
+                              } catch (error) {
+                                toast({ title: "Failed to load PO items", variant: "destructive" });
+                              }
+                            }}
+                            data-testid={`button-receive-po-${order.id}`}
+                          >
+                            <Truck className="h-4 w-4 mr-2" />
+                            Receive Items
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {!purchaseOrders?.some((order: any) => order.status === 'confirmed') && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          No confirmed purchase orders ready for receiving
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -709,6 +777,113 @@ export default function PurchasingPage() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goods Receiving Dialog */}
+      <Dialog open={receivingPOOpen} onOpenChange={setReceivingPOOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Receive Items - {selectedPO?.poNumber}</DialogTitle>
+            <DialogDescription>
+              Terima barang dari supplier dan update stock inventory
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Supplier</Label>
+                <p className="text-sm font-medium">{(selectedPO as any)?.supplierName || selectedPO?.supplierId}</p>
+              </div>
+              <div>
+                <Label>Total Amount</Label>
+                <p className="text-sm font-medium">Rp {Number(selectedPO?.totalAmount || 0).toLocaleString()}</p>
+              </div>
+            </div>
+            
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Ordered Qty</TableHead>
+                    <TableHead>Already Received</TableHead>
+                    <TableHead>Receive Now</TableHead>
+                    <TableHead>Remaining</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedPOItems?.map((item: any) => {
+                    const receivingQty = receivingItems.find(r => r.itemId === item.id)?.quantity || 0;
+                    const remaining = item.quantity - (item.receivedQuantity || 0) - receivingQty;
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell>{(item as any).productName || item.productId}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                        <TableCell>{item.receivedQuantity || 0}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="0"
+                            max={remaining}
+                            value={receivingQty}
+                            onChange={(e) => {
+                              const qty = parseInt(e.target.value) || 0;
+                              setReceivingItems(prev => {
+                                const existing = prev.find(r => r.itemId === item.id);
+                                if (existing) {
+                                  return prev.map(r => 
+                                    r.itemId === item.id ? { ...r, quantity: qty } : r
+                                  );
+                                } else {
+                                  return [...prev, { itemId: item.id, quantity: qty }];
+                                }
+                              });
+                            }}
+                            className="w-20"
+                          />
+                        </TableCell>
+                        <TableCell>{remaining}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReceivingPOOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => {
+                  // Process receiving
+                  const itemsToReceive = receivingItems.filter(item => item.quantity > 0);
+                  if (itemsToReceive.length > 0) {
+                    // Call receiving API
+                    Promise.all(
+                      itemsToReceive.map(item => 
+                        apiRequest(`/api/purchase-orders/items/${item.itemId}/receive`, {
+                          method: 'POST',
+                          data: { receivedQuantity: item.quantity }
+                        })
+                      )
+                    ).then(() => {
+                      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+                      setReceivingPOOpen(false);
+                      setReceivingItems([]);
+                      toast({ title: "Items received successfully" });
+                    }).catch((error) => {
+                      toast({ title: "Failed to receive items", description: error.message, variant: "destructive" });
+                    });
+                  }
+                }}
+                disabled={!receivingItems.some(item => item.quantity > 0)}
+              >
+                Receive Items
+              </Button>
             </div>
           </div>
         </DialogContent>
