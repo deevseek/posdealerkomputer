@@ -6,6 +6,12 @@ import {
   products,
   customers,
   suppliers,
+  locations,
+  productBatches,
+  purchaseOrders,
+  purchaseOrderItems,
+  inventoryAdjustments,
+  inventoryAdjustmentItems,
   transactions,
   transactionItems,
   serviceTickets,
@@ -26,6 +32,18 @@ import {
   type InsertCustomer,
   type Supplier,
   type InsertSupplier,
+  type Location,
+  type InsertLocation,
+  type ProductBatch,
+  type InsertProductBatch,
+  type PurchaseOrder,
+  type InsertPurchaseOrder,
+  type PurchaseOrderItem,
+  type InsertPurchaseOrderItem,
+  type InventoryAdjustment,
+  type InsertInventoryAdjustment,
+  type InventoryAdjustmentItem,
+  type InsertInventoryAdjustmentItem,
   type Transaction,
   type InsertTransaction,
   type TransactionItem,
@@ -74,14 +92,50 @@ export interface IStorage {
   deleteCategory(id: string): Promise<void>;
   
   // Products
-  getProducts(): Promise<Product[]>;
+  getProducts(search?: string): Promise<Product[]>;
   getProductById(id: string): Promise<Product | undefined>;
+  getProductBySku(sku: string): Promise<Product | undefined>;
   getProductByBarcode(barcode: string): Promise<Product | undefined>;
-  searchProducts(query: string): Promise<Product[]>;
-  getLowStockProducts(): Promise<Product[]>;
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: string, product: Partial<InsertProduct>): Promise<Product>;
   deleteProduct(id: string): Promise<void>;
+  
+  // Locations
+  getLocations(): Promise<Location[]>;
+  getLocationById(id: string): Promise<Location | undefined>;
+  createLocation(location: InsertLocation): Promise<Location>;
+  updateLocation(id: string, location: Partial<InsertLocation>): Promise<Location>;
+  deleteLocation(id: string): Promise<void>;
+  
+  // Product Batches
+  getProductBatches(productId?: string): Promise<ProductBatch[]>;
+  getProductBatchById(id: string): Promise<ProductBatch | undefined>;
+  createProductBatch(batch: InsertProductBatch): Promise<ProductBatch>;
+  updateProductBatch(id: string, batch: Partial<InsertProductBatch>): Promise<ProductBatch>;
+  
+  // Purchase Orders
+  getPurchaseOrders(): Promise<PurchaseOrder[]>;
+  getPurchaseOrderById(id: string): Promise<PurchaseOrder | undefined>;
+  createPurchaseOrder(po: InsertPurchaseOrder): Promise<PurchaseOrder>;
+  updatePurchaseOrder(id: string, po: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder>;
+  deletePurchaseOrder(id: string): Promise<void>;
+  approvePurchaseOrder(id: string, approvedBy: string): Promise<PurchaseOrder>;
+  
+  // Purchase Order Items
+  getPurchaseOrderItems(poId: string): Promise<PurchaseOrderItem[]>;
+  createPurchaseOrderItem(item: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
+  updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
+  deletePurchaseOrderItem(id: string): Promise<void>;
+  
+  // Inventory Adjustments
+  getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
+  getInventoryAdjustmentById(id: string): Promise<InventoryAdjustment | undefined>;
+  createInventoryAdjustment(adjustment: InsertInventoryAdjustment): Promise<InventoryAdjustment>;
+  approveInventoryAdjustment(id: string, approvedBy: string): Promise<InventoryAdjustment>;
+  
+  // Inventory Adjustment Items
+  getInventoryAdjustmentItems(adjustmentId: string): Promise<InventoryAdjustmentItem[]>;
+  createInventoryAdjustmentItem(item: InsertInventoryAdjustmentItem): Promise<InventoryAdjustmentItem>;
   
   // Customers
   getCustomers(): Promise<Customer[]>;

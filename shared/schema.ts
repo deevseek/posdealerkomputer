@@ -5,6 +5,7 @@ import {
   jsonb,
   pgTable,
   timestamp,
+  date,
   varchar,
   text,
   integer,
@@ -88,19 +89,49 @@ export const categories = pgTable("categories", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Products
+// Products - Enhanced inventory system
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => categories.id),
-  sku: varchar("sku").unique(),
+  sku: varchar("sku").unique().notNull(),
   barcode: varchar("barcode"),
-  purchasePrice: decimal("purchase_price", { precision: 12, scale: 2 }),
+  brand: varchar("brand"),
+  model: varchar("model"),
+  unit: varchar("unit").default("pcs"), // unit of measurement
+  specifications: text("specifications"), // JSON string for detailed specs
+  
+  // Pricing
+  lastPurchasePrice: decimal("last_purchase_price", { precision: 12, scale: 2 }),
+  averageCost: decimal("average_cost", { precision: 12, scale: 2 }), // calculated COGS
   sellingPrice: decimal("selling_price", { precision: 12, scale: 2 }),
-  stock: integer("stock").default(0),
+  marginPercent: decimal("margin_percent", { precision: 5, scale: 2 }),
+  
+  // Stock management
+  totalStock: integer("total_stock").default(0),
+  availableStock: integer("available_stock").default(0), // total - reserved
+  reservedStock: integer("reserved_stock").default(0),
   minStock: integer("min_stock").default(0),
+  maxStock: integer("max_stock"),
+  reorderPoint: integer("reorder_point"),
+  reorderQuantity: integer("reorder_quantity"),
+  
+  // Tracking
+  trackBatches: boolean("track_batches").default(false),
+  trackSerial: boolean("track_serial").default(false),
+  trackExpiry: boolean("track_expiry").default(false),
+  
+  // Status
   isActive: boolean("is_active").default(true),
+  isDiscontinued: boolean("is_discontinued").default(false),
+  
+  // Metadata
+  weight: decimal("weight", { precision: 8, scale: 3 }),
+  dimensions: varchar("dimensions"), // LxWxH format
+  supplierProductCode: varchar("supplier_product_code"),
+  notes: text("notes"),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -116,14 +147,50 @@ export const customers = pgTable("customers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Suppliers
+// Suppliers - Enhanced supplier management
 export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code").unique().notNull(), // supplier code
   name: varchar("name").notNull(),
+  companyName: varchar("company_name"),
+  
+  // Contact information
   email: varchar("email"),
   phone: varchar("phone"),
+  altPhone: varchar("alt_phone"),
+  website: varchar("website"),
+  
+  // Address
   address: text("address"),
+  city: varchar("city"),
+  province: varchar("province"),
+  postalCode: varchar("postal_code"),
+  country: varchar("country").default("Indonesia"),
+  
+  // Contact persons
   contactPerson: varchar("contact_person"),
+  contactTitle: varchar("contact_title"),
+  contactEmail: varchar("contact_email"),
+  contactPhone: varchar("contact_phone"),
+  
+  // Business details
+  taxNumber: varchar("tax_number"), // NPWP
+  businessLicense: varchar("business_license"),
+  
+  // Terms
+  paymentTerms: integer("payment_terms").default(30), // days
+  creditLimit: decimal("credit_limit", { precision: 15, scale: 2 }),
+  
+  // Status and ratings
+  isActive: boolean("is_active").default(true),
+  rating: integer("rating").default(5), // 1-5 stars
+  
+  // Banking
+  bankName: varchar("bank_name"),
+  bankAccount: varchar("bank_account"),
+  bankAccountName: varchar("bank_account_name"),
+  
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -191,17 +258,180 @@ export const serviceTicketParts = pgTable("service_ticket_parts", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Stock Movements
-export const stockMovements = pgTable("stock_movements", {
+// Product Locations - Warehouse/Location management
+export const locations = pgTable("locations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code").unique().notNull(),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  locationType: varchar("location_type").default("warehouse"), // warehouse, store, etc
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Product Batches/Lots - For batch tracking
+export const productBatches = pgTable("product_batches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   productId: varchar("product_id").references(() => products.id).notNull(),
-  type: stockMovementTypeEnum("type").notNull(),
-  quantity: integer("quantity").notNull(),
-  purchasePrice: decimal("purchase_price", { precision: 12, scale: 2 }), // Track price when stock comes in
-  reference: varchar("reference"), // Transaction ID or other reference
-  referenceType: stockReferenceTypeEnum("reference_type").notNull(),
+  batchNumber: varchar("batch_number").notNull(),
+  serialNumbers: text("serial_numbers").array(), // for serial tracking
+  
+  // Pricing for this batch
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }).notNull(),
+  
+  // Quantities
+  receivedQuantity: integer("received_quantity").notNull(),
+  currentQuantity: integer("current_quantity").notNull(),
+  reservedQuantity: integer("reserved_quantity").default(0),
+  
+  // Dates
+  manufactureDate: date("manufacture_date"),
+  expiryDate: date("expiry_date"),
+  receivedDate: timestamp("received_date").defaultNow(),
+  
+  // References
+  purchaseOrderId: varchar("purchase_order_id"),
+  supplierId: varchar("supplier_id").references(() => suppliers.id),
+  locationId: varchar("location_id").references(() => locations.id),
+  
+  // Status
+  status: varchar("status").default("active"), // active, expired, recalled, sold_out
+  
   notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Purchase Orders - Comprehensive purchasing system
+export const purchaseOrders = pgTable("purchase_orders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  poNumber: varchar("po_number").unique().notNull(),
+  supplierId: varchar("supplier_id").references(() => suppliers.id).notNull(),
+  
+  // Dates
+  orderDate: date("order_date").defaultNow(),
+  expectedDeliveryDate: date("expected_delivery_date"),
+  actualDeliveryDate: date("actual_delivery_date"),
+  
+  // Status workflow
+  status: varchar("status").default("draft"), // draft, sent, confirmed, partial_received, received, cancelled
+  
+  // Financial
+  subtotal: decimal("subtotal", { precision: 15, scale: 2 }).notNull(),
+  taxAmount: decimal("tax_amount", { precision: 15, scale: 2 }).default("0"),
+  discountAmount: decimal("discount_amount", { precision: 15, scale: 2 }).default("0"),
+  shippingCost: decimal("shipping_cost", { precision: 15, scale: 2 }).default("0"),
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  
+  // Approval workflow
+  requestedBy: varchar("requested_by").references(() => users.id).notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedDate: timestamp("approved_date"),
+  
+  // Delivery
+  deliveryAddress: text("delivery_address"),
+  shippingMethod: varchar("shipping_method"),
+  trackingNumber: varchar("tracking_number"),
+  
+  // Terms
+  paymentTerms: integer("payment_terms").default(30),
+  
+  notes: text("notes"),
+  internalNotes: text("internal_notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Purchase Order Items
+export const purchaseOrderItems = pgTable("purchase_order_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  purchaseOrderId: varchar("purchase_order_id").references(() => purchaseOrders.id).notNull(),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  
+  // Quantities
+  orderedQuantity: integer("ordered_quantity").notNull(),
+  receivedQuantity: integer("received_quantity").default(0),
+  
+  // Pricing
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
+  
+  // Product info at time of order (for historical tracking)
+  productName: varchar("product_name").notNull(),
+  productSku: varchar("product_sku").notNull(),
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Stock Movements - Enhanced tracking system
+export const stockMovements = pgTable("stock_movements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  
+  // Product tracking
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  batchId: varchar("batch_id").references(() => productBatches.id),
+  locationId: varchar("location_id").references(() => locations.id),
+  
+  // Movement details
+  movementType: varchar("movement_type").notNull(), // in, out, transfer, adjustment
+  quantity: integer("quantity").notNull(),
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+  
+  // References
+  referenceId: varchar("reference_id"), // PO ID, Sale ID, Adjustment ID, etc
+  referenceType: varchar("reference_type").notNull(), // purchase, sale, adjustment, transfer, service
+  
+  // Additional tracking
+  fromLocationId: varchar("from_location_id").references(() => locations.id),
+  toLocationId: varchar("to_location_id").references(() => locations.id),
+  
+  // Metadata
+  notes: text("notes"),
+  reason: varchar("reason"), // damaged, expired, sold, etc
   userId: varchar("user_id").references(() => users.id).notNull(),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Inventory Adjustments - For manual stock corrections
+export const inventoryAdjustments = pgTable("inventory_adjustments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjustmentNumber: varchar("adjustment_number").unique().notNull(),
+  
+  // Adjustment details
+  type: varchar("type").notNull(), // increase, decrease, recount
+  reason: varchar("reason").notNull(), // damage, theft, expiry, recount, etc
+  
+  // Approval
+  status: varchar("status").default("pending"), // pending, approved, rejected
+  createdBy: varchar("created_by").references(() => users.id).notNull(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedDate: timestamp("approved_date"),
+  
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Inventory Adjustment Items
+export const inventoryAdjustmentItems = pgTable("inventory_adjustment_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  adjustmentId: varchar("adjustment_id").references(() => inventoryAdjustments.id).notNull(),
+  productId: varchar("product_id").references(() => products.id).notNull(),
+  batchId: varchar("batch_id").references(() => productBatches.id),
+  locationId: varchar("location_id").references(() => locations.id),
+  
+  // Quantities
+  systemQuantity: integer("system_quantity").notNull(), // what system shows
+  actualQuantity: integer("actual_quantity").notNull(), // what was counted
+  adjustmentQuantity: integer("adjustment_quantity").notNull(), // difference
+  
+  // Cost impact
+  unitCost: decimal("unit_cost", { precision: 12, scale: 2 }),
+  totalCostImpact: decimal("total_cost_impact", { precision: 12, scale: 2 }),
+  
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -493,6 +723,39 @@ export const insertStockMovementSchema = createInsertSchema(stockMovements).omit
   createdAt: true,
 });
 
+export const insertLocationSchema = createInsertSchema(locations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProductBatchSchema = createInsertSchema(productBatches).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPurchaseOrderSchema = createInsertSchema(purchaseOrders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertPurchaseOrderItemSchema = createInsertSchema(purchaseOrderItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertInventoryAdjustmentSchema = createInsertSchema(inventoryAdjustments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInventoryAdjustmentItemSchema = createInsertSchema(inventoryAdjustmentItems).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertServiceTicketPartSchema = createInsertSchema(serviceTicketParts).omit({
   id: true,
   createdAt: true,
@@ -598,3 +861,17 @@ export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;
+
+// New inventory system types
+export type InsertLocation = z.infer<typeof insertLocationSchema>;
+export type Location = typeof locations.$inferSelect;
+export type InsertProductBatch = z.infer<typeof insertProductBatchSchema>;
+export type ProductBatch = typeof productBatches.$inferSelect;
+export type InsertPurchaseOrder = z.infer<typeof insertPurchaseOrderSchema>;
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrderItem = z.infer<typeof insertPurchaseOrderItemSchema>;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type InsertInventoryAdjustment = z.infer<typeof insertInventoryAdjustmentSchema>;
+export type InventoryAdjustment = typeof inventoryAdjustments.$inferSelect;
+export type InsertInventoryAdjustmentItem = z.infer<typeof insertInventoryAdjustmentItemSchema>;
+export type InventoryAdjustmentItem = typeof inventoryAdjustmentItems.$inferSelect;
