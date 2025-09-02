@@ -443,8 +443,8 @@ export class DatabaseStorage implements IStorage {
 
   async createPurchaseOrder(poData: InsertPurchaseOrder): Promise<PurchaseOrder> {
     // Generate PO number
-    const count = await db.select({ count: count() }).from(purchaseOrders);
-    const poNumber = `PO-${String(count[0].count + 1).padStart(5, '0')}`;
+    const countResult = await db.select({ count: count() }).from(purchaseOrders);
+    const poNumber = `PO-${String(countResult[0].count + 1).padStart(5, '0')}`;
     
     const [po] = await db.insert(purchaseOrders).values({
       ...poData,
@@ -515,8 +515,8 @@ export class DatabaseStorage implements IStorage {
 
   async createInventoryAdjustment(adjustmentData: InsertInventoryAdjustment): Promise<InventoryAdjustment> {
     // Generate adjustment number
-    const count = await db.select({ count: count() }).from(inventoryAdjustments);
-    const adjustmentNumber = `ADJ-${String(count[0].count + 1).padStart(5, '0')}`;
+    const countResult = await db.select({ count: count() }).from(inventoryAdjustments);
+    const adjustmentNumber = `ADJ-${String(countResult[0].count + 1).padStart(5, '0')}`;
     
     const [adjustment] = await db.insert(inventoryAdjustments).values({
       ...adjustmentData,
