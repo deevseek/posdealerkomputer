@@ -137,7 +137,7 @@ export default function Settings() {
                     <Input
                       id="storeName"
                       name="storeName"
-                      defaultValue={(storeConfig as any)?.storeName || ""}
+                      defaultValue={(storeConfig as any)?.name || ""}
                       placeholder="Masukkan nama toko"
                       data-testid="input-store-name"
                     />
