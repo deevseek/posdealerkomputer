@@ -197,6 +197,7 @@ export const stockMovements = pgTable("stock_movements", {
   productId: varchar("product_id").references(() => products.id).notNull(),
   type: stockMovementTypeEnum("type").notNull(),
   quantity: integer("quantity").notNull(),
+  purchasePrice: decimal("purchase_price", { precision: 12, scale: 2 }), // Track price when stock comes in
   reference: varchar("reference"), // Transaction ID or other reference
   referenceType: stockReferenceTypeEnum("reference_type").notNull(),
   notes: text("notes"),

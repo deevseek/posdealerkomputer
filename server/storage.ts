@@ -322,7 +322,7 @@ export class DatabaseStorage implements IStorage {
     await db.update(products).set({ isActive: false }).where(eq(products.id, id));
   }
 
-  async adjustStock(productId: string, quantity: number, notes: string, userId: string): Promise<Product> {
+  async adjustStock(productId: string, quantity: number, notes: string, userId: string, purchasePrice?: string): Promise<Product> {
     return await db.transaction(async (tx) => {
       // Get current product
       const [product] = await tx.select().from(products).where(eq(products.id, productId));
@@ -345,6 +345,7 @@ export class DatabaseStorage implements IStorage {
         productId: productId,
         type: 'in',
         quantity: quantity,
+        purchasePrice: purchasePrice || product.purchasePrice, // Use provided price or current product price
         reference: `STOCK-ADJ-${Date.now()}`,
         referenceType: 'adjustment',
         notes: notes || `Penambahan stock +${quantity}`,
@@ -353,6 +354,42 @@ export class DatabaseStorage implements IStorage {
 
       return updatedProduct;
     });
+  }
+
+  async getAveragePurchasePrice(productId: string): Promise<number> {
+    // Get all stock movements where stock came in (type: 'in') for this product
+    const movements = await db
+      .select({
+        quantity: stockMovements.quantity,
+        purchasePrice: stockMovements.purchasePrice
+      })
+      .from(stockMovements)
+      .where(and(
+        eq(stockMovements.productId, productId),
+        eq(stockMovements.type, 'in'),
+        isNotNull(stockMovements.purchasePrice)
+      ));
+
+    if (movements.length === 0) {
+      // If no stock movements with price found, fallback to product's purchase price
+      const [product] = await db.select({ purchasePrice: products.purchasePrice })
+        .from(products)
+        .where(eq(products.id, productId));
+      return parseFloat(product?.purchasePrice || '0');
+    }
+
+    // Calculate weighted average: sum(quantity * price) / sum(quantity)
+    let totalWeightedCost = 0;
+    let totalQuantity = 0;
+    
+    for (const movement of movements) {
+      const price = parseFloat(movement.purchasePrice || '0');
+      const quantity = movement.quantity;
+      totalWeightedCost += price * quantity;
+      totalQuantity += quantity;
+    }
+
+    return totalQuantity > 0 ? totalWeightedCost / totalQuantity : 0;
   }
 
   // Customers
@@ -538,6 +575,7 @@ export class DatabaseStorage implements IStorage {
             productId: item.productId,
             type: 'out',
             quantity: item.quantity,
+            purchasePrice: null, // For outgoing stock, no purchase price
             reference: transaction.id,
             referenceType: 'sale',
             notes: `Penjualan - ${transaction.transactionNumber}`,
@@ -562,14 +600,13 @@ export class DatabaseStorage implements IStorage {
             userId: transactionData.userId
           });
 
-          // Calculate and record COGS (Cost of Goods Sold)
+          // Calculate and record COGS (Cost of Goods Sold) using average purchase price
           let totalCOGS = 0;
           for (const item of items) {
-            const [product] = await tx.select().from(products).where(eq(products.id, item.productId));
-            if (product) {
-              const itemCOGS = parseFloat(product.purchasePrice) * item.quantity;
-              totalCOGS += itemCOGS;
-            }
+            // Use weighted average purchase price instead of current product price
+            const averagePrice = await this.getAveragePurchasePrice(item.productId);
+            const itemCOGS = averagePrice * item.quantity;
+            totalCOGS += itemCOGS;
           }
 
           // Record COGS as expense
