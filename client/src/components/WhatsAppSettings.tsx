@@ -22,8 +22,9 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
   const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['/api/whatsapp/status'],
     enabled: whatsappEnabled,
-    refetchInterval: whatsappEnabled ? 5000 : false, // Poll every 5 seconds when enabled
-    staleTime: 2000,
+    refetchInterval: false, // Disable automatic polling to prevent infinite loop
+    staleTime: 30000, // Cache for 30 seconds
+    refetchOnWindowFocus: false,
   });
 
   // Enable/disable WhatsApp mutation
@@ -39,7 +40,7 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
+      // Only invalidate WhatsApp status, not store config to prevent loop
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
       toast({
         title: "Berhasil",

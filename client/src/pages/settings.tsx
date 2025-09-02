@@ -21,9 +21,11 @@ export default function Settings() {
   // Fetch store config with proper caching
   const { data: storeConfig, isLoading: configLoading } = useQuery({
     queryKey: ['/api/store-config'],
-    staleTime: 60000, // Cache for 1 minute
+    staleTime: Infinity, // Cache indefinitely
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    refetchInterval: false, // No automatic refetch
+    retry: false,
   });
 
   // Store settings mutation
