@@ -605,7 +605,7 @@ export class DatabaseStorage implements IStorage {
       productId: item.productId,
       movementType: 'in',
       quantity: receivedQuantity,
-      unitCost: item.unitPrice, // Use actual purchase price for HPP calculation
+      unitCost: item.unitCost || item.unitPrice, // Try both field names for HPP calculation
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
@@ -617,7 +617,7 @@ export class DatabaseStorage implements IStorage {
       .update(products)
       .set({ 
         stock: sql`${products.stock} + ${receivedQuantity}`,
-        lastPurchasePrice: item.unitPrice, // Update last purchase price
+        lastPurchasePrice: item.unitCost || item.unitPrice, // Update last purchase price - use available field
         updatedAt: new Date()
       })
       .where(eq(products.id, item.productId));
