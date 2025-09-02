@@ -736,7 +736,7 @@ export default function FinanceNew() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions?.map((transaction) => (
+                  {Array.isArray(transactions) ? transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
                         {format(new Date(transaction.createdAt), 'dd/MM/yyyy')}
@@ -780,7 +780,13 @@ export default function FinanceNew() {
                         {getStatusBadge(transaction.status)}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        Tidak ada transaksi
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
