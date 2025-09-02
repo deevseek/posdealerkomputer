@@ -155,9 +155,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       return;
     }
 
-    // Debug: Log product data to see the format
-    console.log('Adding product to cart:', product);
-    console.log('sellingPrice type:', typeof product.sellingPrice, 'value:', product.sellingPrice);
+    // Adding product to cart
     
     const existingItem = items.find(item => item.productId === product.id);
     if (existingItem) {
@@ -174,7 +172,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
         quantity: 1,
         stock: product.stock,
       };
-      console.log('Created newItem:', newItem);
+      // Item created successfully
       setItems(prev => [...prev, newItem]);
     }
     setProductSearch("");

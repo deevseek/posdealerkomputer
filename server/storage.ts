@@ -724,8 +724,7 @@ export class DatabaseStorage implements IStorage {
         await tx
           .update(products)
           .set({ 
-            totalStock: sql`${products.totalStock} + ${item.adjustmentQuantity}`,
-            availableStock: sql`${products.availableStock} + ${item.adjustmentQuantity}`,
+            stock: sql`${products.stock} + ${item.adjustmentQuantity}`,
             updatedAt: new Date()
           })
           .where(eq(products.id, item.productId));
@@ -1156,9 +1155,7 @@ export class DatabaseStorage implements IStorage {
             const newStock = currentStock - part.quantity;
             await tx.update(products)
               .set({ 
-                stock: newStock, // Update main stock field for display
-                totalStock: newStock,
-                availableStock: (product.availableStock || 0) - part.quantity,
+                stock: newStock,
                 updatedAt: new Date()
               })
               .where(eq(products.id, part.productId));
@@ -1176,13 +1173,13 @@ export class DatabaseStorage implements IStorage {
           } else {
             // For non-completed status, just reserve stock (optional - estimate only)
             const currentReserved = product.reservedStock || 0;
-            await tx.update(products)
-              .set({ 
-                reservedStock: currentReserved + part.quantity,
-                availableStock: (product.totalStock || 0) - (currentReserved + part.quantity),
-                updatedAt: new Date()
-              })
-              .where(eq(products.id, part.productId));
+            // Note: Reserved stock - for now we'll keep it simple and just track main stock
+            // await tx.update(products)
+            //   .set({ 
+            //     reservedStock: currentReserved + part.quantity,
+            //     updatedAt: new Date()
+            //   })
+            //   .where(eq(products.id, part.productId));
           }
           
           totalPartsCost += parseFloat(totalPrice);
