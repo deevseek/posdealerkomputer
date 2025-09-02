@@ -342,14 +342,20 @@ export default function FinanceNew() {
     } else {
       // Cek apakah ini transaksi aset atau expense berdasarkan kategori dan deskripsi
       const isAsset = [
-        'Persediaan', 'Peralatan', 'Kendaraan', 'Furniture', 'Aset', 
-        'Inventory', 'Assets', 'Equipment', 'Vehicle', 'Asset',
-        'Kas', 'Bank', 'Cash', 'Piutang', 'Fixed Asset'
+        // Kategori inventory/persediaan
+        'Cost of Goods Sold', 'Inventory', 'Persediaan', 'Stock', 'Barang',
+        // Kategori aset fisik
+        'Peralatan', 'Equipment', 'Kendaraan', 'Vehicle', 'Furniture', 
+        'Aset', 'Assets', 'Fixed Asset',
+        // Kategori kas dan bank
+        'Kas', 'Cash', 'Bank', 'Tunai',
+        // Kategori piutang
+        'Piutang', 'Receivable', 'Tagihan'
       ].some(keyword => 
         transaction.category?.toLowerCase().includes(keyword.toLowerCase()) || 
         transaction.subcategory?.toLowerCase().includes(keyword.toLowerCase()) || 
         transaction.description?.toLowerCase().includes(keyword.toLowerCase())
-      );
+      ) || transaction.category === 'Cost of Goods Sold' || transaction.category === 'Inventory Purchase';
       
       if (isAsset) {
         return {
