@@ -72,14 +72,14 @@ export default function Settings() {
   };
 
   if (configLoading) {
-    return <div>Loading...</div>;
+    return <div>Memuat...</div>;
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Settings" breadcrumb="Home / Settings" />
+        <Header title="Pengaturan" breadcrumb="Beranda / Pengaturan" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div>
@@ -97,7 +97,7 @@ export default function Settings() {
           </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center space-x-2">
             <Users className="w-4 h-4" />
-            <span>Users</span>
+            <span>Pengguna</span>
           </TabsTrigger>
           <TabsTrigger value="whatsapp" className="flex items-center space-x-2">
             <MessageCircle className="w-4 h-4" />

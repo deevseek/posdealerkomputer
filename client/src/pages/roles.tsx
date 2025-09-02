@@ -337,12 +337,12 @@ export default function RolesPage() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Management Role" breadcrumb="Home / Roles" />
+        <Header title="Manajemen Peran" breadcrumb="Beranda / Peran" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold" data-testid="page-title">Management Role</h1>
+                <h1 className="text-2xl font-bold" data-testid="page-title">Manajemen Peran</h1>
                 <p className="text-muted-foreground">
                   Kelola peran dan izin pengguna untuk sistem POS dengan fitur lengkap: 
                   POS, Service, Inventory, Finance, WhatsApp, dan Thermal Printing

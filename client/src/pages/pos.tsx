@@ -64,14 +64,14 @@ export default function POS() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
           title="Point of Sale" 
-          breadcrumb="Home / POS"
+          breadcrumb="Beranda / POS"
           action={
             <Button 
               onClick={handleNewTransaction}
               data-testid="button-new-transaction"
             >
               <Plus className="w-4 h-4 mr-2" />
-              New Transaction
+              Transaksi Baru
             </Button>
           }
         />

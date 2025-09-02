@@ -140,6 +140,8 @@ export default function ServiceTickets() {
       deviceType: "",
       deviceBrand: "",
       deviceModel: "",
+      serialNumber: "",
+      completeness: "",
       problem: "",
       diagnosis: "",
       solution: "",
@@ -167,6 +169,8 @@ export default function ServiceTickets() {
         deviceType: "",
         deviceBrand: "",
         deviceModel: "",
+        serialNumber: "",
+        completeness: "",
         problem: "",
         diagnosis: "",
         solution: "",
@@ -224,6 +228,8 @@ export default function ServiceTickets() {
         deviceType: "",
         deviceBrand: "",
         deviceModel: "",
+        serialNumber: "",
+        completeness: "",
         problem: "",
         diagnosis: "",
         solution: "",
@@ -415,8 +421,8 @@ export default function ServiceTickets() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Service Tickets" 
-          breadcrumb="Home / Service Tickets"
+          title="Tiket Service" 
+          breadcrumb="Beranda / Service"
           action={
             <Button onClick={handleNew} data-testid="button-add-ticket">
               <Plus className="w-4 h-4 mr-2" />
@@ -687,6 +693,40 @@ export default function ServiceTickets() {
                   )}
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="serialNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Serial Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Masukkan serial number perangkat" {...field} data-testid="input-serial-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="completeness"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kelengkapan</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="Misal: Charger, Tas laptop, Mouse, dll..." 
+                        {...field} 
+                        data-testid="textarea-completeness" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

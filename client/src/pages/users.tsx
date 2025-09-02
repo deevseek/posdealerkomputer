@@ -147,12 +147,12 @@ export default function UsersPage() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Management User" breadcrumb="Home / Users" />
+        <Header title="Manajemen Pengguna" breadcrumb="Beranda / Pengguna" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold" data-testid="page-title">Management User</h1>
+                <h1 className="text-2xl font-bold" data-testid="page-title">Manajemen Pengguna</h1>
                 <p className="text-muted-foreground">Kelola akun pengguna dan peran mereka</p>
               </div>
             </div>

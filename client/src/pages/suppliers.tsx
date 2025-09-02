@@ -182,12 +182,12 @@ export default function Suppliers() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Supplier Management" 
-          breadcrumb="Home / Suppliers"
+          title="Manajemen Supplier" 
+          breadcrumb="Beranda / Supplier"
           action={
             <Button onClick={handleNew} data-testid="button-add-supplier">
               <Plus className="w-4 h-4 mr-2" />
-              Add Supplier
+              Tambah Supplier
             </Button>
           }
         />

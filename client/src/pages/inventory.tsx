@@ -336,14 +336,14 @@ export default function Inventory() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Inventory Management" 
-          breadcrumb="Home / Inventory"
+          title="Manajemen Inventori" 
+          breadcrumb="Beranda / Inventori"
           action={
             <div className="flex space-x-2">
               <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
                 <DialogTrigger asChild>
                   <Button variant="outline" data-testid="button-add-category">
-                    Add Category
+                    Tambah Kategori
                   </Button>
                 </DialogTrigger>
               </Dialog>
@@ -511,7 +511,7 @@ export default function Inventory() {
                   <CardTitle>Categories ({categories.length})</CardTitle>
                   <Button onClick={() => setShowCategoryDialog(true)} data-testid="button-add-category">
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Category
+                    Tambah Kategori
                   </Button>
                 </CardHeader>
                 <CardContent>

@@ -19,8 +19,8 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
+        title: "Tidak Diotorisasi",
+        description: "Anda telah logout. Masuk kembali...",
         variant: "destructive",
       });
       setTimeout(() => {
@@ -36,45 +36,45 @@ export default function Dashboard() {
   });
 
   if (isLoading || !isAuthenticated) {
-    return <div>Loading...</div>;
+    return <div>Memuat...</div>;
   }
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Dashboard" breadcrumb="Home / Dashboard" />
+        <Header title="Dashboard" breadcrumb="Beranda / Dashboard" />
         <main className="flex-1 overflow-y-auto p-6">
           {/* Dashboard Stats Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
-              title="Today's Sales"
-              value={statsLoading ? "Loading..." : `Rp ${Number(stats?.todaySales || 0).toLocaleString('id-ID')}`}
-              change="+12% from yesterday"
+              title="Penjualan Hari Ini"
+              value={statsLoading ? "Memuat..." : `Rp ${Number(stats?.todaySales || 0).toLocaleString('id-ID')}`}
+              change="+12% dari kemarin"
               icon="money-bill-wave"
               color="primary"
               data-testid="stat-today-sales"
             />
             <StatCard
-              title="Active Services"
-              value={statsLoading ? "Loading..." : stats?.activeServices?.toString() || "0"}
-              change="5 urgent"
+              title="Service Aktif"
+              value={statsLoading ? "Memuat..." : stats?.activeServices?.toString() || "0"}
+              change="5 mendesak"
               icon="tools"
               color="accent"
               data-testid="stat-active-services"
             />
             <StatCard
-              title="Low Stock Items"
-              value={statsLoading ? "Loading..." : stats?.lowStockCount?.toString() || "0"}
-              change="Requires attention"
+              title="Stok Menipis"
+              value={statsLoading ? "Memuat..." : stats?.lowStockCount?.toString() || "0"}
+              change="Perlu perhatian"
               icon="exclamation-triangle"
               color="destructive"
               data-testid="stat-low-stock"
             />
             <StatCard
-              title="Monthly Profit"
-              value={statsLoading ? "Loading..." : `Rp ${Number(stats?.monthlyProfit || 0).toLocaleString('id-ID')}`}
-              change="+8% this month"
+              title="Profit Bulanan"
+              value={statsLoading ? "Memuat..." : `Rp ${Number(stats?.monthlyProfit || 0).toLocaleString('id-ID')}`}
+              change="+8% bulan ini"
               icon="chart-line"
               color="accent"
               data-testid="stat-monthly-profit"

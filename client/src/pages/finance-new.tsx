@@ -334,7 +334,7 @@ export default function FinanceNew() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Finance & Payroll" breadcrumb="Home / Finance & Payroll" />
+        <Header title="Keuangan & Payroll" breadcrumb="Beranda / Keuangan & Payroll" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div className="flex justify-between items-center">

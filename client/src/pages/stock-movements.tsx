@@ -120,7 +120,7 @@ export default function StockMovements() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Stock Movements" breadcrumb="Home / Stock Movements" />
+        <Header title="Pergerakan Stok" breadcrumb="Beranda / Pergerakan Stok" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
             <div className="flex items-center justify-between">

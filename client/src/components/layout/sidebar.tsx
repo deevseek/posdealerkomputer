@@ -30,15 +30,15 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: ChartLine, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
   { name: "POS", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
   { name: "Service", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
-  { name: "Inventory", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
-  { name: "Finance & Payroll", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
-  { name: "Customers", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
-  { name: "Suppliers", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
-  { name: "Users", href: "/users", icon: UserCog, roles: ["admin", "owner"] },
-  { name: "Roles", href: "/roles", icon: Shield, roles: ["admin", "owner"] },
-  { name: "Reports", href: "/reports", icon: FileText, roles: ["admin", "finance", "owner"] },
-  { name: "Stock Movements", href: "/stock-movements", icon: Layers, roles: ["admin", "purchasing", "owner"] },
-  { name: "Settings", href: "/settings", icon: Settings, roles: ["admin", "owner"] },
+  { name: "Inventori", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
+  { name: "Keuangan & Payroll", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
+  { name: "Pelanggan", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
+  { name: "Supplier", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
+  { name: "Pengguna", href: "/users", icon: UserCog, roles: ["admin", "owner"] },
+  { name: "Peran", href: "/roles", icon: Shield, roles: ["admin", "owner"] },
+  { name: "Laporan", href: "/reports", icon: FileText, roles: ["admin", "finance", "owner"] },
+  { name: "Pergerakan Stok", href: "/stock-movements", icon: Layers, roles: ["admin", "purchasing", "owner"] },
+  { name: "Pengaturan", href: "/settings", icon: Settings, roles: ["admin", "owner"] },
 ];
 
 export default function Sidebar() {
@@ -65,16 +65,16 @@ export default function Sidebar() {
     },
     onSuccess: () => {
       toast({
-        title: "Logout Successful",
-        description: "You have been logged out successfully.",
+        title: "Logout Berhasil",
+        description: "Anda telah berhasil logout.",
       });
       // Reload to trigger authentication state update
       window.location.href = "/";
     },
     onError: (error: any) => {
       toast({
-        title: "Logout Error",
-        description: error.message || "Failed to logout",
+        title: "Error Logout",
+        description: error.message || "Gagal logout",
         variant: "destructive",
       });
     },

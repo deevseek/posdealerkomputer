@@ -268,7 +268,7 @@ export default function Reports() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Business Reports" breadcrumb="Home / Reports" />
+        <Header title="Laporan Bisnis" breadcrumb="Beranda / Laporan" />
         <main className="flex-1 overflow-y-auto p-6">
           
           {/* Filter Controls */}

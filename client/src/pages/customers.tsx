@@ -181,12 +181,12 @@ export default function Customers() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Customer Management" 
-          breadcrumb="Home / Customers"
+          title="Manajemen Pelanggan" 
+          breadcrumb="Beranda / Pelanggan"
           action={
             <Button onClick={handleNew} data-testid="button-add-customer">
               <Plus className="w-4 h-4 mr-2" />
-              Add Customer
+              Tambah Pelanggan
             </Button>
           }
         />

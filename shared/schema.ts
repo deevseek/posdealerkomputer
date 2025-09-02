@@ -163,6 +163,8 @@ export const serviceTickets = pgTable("service_tickets", {
   deviceType: varchar("device_type").notNull(),
   deviceBrand: varchar("device_brand"),
   deviceModel: varchar("device_model"),
+  serialNumber: varchar("serial_number"),
+  completeness: text("completeness"),
   problem: text("problem").notNull(),
   diagnosis: text("diagnosis"),
   solution: text("solution"),

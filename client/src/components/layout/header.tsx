@@ -35,7 +35,7 @@ export default function Header({ title, breadcrumb, action }: HeaderProps) {
               {user?.firstName || user?.email || "User"}
             </p>
             <p className="text-xs text-muted-foreground capitalize" data-testid="text-user-role">
-              {user?.role || "Staff"}
+              {user?.role || "Staf"}
             </p>
           </div>
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
