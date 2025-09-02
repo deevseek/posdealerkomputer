@@ -53,6 +53,7 @@ export default function Suppliers() {
   const form = useForm({
     resolver: zodResolver(supplierFormSchema),
     defaultValues: {
+      code: "",
       name: "",
       email: "",
       phone: "",
@@ -150,6 +151,7 @@ export default function Suppliers() {
   const handleEdit = (supplier: Supplier) => {
     setEditingSupplier(supplier);
     form.reset({
+      code: supplier.code || "",
       name: supplier.name,
       email: supplier.email || "",
       phone: supplier.phone || "",
@@ -338,19 +340,34 @@ export default function Suppliers() {
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Supplier Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter supplier name" {...field} data-testid="input-supplier-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplier Code *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="SUP001" {...field} data-testid="input-supplier-code" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Supplier Name *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter supplier name" {...field} data-testid="input-supplier-name" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
               
               <FormField
                 control={form.control}
