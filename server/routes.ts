@@ -752,13 +752,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/purchase-orders/:id/items', isAuthenticated, async (req, res) => {
     try {
+      const quantity = parseInt(req.body.quantity) || 1;
+      const unitCost = parseFloat(req.body.unitCost) || 0;
       const itemData = {
-        ...req.body,
         purchaseOrderId: req.params.id,
-        quantity: parseInt(req.body.quantity) || 1,
-        orderedQuantity: parseInt(req.body.quantity) || 1,
-        unitCost: parseFloat(req.body.unitCost) || 0
+        productId: req.body.productId,
+        quantity: quantity, // Maps to quantity field (NOT NULL)
+        orderedQuantity: quantity, // Maps to ordered_quantity field
+        unitCost: String(unitCost), // Maps to unit_cost (varchar)
+        totalCost: String(quantity * unitCost), // Maps to total_cost (varchar)
+        notes: req.body.notes || "",
       };
+      console.log("Creating PO item with data:", itemData);
       const item = await storage.createPurchaseOrderItem(itemData);
       res.json(item);
     } catch (error) {

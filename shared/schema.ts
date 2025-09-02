@@ -348,20 +348,24 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   purchaseOrderId: varchar("purchase_order_id").references(() => purchaseOrders.id).notNull(),
   productId: varchar("product_id").references(() => products.id).notNull(),
   
-  // Quantities
-  orderedQuantity: integer("ordered_quantity").notNull(),
+  // Quantities - both fields exist in database
+  quantity: integer("quantity").notNull(),
+  orderedQuantity: integer("ordered_quantity"),
   receivedQuantity: integer("received_quantity").default(0),
   
-  // Pricing
-  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
-  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
+  // Pricing - both naming conventions exist
+  unitCost: varchar("unit_cost").notNull(),
+  totalCost: varchar("total_cost"),
+  unitPrice: decimal("unit_price", { precision: 12, scale: 2 }),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }),
   
   // Product info at time of order (for historical tracking)
-  productName: varchar("product_name").notNull(),
-  productSku: varchar("product_sku").notNull(),
+  productName: varchar("product_name"),
+  productSku: varchar("product_sku"),
   
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Stock Movements - Enhanced tracking system
