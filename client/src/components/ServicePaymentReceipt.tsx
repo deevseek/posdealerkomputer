@@ -352,83 +352,85 @@ export default function ServicePaymentReceipt({
               }}
             >
               {/* Header */}
-              <div className="text-center space-y-1 mb-4">
-                <h1 className="font-bold text-lg">{storeConfig.name}</h1>
-                <p className="text-xs">{storeConfig.address}</p>
-                <p className="text-xs">Telp: {storeConfig.phone}</p>
-                <p className="text-xs">Email: {storeConfig.email}</p>
+              <div className="text-center mb-6">
+                <h1 className="font-bold text-2xl mb-2 tracking-wide">{storeConfig.name}</h1>
+                <div className="text-sm text-gray-700 space-y-1">
+                  <p>{storeConfig.address}</p>
+                  <p>Telp: {storeConfig.phone} | Email: {storeConfig.email}</p>
+                </div>
               </div>
 
-              <div className="border-t border-b border-dashed border-gray-400 py-2 my-2">
-                <h2 className="text-center font-bold">NOTA PEMBAYARAN SERVICE</h2>
-                <p className="text-center text-xs">No: {serviceTicket.ticketNumber}</p>
+              <div className="bg-gray-100 py-3 px-4 mb-4 rounded">
+                <h2 className="text-center font-bold text-lg">NOTA PEMBAYARAN SERVICE</h2>
+                <p className="text-center text-sm mt-1">No: {serviceTicket.ticketNumber}</p>
               </div>
 
               {/* Customer Info */}
-              <div className="space-y-1 mb-3">
-                <div className="flex justify-between">
-                  <span className="text-xs">Tanggal:</span>
-                  <span className="text-xs">{format(new Date(), 'dd/MM/yyyy HH:mm', { locale: id })}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-xs">Customer:</span>
-                  <span className="text-xs">{customer.name}</span>
-                </div>
-                {customer.phone && (
-                  <div className="flex justify-between">
-                    <span className="text-xs">Telp:</span>
-                    <span className="text-xs">{customer.phone}</span>
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="font-semibold text-sm mb-2 border-b pb-1">INFORMASI NOTA</h3>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="text-gray-600">Tanggal:</span> {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: id })}</div>
+                    <div><span className="text-gray-600">Status:</span> <span className="text-green-600 font-medium">LUNAS</span></div>
                   </div>
-                )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm mb-2 border-b pb-1">DATA PELANGGAN</h3>
+                  <div className="space-y-1 text-sm">
+                    <div><span className="text-gray-600">Nama:</span> {customer.name}</div>
+                    {customer.phone && <div><span className="text-gray-600">Telp:</span> {customer.phone}</div>}
+                    {customer.email && <div><span className="text-gray-600">Email:</span> {customer.email}</div>}
+                  </div>
+                </div>
               </div>
 
               {/* Device Info */}
-              <div className="border-t border-dashed border-gray-400 py-2 my-2">
-                <h3 className="font-bold text-xs mb-1">DETAIL PERANGKAT</h3>
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-xs">Jenis:</span>
-                    <span className="text-xs">{serviceTicket.deviceType}</span>
+              <div className="bg-gray-50 p-4 rounded mb-4">
+                <h3 className="font-semibold text-sm mb-3 border-b pb-1">DETAIL PERANGKAT</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600 block">Jenis Perangkat:</span>
+                    <span className="font-medium">{serviceTicket.deviceType}</span>
                   </div>
                   {serviceTicket.deviceBrand && (
-                    <div className="flex justify-between">
-                      <span className="text-xs">Merk:</span>
-                      <span className="text-xs">{serviceTicket.deviceBrand}</span>
+                    <div>
+                      <span className="text-gray-600 block">Merk:</span>
+                      <span className="font-medium">{serviceTicket.deviceBrand}</span>
                     </div>
                   )}
                   {serviceTicket.deviceModel && (
-                    <div className="flex justify-between">
-                      <span className="text-xs">Model:</span>
-                      <span className="text-xs">{serviceTicket.deviceModel}</span>
+                    <div>
+                      <span className="text-gray-600 block">Model:</span>
+                      <span className="font-medium">{serviceTicket.deviceModel}</span>
                     </div>
                   )}
                   {serviceTicket.serialNumber && (
-                    <div className="flex justify-between">
-                      <span className="text-xs">S/N:</span>
-                      <span className="text-xs">{serviceTicket.serialNumber}</span>
+                    <div>
+                      <span className="text-gray-600 block">Serial Number:</span>
+                      <span className="font-medium">{serviceTicket.serialNumber}</span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Service Details */}
-              <div className="border-t border-dashed border-gray-400 py-2 my-2">
-                <h3 className="font-bold text-xs mb-1">RINCIAN PERBAIKAN</h3>
-                <div className="space-y-1">
-                  <div>
-                    <span className="text-xs font-semibold">Masalah:</span>
-                    <p className="text-xs">{serviceTicket.problem}</p>
+              <div className="mb-4">
+                <h3 className="font-semibold text-sm mb-3 border-b pb-1">RINCIAN PERBAIKAN</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="bg-red-50 p-3 rounded">
+                    <span className="text-red-700 font-medium block mb-1">Keluhan/Masalah:</span>
+                    <p className="text-gray-800">{serviceTicket.problem}</p>
                   </div>
                   {serviceTicket.diagnosis && (
-                    <div>
-                      <span className="text-xs font-semibold">Diagnosa:</span>
-                      <p className="text-xs">{serviceTicket.diagnosis}</p>
+                    <div className="bg-blue-50 p-3 rounded">
+                      <span className="text-blue-700 font-medium block mb-1">Diagnosa:</span>
+                      <p className="text-gray-800">{serviceTicket.diagnosis}</p>
                     </div>
                   )}
                   {serviceTicket.solution && (
-                    <div>
-                      <span className="text-xs font-semibold">Solusi:</span>
-                      <p className="text-xs">{serviceTicket.solution}</p>
+                    <div className="bg-green-50 p-3 rounded">
+                      <span className="text-green-700 font-medium block mb-1">Solusi & Tindakan:</span>
+                      <p className="text-gray-800">{serviceTicket.solution}</p>
                     </div>
                   )}
                 </div>
@@ -436,94 +438,124 @@ export default function ServicePaymentReceipt({
 
               {/* Parts Used */}
               {serviceTicket.parts && serviceTicket.parts.length > 0 && (
-                <div className="border-t border-dashed border-gray-400 py-2 my-2">
-                  <h3 className="font-bold text-xs mb-1">SPAREPART DIGUNAKAN</h3>
-                  {serviceTicket.parts.map((part, index) => (
-                    <div key={index} className="flex justify-between text-xs">
-                      <span>{part.productName} x{part.quantity}</span>
-                      <span>{formatCurrency(part.totalPrice)}</span>
-                    </div>
-                  ))}
+                <div className="mb-4">
+                  <h3 className="font-semibold text-sm mb-3 border-b pb-1">SPAREPART YANG DIGUNAKAN</h3>
+                  <div className="bg-yellow-50 p-4 rounded">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-yellow-200">
+                          <th className="text-left py-1">Item</th>
+                          <th className="text-center py-1">Qty</th>
+                          <th className="text-right py-1">Harga</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {serviceTicket.parts.map((part, index) => (
+                          <tr key={index} className="border-b border-yellow-100">
+                            <td className="py-2">{part.productName}</td>
+                            <td className="text-center py-2">{part.quantity}</td>
+                            <td className="text-right py-2 font-medium">{formatCurrency(part.totalPrice)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
               {/* Cost Breakdown */}
-              <div className="border-t border-dashed border-gray-400 py-2 my-2">
-                <h3 className="font-bold text-xs mb-1">RINCIAN BIAYA</h3>
-                <div className="space-y-1">
+              <div className="bg-gray-100 p-4 rounded mb-4">
+                <h3 className="font-semibold text-sm mb-3 border-b border-gray-300 pb-1">RINCIAN BIAYA</h3>
+                <div className="space-y-2 text-sm">
                   {serviceTicket.laborCost && Number(serviceTicket.laborCost) > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span>Biaya Jasa:</span>
-                      <span>{formatCurrency(serviceTicket.laborCost)}</span>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-700">Biaya Jasa Service:</span>
+                      <span className="font-medium">{formatCurrency(serviceTicket.laborCost)}</span>
                     </div>
                   )}
                   {serviceTicket.partsCost && Number(serviceTicket.partsCost) > 0 && (
-                    <div className="flex justify-between text-xs">
-                      <span>Biaya Sparepart:</span>
-                      <span>{formatCurrency(serviceTicket.partsCost)}</span>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-700">Biaya Sparepart:</span>
+                      <span className="font-medium">{formatCurrency(serviceTicket.partsCost)}</span>
                     </div>
                   )}
-                  <div className="border-t border-dashed border-gray-400 pt-1 mt-1">
-                    <div className="flex justify-between font-bold text-xs">
+                  <div className="border-t-2 border-gray-400 pt-2 mt-3">
+                    <div className="flex justify-between py-2 bg-green-100 px-3 rounded font-bold text-base">
                       <span>TOTAL PEMBAYARAN:</span>
-                      <span>{formatCurrency(getTotalCost())}</span>
+                      <span className="text-green-700">{formatCurrency(getTotalCost())}</span>
                     </div>
+                    <p className="text-center text-xs text-gray-600 mt-2">** LUNAS **</p>
                   </div>
                 </div>
               </div>
 
               {/* Status & Dates */}
-              <div className="border-t border-dashed border-gray-400 py-2 my-2">
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span>Status:</span>
-                    <span className="font-semibold">
-                      {serviceTicket.status === 'completed' ? 'SELESAI' : 
-                       serviceTicket.status === 'delivered' ? 'DIAMBIL' : 'SELESAI'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tgl Masuk:</span>
-                    <span>{format(new Date(serviceTicket.createdAt), 'dd/MM/yyyy', { locale: id })}</span>
-                  </div>
-                  {serviceTicket.completedAt && (
+              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div>
+                  <h4 className="font-medium mb-2 text-gray-700">Timeline Service:</h4>
+                  <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>Tgl Selesai:</span>
-                      <span>{format(new Date(serviceTicket.completedAt), 'dd/MM/yyyy', { locale: id })}</span>
+                      <span className="text-gray-600">Tanggal Masuk:</span>
+                      <span>{format(new Date(serviceTicket.createdAt), 'dd/MM/yyyy', { locale: id })}</span>
                     </div>
-                  )}
-                  {technician && (
+                    {serviceTicket.completedAt && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Tanggal Selesai:</span>
+                        <span>{format(new Date(serviceTicket.completedAt), 'dd/MM/yyyy', { locale: id })}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2 text-gray-700">Informasi Lainnya:</h4>
+                  <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span>Teknisi:</span>
-                      <span>{technician.name}</span>
+                      <span className="text-gray-600">Status:</span>
+                      <span className="font-semibold text-green-600">
+                        {serviceTicket.status === 'completed' ? 'SELESAI' : 
+                         serviceTicket.status === 'delivered' ? 'DIAMBIL' : 'SELESAI'}
+                      </span>
                     </div>
-                  )}
+                    {technician && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Teknisi:</span>
+                        <span>{technician.name}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* QR Code */}
               {qrCodeDataURL && (
-                <div className="text-center py-2 my-2">
+                <div className="text-center py-4 bg-white border border-gray-200 rounded mb-4">
+                  <p className="text-sm font-medium mb-2 text-gray-700">QR Code - Tracking Service</p>
                   <img 
                     src={qrCodeDataURL} 
                     alt="QR Code" 
-                    className="mx-auto"
+                    className="mx-auto border border-gray-100 p-2 rounded"
                     style={{ 
-                      width: paperSize === 'a4' ? '50mm' : 
-                             paperSize === '58' ? '30mm' : '35mm', 
+                      width: paperSize === 'a4' ? '60mm' : 
+                             paperSize === '58' ? '30mm' : '40mm', 
                       height: 'auto' 
                     }}
                   />
-                  <p className="text-xs mt-1">Scan untuk cek status service</p>
+                  <p className="text-xs mt-2 text-gray-600">Scan untuk cek status service online</p>
                 </div>
               )}
 
               {/* Footer */}
-              <div className="border-t border-dashed border-gray-400 pt-2 mt-4">
-                <div className="text-center text-xs space-y-1">
-                  <p className="font-bold">TERIMA KASIH</p>
-                  <p>Atas kepercayaan Anda menggunakan layanan kami</p>
-                  <p>Garansi service 30 hari dari tanggal pengambilan</p>
+              <div className="bg-blue-50 p-4 rounded text-center">
+                <div className="space-y-2">
+                  <p className="font-bold text-lg text-blue-800">TERIMA KASIH</p>
+                  <p className="text-sm text-gray-700">Atas kepercayaan Anda menggunakan layanan service kami</p>
+                  <div className="bg-yellow-100 p-2 rounded mt-3">
+                    <p className="text-sm font-medium text-yellow-800">⚠️ GARANSI SERVICE 30 HARI</p>
+                    <p className="text-xs text-yellow-700">Berlaku dari tanggal pengambilan barang</p>
+                  </div>
+                  <div className="border-t border-blue-200 pt-2 mt-3">
+                    <p className="text-xs text-gray-500">Nota ini adalah bukti pembayaran yang sah</p>
+                  </div>
                 </div>
               </div>
             </div>
