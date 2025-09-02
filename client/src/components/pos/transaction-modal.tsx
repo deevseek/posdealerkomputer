@@ -49,6 +49,11 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     queryKey: ["/api/products"],
   });
 
+  // Fetch store config for tax rate
+  const { data: storeConfig } = useQuery({
+    queryKey: ["/api/store-config"],
+  });
+
   // Fetch customers
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ["/api/customers", customerSearch],
@@ -159,7 +164,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
-  const taxRate = Number((storeConfig as any)?.taxRate || 11) / 100;
+  const taxRate = Number(storeConfig?.taxRate || 11) / 100;
   const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
