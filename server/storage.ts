@@ -40,7 +40,7 @@ import {
   type InsertFinancialRecord,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, count, sum, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -285,7 +285,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          like(products.name, `%${query}%`)
+          ilike(products.name, `%${query}%`)
         )
       )
       .orderBy(asc(products.name));
@@ -369,7 +369,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(customers)
-      .where(like(customers.name, `%${query}%`))
+      .where(ilike(customers.name, `%${query}%`))
       .orderBy(asc(customers.name));
   }
 
