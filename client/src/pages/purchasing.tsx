@@ -861,10 +861,7 @@ export default function PurchasingPage() {
                     Promise.all(
                       itemsToReceive.map(item => {
                         console.log("Sending receive request for:", item);
-                        return apiRequest(`/api/purchase-orders/items/${item.itemId}/receive`, {
-                          method: 'POST',
-                          data: { receivedQuantity: item.quantity }
-                        });
+                        return apiRequest('POST', `/api/purchase-orders/items/${item.itemId}/receive`, { receivedQuantity: item.quantity });
                       })
                     ).then(() => {
                       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
