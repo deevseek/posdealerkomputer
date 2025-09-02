@@ -330,6 +330,45 @@ export default function FinanceNew() {
     return <Badge variant={config.variant}>{config.text}</Badge>;
   };
 
+  // Helper function untuk menampilkan transaksi dengan benar (aset = positif, expense = negatif)
+  const getTransactionDisplay = (transaction: FinancialTransaction) => {
+    if (transaction.type === 'income') {
+      return {
+        sign: '+',
+        color: 'text-green-600',
+        badge: 'default',
+        label: 'Pemasukan'
+      };
+    } else {
+      // Cek apakah ini transaksi aset atau expense berdasarkan kategori dan deskripsi
+      const isAsset = [
+        'Persediaan', 'Peralatan', 'Kendaraan', 'Furniture', 'Aset', 
+        'Inventory', 'Assets', 'Equipment', 'Vehicle', 'Asset',
+        'Kas', 'Bank', 'Cash', 'Piutang', 'Fixed Asset'
+      ].some(keyword => 
+        transaction.category?.toLowerCase().includes(keyword.toLowerCase()) || 
+        transaction.subcategory?.toLowerCase().includes(keyword.toLowerCase()) || 
+        transaction.description?.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (isAsset) {
+        return {
+          sign: '+',
+          color: 'text-blue-600',
+          badge: 'secondary',
+          label: 'Aset'
+        };
+      } else {
+        return {
+          sign: '-',
+          color: 'text-red-600', 
+          badge: 'destructive',
+          label: 'Pengeluaran'
+        };
+      }
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
@@ -742,9 +781,14 @@ export default function FinanceNew() {
                         {format(new Date(transaction.createdAt), 'dd/MM/yyyy')}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={transaction.type === 'income' ? 'default' : 'destructive'}>
-                          {transaction.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
-                        </Badge>
+                        {(() => {
+                          const display = getTransactionDisplay(transaction);
+                          return (
+                            <Badge variant={display.badge as any}>
+                              {display.label}
+                            </Badge>
+                          );
+                        })()}
                         {transaction.paymentMethod && (
                           <div className="text-xs text-muted-foreground mt-1">
                             {transaction.paymentMethod === 'cash' ? 'Tunai' :
@@ -773,8 +817,8 @@ export default function FinanceNew() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className={transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}>
-                        {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                      <TableCell className={getTransactionDisplay(transaction).color}>
+                        {getTransactionDisplay(transaction).sign}{formatCurrency(transaction.amount)}
                       </TableCell>
                       <TableCell>
                         {getStatusBadge(transaction.status)}
