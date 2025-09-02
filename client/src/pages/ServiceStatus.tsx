@@ -5,9 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt } from "lucide-react";
+import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings } from "lucide-react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
+import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const statusConfig = {
   pending: { label: 'Menunggu', color: 'bg-yellow-500', icon: Clock },
@@ -21,6 +22,7 @@ const statusConfig = {
 export default function ServiceStatus() {
   const [serviceNumber, setServiceNumber] = useState("");
   const [searchClicked, setSearchClicked] = useState(false);
+  const [showStatusTracker, setShowStatusTracker] = useState(false);
 
   const { data: serviceData, isLoading, error } = useQuery({
     queryKey: ['/api/public/service-status', serviceNumber],
@@ -216,7 +218,33 @@ export default function ServiceStatus() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Action Button */}
+            <Card>
+              <CardContent className="p-6 text-center">
+                <Button 
+                  onClick={() => setShowStatusTracker(true)}
+                  className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 mx-auto"
+                >
+                  <Settings className="h-4 w-4" />
+                  Detail Status Proses Service
+                </Button>
+                <p className="text-sm text-gray-500 mt-2">
+                  Lihat tahapan detail proses perbaikan perangkat Anda
+                </p>
+              </CardContent>
+            </Card>
           </div>
+        )}
+
+        {/* Service Status Tracker Dialog */}
+        {serviceData && (
+          <ServiceStatusTracker
+            isOpen={showStatusTracker}
+            onClose={() => setShowStatusTracker(false)}
+            serviceNumber={serviceData.ticketNumber}
+            currentStatus={serviceData.status}
+          />
         )}
       </div>
     </div>

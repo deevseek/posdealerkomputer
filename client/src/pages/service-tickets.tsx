@@ -49,6 +49,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { ServicePartsSelector } from "@/components/service-parts-selector";
 import ServiceReceipt from "@/components/ServiceReceipt";
 import ServiceReceiptNew from "@/components/ServiceReceiptNew";
+import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,
@@ -116,6 +117,8 @@ export default function ServiceTickets() {
   const [selectedParts, setSelectedParts] = useState<ServicePart[]>([]);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<ServiceTicket | null>(null);
+  const [showStatusTracker, setShowStatusTracker] = useState(false);
+  const [statusTrackerData, setStatusTrackerData] = useState<ServiceTicket | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -578,6 +581,18 @@ export default function ServiceTickets() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                onClick={() => {
+                                  setStatusTrackerData(ticket);
+                                  setShowStatusTracker(true);
+                                }}
+                                data-testid={`button-status-${ticket.id}`}
+                                title="Detail Status"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => handlePrintReceipt(ticket)}
                                 data-testid={`button-receipt-ticket-${ticket.id}`}
                                 title="Cetak Nota"
@@ -920,6 +935,16 @@ export default function ServiceTickets() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Service Status Tracker Dialog */}
+      {statusTrackerData && (
+        <ServiceStatusTracker
+          isOpen={showStatusTracker}
+          onClose={() => setShowStatusTracker(false)}
+          serviceNumber={statusTrackerData.ticketNumber}
+          currentStatus={statusTrackerData.status}
+        />
+      )}
     </div>
   );
 }
