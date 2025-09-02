@@ -314,14 +314,14 @@ export default function FinanceNew() {
 
   const getStatusBadge = (status: string, type?: string) => {
     const statusConfig = {
-      'confirmed': { variant: 'default' as const, text: 'Confirmed' },
-      'pending': { variant: 'secondary' as const, text: 'Pending' },
-      'cancelled': { variant: 'destructive' as const, text: 'Cancelled' },
-      'draft': { variant: 'secondary' as const, text: 'Draft' },
-      'approved': { variant: 'default' as const, text: 'Approved' },
-      'paid': { variant: 'default' as const, text: 'Paid' },
-      'active': { variant: 'default' as const, text: 'Active' },
-      'inactive': { variant: 'secondary' as const, text: 'Inactive' }
+      'confirmed': { variant: 'default' as const, text: 'Dikonfirmasi' },
+      'pending': { variant: 'secondary' as const, text: 'Menunggu' },
+      'cancelled': { variant: 'destructive' as const, text: 'Dibatalkan' },
+      'draft': { variant: 'secondary' as const, text: 'Konsep' },
+      'approved': { variant: 'default' as const, text: 'Disetujui' },
+      'paid': { variant: 'default' as const, text: 'Dibayar' },
+      'active': { variant: 'default' as const, text: 'Aktif' },
+      'inactive': { variant: 'secondary' as const, text: 'Tidak Aktif' }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || 
@@ -537,7 +537,7 @@ export default function FinanceNew() {
                       </div>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Net: {formatCurrency((data.income - data.expense).toString())}
+                      Bersih: {formatCurrency((data.income - data.expense).toString())}
                     </div>
                   </div>
                 ))}
@@ -556,7 +556,7 @@ export default function FinanceNew() {
                   <div key={source} className="flex justify-between items-center">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">
-                        {source === 'service' ? 'Service/Repair' :
+                        {source === 'service' ? 'Service/Perbaikan' :
                          source === 'service_labor' ? 'Ongkos Kerja' :
                          source === 'service_parts_cost' ? 'Biaya Parts' :
                          source === 'service_parts_revenue' ? 'Penjualan Parts' :
@@ -1013,7 +1013,7 @@ export default function FinanceNew() {
 
         <TabsContent value="payroll" className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Payroll Management</h2>
+            <h2 className="text-xl font-semibold">Manajemen Gaji</h2>
             <Dialog open={showPayrollDialog} onOpenChange={setShowPayrollDialog}>
               <DialogTrigger asChild>
                 <Button>
@@ -1196,7 +1196,7 @@ export default function FinanceNew() {
                     <TableRow key={payroll.id}>
                       <TableCell className="font-mono">{payroll.payrollNumber}</TableCell>
                       <TableCell>
-                        {employees?.find(e => e.id === payroll.employeeId)?.name || 'Unknown'}
+                        {employees?.find(e => e.id === payroll.employeeId)?.name || 'Tidak Diketahui'}
                       </TableCell>
                       <TableCell>
                         {format(new Date(payroll.periodStart), 'dd/MM')} - {format(new Date(payroll.periodEnd), 'dd/MM/yyyy')}
@@ -1224,7 +1224,7 @@ export default function FinanceNew() {
                               status: 'approved'
                             })}
                           >
-                            Approve
+                            Setujui
                           </Button>
                         )}
                         {payroll.status === 'approved' && (
