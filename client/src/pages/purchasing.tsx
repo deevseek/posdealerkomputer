@@ -169,8 +169,12 @@ export default function PurchasingPage() {
   // Mutation to delete item from existing purchase order
   const deleteItemMutation = useMutation({
     mutationFn: ({ poId, itemId }: { poId: string; itemId: string }) => 
-      apiRequest(`/api/purchase-orders/${poId}/items/${itemId}`, {
-        method: 'DELETE'
+      fetch(`/api/purchase-orders/${poId}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      }).then(res => {
+        if (!res.ok) throw new Error('Failed to delete item');
+        return res.json();
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders'] });
