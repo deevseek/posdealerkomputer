@@ -76,7 +76,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
       
       const pdf = new jsPDF('p', 'mm', [thermalWidth, thermalHeight]);
       pdf.addImage(imgData, 'PNG', 0, 0, thermalWidth, thermalHeight);
-      pdf.save(`Nota-Pembelian-${transaction.transactionNumber || transaction.id}-${thermalWidth}mm.pdf`);
+      pdf.save(`Nota-Pembayaran-POS-${transaction.transactionNumber || transaction.id}-${thermalWidth}mm.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {
@@ -201,7 +201,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="no-print">
-          <DialogTitle>Nota Pembelian</DialogTitle>
+          <DialogTitle>Nota Pembayaran POS</DialogTitle>
           <Button
             variant="ghost"
             size="sm"

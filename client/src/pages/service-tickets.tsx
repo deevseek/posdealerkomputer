@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText, CreditCard } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -49,6 +49,7 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { ServicePartsSelector } from "@/components/service-parts-selector";
 import ServiceReceipt from "@/components/ServiceReceipt";
 import ServiceReceiptNew from "@/components/ServiceReceiptNew";
+import ServicePaymentReceipt from "@/components/ServicePaymentReceipt";
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
@@ -127,6 +128,8 @@ export default function ServiceTickets() {
   const [selectedParts, setSelectedParts] = useState<ServicePart[]>([]);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<ServiceTicket | null>(null);
+  const [showPaymentReceipt, setShowPaymentReceipt] = useState(false);
+  const [paymentReceiptData, setPaymentReceiptData] = useState<ServiceTicket | null>(null);
   const [showStatusTracker, setShowStatusTracker] = useState(false);
   const [statusTrackerData, setStatusTrackerData] = useState<ServiceTicket | null>(null);
   const queryClient = useQueryClient();
@@ -416,6 +419,11 @@ export default function ServiceTickets() {
     setShowReceipt(true);
   };
 
+  const handlePrintPaymentReceipt = (ticket: ServiceTicket) => {
+    setPaymentReceiptData(ticket);
+    setShowPaymentReceipt(true);
+  };
+
   const handleNew = () => {
     setEditingTicket(null);
     form.reset({
@@ -615,10 +623,22 @@ export default function ServiceTickets() {
                                 size="sm"
                                 onClick={() => handlePrintReceipt(ticket)}
                                 data-testid={`button-receipt-ticket-${ticket.id}`}
-                                title="Cetak Nota"
+                                title="Cetak Nota Service"
                               >
                                 <Receipt className="w-4 h-4" />
                               </Button>
+                              {/* Payment Receipt Button - Only show for completed/delivered */}
+                              {(ticket.status === 'completed' || ticket.status === 'delivered') && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handlePrintPaymentReceipt(ticket)}
+                                  data-testid={`button-payment-receipt-${ticket.id}`}
+                                  title="Nota Pembayaran"
+                                >
+                                  <CreditCard className="w-4 h-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -961,6 +981,29 @@ export default function ServiceTickets() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Service Payment Receipt Dialog */}
+      {paymentReceiptData && (
+        <ServicePaymentReceipt
+          open={showPaymentReceipt}
+          onClose={() => setShowPaymentReceipt(false)}
+          serviceTicket={paymentReceiptData}
+          customer={customers.find((c: Customer) => c.id === paymentReceiptData.customerId) || {
+            id: paymentReceiptData.customerId,
+            name: 'Customer',
+            phone: '',
+            email: '',
+            address: ''
+          }}
+          storeConfig={storeConfig || {
+            name: 'LaptopPOS Service',
+            address: 'Alamat Toko',
+            phone: '0123456789',
+            email: 'info@laptoppos.com'
+          }}
+          technician={paymentReceiptData.technicianId ? users.find((u: any) => u.id === paymentReceiptData.technicianId) : null}
+        />
+      )}
 
       {/* Service Status Tracker Dialog */}
       {statusTrackerData && (
