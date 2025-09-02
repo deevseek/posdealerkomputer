@@ -291,7 +291,6 @@ export default function ServicePaymentReceipt({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="a4">{paperSizes['a4'].name}</SelectItem>
-                <SelectItem value="" disabled className="text-xs text-muted-foreground font-semibold">--- Thermal Printer ---</SelectItem>
                 <SelectItem value="58">{paperSizes['58'].name}</SelectItem>
                 <SelectItem value="80">{paperSizes['80'].name}</SelectItem>
                 <SelectItem value="100">{paperSizes['100'].name}</SelectItem>
