@@ -1147,9 +1147,11 @@ export class DatabaseStorage implements IStorage {
             }
             
             // Update product stock
+            const newStock = currentStock - part.quantity;
             await tx.update(products)
               .set({ 
-                totalStock: currentStock - part.quantity,
+                stock: newStock, // Update main stock field for display
+                totalStock: newStock,
                 availableStock: (product.availableStock || 0) - part.quantity,
                 updatedAt: new Date()
               })
