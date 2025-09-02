@@ -778,11 +778,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { itemId } = req.params;
       const { receivedQuantity } = req.body;
       
+      console.log("Receiving items:", { itemId, receivedQuantity });
       await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity));
       res.json({ message: "Items received successfully" });
     } catch (error) {
       console.error("Error receiving items:", error);
-      res.status(500).json({ message: "Failed to receive items" });
+      res.status(500).json({ message: "Failed to receive items", error: error.message });
     }
   });
 
