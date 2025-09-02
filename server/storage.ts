@@ -432,8 +432,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Orders
-  async getPurchaseOrders(): Promise<PurchaseOrder[]> {
-    return await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.orderDate));
+  async getPurchaseOrders(): Promise<(PurchaseOrder & { supplierName: string })[]> {
+    return await db
+      .select({
+        ...purchaseOrders,
+        supplierName: suppliers.name,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .orderBy(desc(purchaseOrders.orderDate));
   }
 
   async getPurchaseOrderById(id: string): Promise<PurchaseOrder | undefined> {

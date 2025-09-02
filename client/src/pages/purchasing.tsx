@@ -308,7 +308,7 @@ export default function PurchasingPage() {
                         <TableCell className="font-medium" data-testid={`text-po-number-${order.id}`}>
                           {order.poNumber}
                         </TableCell>
-                        <TableCell>{order.supplierId}</TableCell>
+                        <TableCell>{(order as any).supplierName || order.supplierId}</TableCell>
                         <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
                         <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
