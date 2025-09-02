@@ -1018,10 +1018,10 @@ export class DatabaseStorage implements IStorage {
           // Create stock movement record
           await tx.insert(stockMovements).values({
             productId: item.productId,
-            type: 'out',
+            movementType: 'out',
             quantity: item.quantity,
-            purchasePrice: null, // For outgoing stock, no purchase price
-            reference: transaction.id,
+            unitCost: item.unitPrice, // Record sale price for profit tracking
+            referenceId: transaction.id,
             referenceType: 'sale',
             notes: `Penjualan - ${transaction.transactionNumber}`,
             userId: transactionData.userId,
@@ -1158,9 +1158,9 @@ export class DatabaseStorage implements IStorage {
             // Record stock movement
             await tx.insert(stockMovements).values({
               productId: part.productId,
-              type: 'out',
+              movementType: 'out',
               quantity: part.quantity,
-              reference: id,
+              referenceId: id,
               referenceType: 'service',
               notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
               userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
