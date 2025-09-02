@@ -754,7 +754,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const itemData = {
         ...req.body,
-        purchaseOrderId: req.params.id
+        purchaseOrderId: req.params.id,
+        quantity: parseInt(req.body.quantity) || 1,
+        orderedQuantity: parseInt(req.body.quantity) || 1,
+        unitCost: parseFloat(req.body.unitCost) || 0
       };
       const item = await storage.createPurchaseOrderItem(itemData);
       res.json(item);

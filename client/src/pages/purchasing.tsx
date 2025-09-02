@@ -455,6 +455,11 @@ export default function PurchasingPage() {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => {
+                                // For now, just open the view dialog as edit functionality
+                                setSelectedPO(order);
+                                setViewPOOpen(true);
+                              }}
                               data-testid={`button-edit-po-${order.id}`}
                             >
                               <Edit className="h-4 w-4" />
@@ -629,7 +634,7 @@ export default function PurchasingPage() {
                                   <Input 
                                     type="number" 
                                     {...field} 
-                                    onChange={(e) => field.onChange(Number(e.target.value))}
+                                    onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
                                     data-testid="input-quantity"
                                   />
                                 </FormControl>
