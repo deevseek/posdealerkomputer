@@ -12,8 +12,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { LogIn, Laptop } from "lucide-react";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
+  username: z.string().min(1, "Username harus diisi"),
+  password: z.string().min(1, "Password harus diisi"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -50,16 +50,16 @@ export default function Login() {
     },
     onSuccess: () => {
       toast({
-        title: "Login Successful", 
-        description: "Welcome to LaptopPOS!",
+        title: "Login Berhasil", 
+        description: "Selamat datang di LaptopPOS!",
       });
       // Reload to trigger authentication state update
       window.location.href = "/";
     },
     onError: (error: any) => {
       toast({
-        title: "Login Failed",
-        description: error.message || "Invalid username or password",
+        title: "Login Gagal",
+        description: error.message || "Username atau password salah",
         variant: "destructive",
       });
     },
@@ -100,7 +100,7 @@ export default function Login() {
                     </FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Enter your username"
+                        placeholder="Masukkan username Anda"
                         {...field}
                         data-testid="input-username"
                         className="h-11"
@@ -122,7 +122,7 @@ export default function Login() {
                     <FormControl>
                       <Input
                         type="password"
-                        placeholder="Enter your password"
+                        placeholder="Masukkan password Anda"
                         {...field}
                         data-testid="input-password"
                         className="h-11"
@@ -142,12 +142,12 @@ export default function Login() {
                 {isLoading || loginMutation.isPending ? (
                   <>
                     <LogIn className="w-4 h-4 mr-2 animate-spin" />
-                    Logging in...
+                    Masuk...
                   </>
                 ) : (
                   <>
                     <LogIn className="w-4 h-4 mr-2" />
-                    Login
+                    Masuk
                   </>
                 )}
               </Button>
@@ -156,7 +156,7 @@ export default function Login() {
           
           <div className="text-center pt-4 border-t border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              Use your account credentials to access the system
+              Gunakan kredensial akun Anda untuk mengakses sistem
             </p>
           </div>
         </CardContent>

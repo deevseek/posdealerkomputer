@@ -28,12 +28,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: ChartLine, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
-  { name: "POS", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
-  { name: "Service", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
+  { name: "Dasbor", href: "/", icon: ChartLine, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
+  { name: "Kasir", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
+  { name: "Servis", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
   { name: "Inventori", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
-  { name: "Purchasing", href: "/purchasing", icon: ShoppingCart, roles: ["admin", "purchasing", "owner"] },
-  { name: "Keuangan & Payroll", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
+  { name: "Pembelian", href: "/purchasing", icon: ShoppingCart, roles: ["admin", "purchasing", "owner"] },
+  { name: "Keuangan & Gaji", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
   { name: "Pelanggan", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
   { name: "Supplier", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
   { name: "Pengguna", href: "/users", icon: UserCog, roles: ["admin", "owner"] },
@@ -122,7 +122,7 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div className="transition-opacity duration-300">
               <h1 className="text-lg font-semibold text-foreground">{(storeConfig as any)?.name || 'LaptopPOS'}</h1>
-              <p className="text-xs text-muted-foreground">Service & Sales</p>
+              <p className="text-xs text-muted-foreground">Servis & Penjualan</p>
             </div>
           )}
         </div>
@@ -184,7 +184,7 @@ export default function Sidebar() {
           <LogOut className="w-4 h-4" />
           {!isCollapsed && (
             <span className="transition-opacity duration-300">
-              {logoutMutation.isPending ? "Logging out..." : "Logout"}
+              {logoutMutation.isPending ? "Keluar..." : "Keluar"}
             </span>
           )}
         </Button>

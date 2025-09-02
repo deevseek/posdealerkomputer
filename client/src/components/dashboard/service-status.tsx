@@ -47,22 +47,22 @@ export default function ServiceStatus() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'Pending';
+        return 'Menunggu';
       case 'in_progress':
-        return 'In Progress';
+        return 'Dikerjakan';
       case 'completed':
-        return 'Ready';
+        return 'Selesai';
       case 'delivered':
-        return 'Delivered';
+        return 'Terkirim';
       default:
-        return 'Delayed';
+        return 'Tertunda';
     }
   };
 
   return (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
-        <CardTitle>Service Status</CardTitle>
+        <CardTitle>Status Servis</CardTitle>
       </CardHeader>
       <CardContent className="p-6">
         {isLoading ? (
@@ -73,7 +73,7 @@ export default function ServiceStatus() {
           </div>
         ) : !serviceTickets || serviceTickets.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
-            No active service tickets.
+            Tidak ada tiket servis aktif.
           </p>
         ) : (
           <div className="space-y-4">

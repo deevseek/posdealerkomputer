@@ -12,7 +12,7 @@ export default function InventoryAlerts() {
   return (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
-        <CardTitle>Inventory Alerts</CardTitle>
+        <CardTitle>Peringatan Inventori</CardTitle>
       </CardHeader>
       <CardContent className="p-6">
         {isLoading ? (
@@ -23,7 +23,7 @@ export default function InventoryAlerts() {
           </div>
         ) : !lowStockProducts || lowStockProducts.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
-            All products are well stocked.
+            Semua produk stoknya mencukupi.
           </p>
         ) : (
           <div className="space-y-4">
@@ -55,9 +55,9 @@ export default function InventoryAlerts() {
                         {product.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Stock: <span data-testid={`stock-count-${product.id}`}>{product.stock} units</span>
+                        Stok: <span data-testid={`stock-count-${product.id}`}>{product.stock} unit</span>
                         {product.minStock && (
-                          <span className="ml-2">Min: {product.minStock}</span>
+                          <span className="ml-2">Minimal: {product.minStock}</span>
                         )}
                       </p>
                     </div>
@@ -66,7 +66,7 @@ export default function InventoryAlerts() {
                     size="sm"
                     data-testid={`button-reorder-${product.id}`}
                   >
-                    Reorder
+                    Pesan Ulang
                   </Button>
                 </div>
               );

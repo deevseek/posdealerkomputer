@@ -63,8 +63,8 @@ export default function POS() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Point of Sale" 
-          breadcrumb="Beranda / POS"
+          title="Kasir" 
+          breadcrumb="Beranda / Kasir"
           action={
             <Button 
               onClick={handleNewTransaction}
@@ -79,7 +79,7 @@ export default function POS() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Recent Transactions</CardTitle>
+                <CardTitle>Transaksi Terbaru</CardTitle>
               </CardHeader>
               <CardContent>
                 {transactionsLoading ? (

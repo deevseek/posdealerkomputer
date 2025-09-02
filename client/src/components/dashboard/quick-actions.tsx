@@ -14,35 +14,35 @@ export default function QuickActions() {
 
   const actions = [
     {
-      title: "New Sale",
+      title: "Penjualan Baru",
       icon: Plus,
       onClick: () => setLocation("/pos"),
       variant: "default" as const,
       testId: "button-quick-new-sale"
     },
     {
-      title: "New Service",
+      title: "Servis Baru",
       icon: Wrench,
       onClick: () => setLocation("/service"),
       variant: "outline" as const,
       testId: "button-quick-new-service"
     },
     {
-      title: "Add Product",
+      title: "Tambah Produk",
       icon: Package,
       onClick: () => setLocation("/inventory"),
       variant: "outline" as const,
       testId: "button-quick-add-product"
     },
     {
-      title: "Add Customer",
+      title: "Tambah Pelanggan",
       icon: UserPlus,
       onClick: () => setLocation("/customers"),
       variant: "outline" as const,
       testId: "button-quick-add-customer"
     },
     {
-      title: "Generate Report",
+      title: "Buat Laporan",
       icon: FileDown,
       onClick: () => setLocation("/reports"),
       variant: "outline" as const,
@@ -53,7 +53,7 @@ export default function QuickActions() {
   return (
     <Card className="shadow-sm">
       <CardHeader className="border-b">
-        <CardTitle>Quick Actions</CardTitle>
+        <CardTitle>Aksi Cepat</CardTitle>
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-3">

@@ -76,13 +76,13 @@ export default function Customers() {
       setShowDialog(false);
       setEditingCustomer(null);
       form.reset();
-      toast({ title: "Success", description: "Customer created successfully" });
+      toast({ title: "Berhasil", description: "Pelanggan berhasil dibuat" });
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
         toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
+          title: "Tidak Diotorisasi",
+          description: "Anda telah logout. Masuk kembali...",
           variant: "destructive",
         });
         setTimeout(() => {
@@ -90,7 +90,7 @@ export default function Customers() {
         }, 500);
         return;
       }
-      toast({ title: "Error", description: "Failed to create customer", variant: "destructive" });
+      toast({ title: "Error", description: "Gagal membuat pelanggan", variant: "destructive" });
     },
   });
 
@@ -103,13 +103,13 @@ export default function Customers() {
       setShowDialog(false);
       setEditingCustomer(null);
       form.reset();
-      toast({ title: "Success", description: "Customer updated successfully" });
+      toast({ title: "Berhasil", description: "Pelanggan berhasil diupdate" });
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
         toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
+          title: "Tidak Diotorisasi",
+          description: "Anda telah logout. Masuk kembali...",
           variant: "destructive",
         });
         setTimeout(() => {
@@ -117,7 +117,7 @@ export default function Customers() {
         }, 500);
         return;
       }
-      toast({ title: "Error", description: "Failed to update customer", variant: "destructive" });
+      toast({ title: "Error", description: "Gagal mengupdate pelanggan", variant: "destructive" });
     },
   });
 
@@ -132,8 +132,8 @@ export default function Customers() {
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
         toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
+          title: "Tidak Diotorisasi",
+          description: "Anda telah logout. Masuk kembali...",
           variant: "destructive",
         });
         setTimeout(() => {

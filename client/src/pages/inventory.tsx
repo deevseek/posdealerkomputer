@@ -60,12 +60,12 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      toast({ title: "Success", description: "Category berhasil ditambahkan!" });
+      toast({ title: "Berhasil", description: "Kategori berhasil ditambahkan!" });
       form.reset();
       onSuccess();
     },
     onError: () => {
-      toast({ title: "Error", description: "Gagal menambah category", variant: "destructive" });
+      toast({ title: "Error", description: "Gagal menambah kategori", variant: "destructive" });
     },
   });
 
@@ -110,7 +110,7 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
             disabled={addCategoryMutation.isPending}
             data-testid="button-add-category-submit"
           >
-            {addCategoryMutation.isPending ? "Adding..." : "Tambah Kategori"}
+            {addCategoryMutation.isPending ? "Menambah..." : "Tambah Kategori"}
           </Button>
         </div>
       </form>
