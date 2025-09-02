@@ -131,6 +131,9 @@ export default function ServiceTickets() {
   const { data: storeConfig = {} } = useQuery({
     queryKey: ['/api/store-config'],
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   const form = useForm({

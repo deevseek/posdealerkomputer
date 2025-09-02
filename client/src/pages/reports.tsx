@@ -45,6 +45,9 @@ export default function Reports() {
   const { data: storeConfig } = useQuery({
     queryKey: ['/api/store-config'],
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   // API queries untuk data reports

@@ -38,6 +38,9 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
   const { data: storeConfig } = useQuery({
     queryKey: ['/api/store-config'],
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   if (!transaction) return null;

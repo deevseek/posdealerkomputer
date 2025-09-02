@@ -57,6 +57,9 @@ export default function Sidebar() {
   const { data: storeConfig } = useQuery({
     queryKey: ['/api/store-config'],
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   const userRole = (user as any)?.role || "kasir";

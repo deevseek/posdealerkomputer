@@ -52,6 +52,10 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   // Fetch store config for tax rate
   const { data: storeConfig } = useQuery({
     queryKey: ["/api/store-config"],
+    retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   // Fetch customers
