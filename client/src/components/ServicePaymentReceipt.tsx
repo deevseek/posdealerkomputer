@@ -60,9 +60,10 @@ interface ServicePaymentReceiptProps {
 }
 
 const paperSizes = {
-  '58': { name: '58mm (2.3")', width: 58 },
-  '80': { name: '80mm (3.1")', width: 80 },
-  '100': { name: '100mm (3.9")', width: 100 },
+  'a4': { name: 'A4 - Printer Biasa', width: 210, type: 'standard' },
+  '58': { name: '58mm - Thermal Kecil', width: 58, type: 'thermal' },
+  '80': { name: '80mm - Thermal Standar', width: 80, type: 'thermal' },
+  '100': { name: '100mm - Thermal Besar', width: 100, type: 'thermal' },
 } as const;
 
 type PaperSize = keyof typeof paperSizes;
@@ -77,7 +78,7 @@ export default function ServicePaymentReceipt({
 }: ServicePaymentReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [qrCodeDataURL, setQrCodeDataURL] = useState<string>('');
-  const [paperSize, setPaperSize] = useState<PaperSize>('80');
+  const [paperSize, setPaperSize] = useState<PaperSize>('a4');
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
@@ -133,12 +134,20 @@ export default function ServicePaymentReceipt({
       });
 
       const imgData = canvas.toDataURL('image/png');
-      const thermalWidth = paperSizes[paperSize].width;
-      const thermalHeight = (canvas.height / canvas.width) * thermalWidth;
+      const pageWidth = paperSizes[paperSize].width;
+      const pageHeight = paperSize === 'a4' ? 297 : (canvas.height / canvas.width) * pageWidth;
       
-      const pdf = new jsPDF('p', 'mm', [thermalWidth, thermalHeight]);
-      pdf.addImage(imgData, 'PNG', 0, 0, thermalWidth, thermalHeight);
-      pdf.save(`Nota-Pembayaran-Service-${serviceTicket.ticketNumber}-${thermalWidth}mm.pdf`);
+      const pdf = new jsPDF('p', 'mm', paperSize === 'a4' ? 'a4' : [pageWidth, pageHeight]);
+      if (paperSize === 'a4') {
+        // For A4, fit to page with margins
+        const margin = 10;
+        const availableWidth = pageWidth - (2 * margin);
+        const scaledHeight = (canvas.height / canvas.width) * availableWidth;
+        pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, scaledHeight);
+      } else {
+        pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
+      }
+      pdf.save(`Nota-Pembayaran-Service-${serviceTicket.ticketNumber}-${pageWidth}mm.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
     } finally {
@@ -148,8 +157,10 @@ export default function ServicePaymentReceipt({
 
   const handlePrint = () => {
     try {
-      const thermalWidth = paperSizes[paperSize].width;
-      const fontSize = paperSize === '58' ? '7px' : paperSize === '80' ? '8px' : '10px';
+      const pageWidth = paperSizes[paperSize].width;
+      const fontSize = paperSize === 'a4' ? '12px' : 
+                      paperSize === '58' ? '7px' : 
+                      paperSize === '80' ? '8px' : '10px';
       
       const printStyle = `
         <style id="service-payment-print-style">
@@ -168,23 +179,24 @@ export default function ServicePaymentReceipt({
               position: absolute;
               left: 0;
               top: 0;
-              width: ${thermalWidth}mm;
-              max-width: ${thermalWidth}mm;
-              font-family: 'Courier New', monospace;
+              width: ${pageWidth}mm;
+              max-width: ${pageWidth}mm;
+              font-family: ${paperSize === 'a4' ? 'Arial, sans-serif' : "'Courier New', monospace"};
               font-size: ${fontSize};
-              line-height: 1.0;
+              line-height: ${paperSize === 'a4' ? '1.4' : '1.0'};
               color: #000;
               background: #fff;
               page-break-inside: avoid;
               height: auto;
-              max-height: 300mm;
+              max-height: ${paperSize === 'a4' ? '270mm' : '300mm'};
+              padding: ${paperSize === 'a4' ? '10mm' : '2mm'};
             }
             .no-print { 
               display: none !important; 
             }
             @page {
-              size: ${thermalWidth}mm 350mm;
-              margin: 1mm;
+              size: ${paperSize === 'a4' ? 'A4' : `${pageWidth}mm 350mm`};
+              margin: ${paperSize === 'a4' ? '10mm' : '1mm'};
             }
             .text-center { text-align: center; }
             .font-bold { font-weight: bold; }
@@ -235,15 +247,17 @@ export default function ServicePaymentReceipt({
 
   const getReceiptWidth = () => {
     switch (paperSize) {
+      case 'a4': return 'max-w-[500px]';
       case '58': return 'max-w-[58mm]';
       case '80': return 'max-w-[80mm]';
       case '100': return 'max-w-[100mm]';
-      default: return 'max-w-[80mm]';
+      default: return 'max-w-[500px]';
     }
   };
 
   const getTextSize = () => {
     switch (paperSize) {
+      case 'a4': return 'text-sm';
       case '58': return 'text-xs';
       case '80': return 'text-sm';
       case '100': return 'text-base';
@@ -276,6 +290,8 @@ export default function ServicePaymentReceipt({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="a4">{paperSizes['a4'].name}</SelectItem>
+                <SelectItem value="" disabled className="text-xs text-muted-foreground font-semibold">--- Thermal Printer ---</SelectItem>
                 <SelectItem value="58">{paperSizes['58'].name}</SelectItem>
                 <SelectItem value="80">{paperSizes['80'].name}</SelectItem>
                 <SelectItem value="100">{paperSizes['100'].name}</SelectItem>
@@ -464,7 +480,11 @@ export default function ServicePaymentReceipt({
                     src={qrCodeDataURL} 
                     alt="QR Code" 
                     className="mx-auto"
-                    style={{ width: paperSize === '58' ? '30mm' : '35mm', height: 'auto' }}
+                    style={{ 
+                      width: paperSize === 'a4' ? '50mm' : 
+                             paperSize === '58' ? '30mm' : '35mm', 
+                      height: 'auto' 
+                    }}
                   />
                   <p className="text-xs mt-1">Scan untuk cek status service</p>
                 </div>
