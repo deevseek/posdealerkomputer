@@ -439,10 +439,11 @@ export default function Inventory() {
   });
 
   // Stock movements for tracking
-  const { data: stockMovements = [] } = useQuery({
+  const { data: stockMovementsData } = useQuery({
     queryKey: ["/api/reports/stock-movements"],
     retry: false,
   });
+  const stockMovements = stockMovementsData?.movements || [];
 
   // Purchase orders untuk show incoming stock
   const { data: purchaseOrders = [] } = useQuery({
@@ -876,14 +877,14 @@ export default function Inventory() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(stockMovements as any[]).length === 0 ? (
+                      {stockMovements.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             No stock movements recorded yet
                           </TableCell>
                         </TableRow>
                       ) : (
-                        (stockMovements as any[]).slice(0, 20).map((movement: any) => (
+                        stockMovements.slice(0, 20).map((movement: any) => (
                           <TableRow key={movement.id}>
                             <TableCell className="text-sm">
                               {new Date(movement.createdAt).toLocaleDateString('id-ID')}
