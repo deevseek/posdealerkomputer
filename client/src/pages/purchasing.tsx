@@ -567,7 +567,7 @@ export default function PurchasingPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Supplier</Label>
-                <p className="text-sm font-medium">{selectedPO?.supplierId}</p>
+                <p className="text-sm font-medium">{(selectedPO as any)?.supplierName || selectedPO?.supplierId}</p>
               </div>
               <div>
                 <Label>Status</Label>
@@ -696,7 +696,7 @@ export default function PurchasingPage() {
                 <TableBody>
                   {selectedPOItems?.map((item: any) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.productId}</TableCell>
+                      <TableCell>{(item as any).productName || item.productId}</TableCell>
                       <TableCell>{item.quantity}</TableCell>
                       <TableCell>Rp {Number(item.unitCost).toLocaleString()}</TableCell>
                       <TableCell>Rp {(item.quantity * Number(item.unitCost)).toLocaleString()}</TableCell>

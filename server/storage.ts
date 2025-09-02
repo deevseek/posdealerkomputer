@@ -122,7 +122,7 @@ export interface IStorage {
   approvePurchaseOrder(id: string, approvedBy: string): Promise<PurchaseOrder>;
   
   // Purchase Order Items
-  getPurchaseOrderItems(poId: string): Promise<PurchaseOrderItem[]>;
+  getPurchaseOrderItems(poId: string): Promise<(PurchaseOrderItem & { productName: string; productSku: string })[]>;
   createPurchaseOrderItem(item: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
@@ -493,8 +493,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Order Items
-  async getPurchaseOrderItems(poId: string): Promise<PurchaseOrderItem[]> {
-    return await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, poId));
+  async getPurchaseOrderItems(poId: string): Promise<(PurchaseOrderItem & { productName: string; productSku: string })[]> {
+    return await db
+      .select({
+        ...purchaseOrderItems,
+        productName: products.name,
+        productSku: products.sku,
+      })
+      .from(purchaseOrderItems)
+      .leftJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .where(eq(purchaseOrderItems.purchaseOrderId, poId));
   }
 
   async createPurchaseOrderItem(itemData: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
