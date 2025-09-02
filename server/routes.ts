@@ -304,19 +304,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           quantity: stockMovements.quantity,
           unitCost: stockMovements.unitCost,
           referenceType: stockMovements.referenceType,
-          reference: sql<string>`
-            CASE 
-              WHEN ${stockMovements.referenceType} = 'purchase' THEN COALESCE(${purchaseOrders.poNumber}, ${stockMovements.referenceId})
-              ELSE ${stockMovements.referenceId}
-            END
-          `,
+          reference: stockMovements.referenceId, // Temporary fix - show ID for now
           notes: stockMovements.notes,
           createdAt: stockMovements.createdAt,
           userName: sql<string>`'Admin'`, // Add userName field
         })
         .from(stockMovements)
         .leftJoin(products, eq(stockMovements.productId, products.id))
-        .leftJoin(purchaseOrders, eq(stockMovements.referenceId, purchaseOrders.id))
         .orderBy(desc(stockMovements.createdAt));
       
       // Frontend expects { movements: [...] } structure
