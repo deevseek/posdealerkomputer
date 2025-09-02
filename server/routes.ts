@@ -1577,6 +1577,50 @@ Terima kasih!
     }
   });
 
+  // Public API for customers to check service status with query parameter
+  app.get('/api/public/service-status', async (req, res) => {
+    try {
+      const { ticket } = req.query;
+      
+      if (!ticket) {
+        return res.status(400).json({ message: 'Ticket number is required' });
+      }
+
+      // Get service ticket with customer info using Drizzle
+      const serviceTicket = await db
+        .select()
+        .from(serviceTickets)
+        .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
+        .where(eq(serviceTickets.ticketNumber, ticket as string))
+        .limit(1);
+
+      if (!serviceTicket.length) {
+        return res.status(404).json({ message: 'Service not found' });
+      }
+
+      const service = serviceTicket[0];
+      
+      // Return limited info for customer
+      res.json({
+        ticketNumber: service.service_tickets.ticketNumber,
+        customerName: service.customers?.name,
+        deviceType: service.service_tickets.deviceType,
+        deviceBrand: service.service_tickets.deviceBrand,
+        deviceModel: service.service_tickets.deviceModel,
+        problem: service.service_tickets.problem,
+        diagnosis: service.service_tickets.diagnosis,
+        status: service.service_tickets.status,
+        estimatedCost: service.service_tickets.estimatedCost,
+        estimatedCompletion: service.service_tickets.estimatedCompletion,
+        completedAt: service.service_tickets.completedAt,
+        createdAt: service.service_tickets.createdAt,
+      });
+    } catch (error) {
+      console.error('Error getting service status:', error);
+      res.status(500).json({ message: 'Failed to get service status' });
+    }
+  });
+
   // Public API for customers to check service status
   app.get('/api/public/service-status/:serviceNumber', async (req, res) => {
     try {
@@ -1586,13 +1630,35 @@ Terima kasih!
         return res.status(400).json({ message: 'Service number is required' });
       }
 
-      // Get service ticket with customer info
-      const serviceTickets = await storage.getServiceTickets();
-      const service = serviceTickets.find(s => s.serviceNumber === serviceNumber);
-      
-      if (!service) {
+      // Get service ticket with customer info using Drizzle
+      const serviceTicket = await db
+        .select()
+        .from(serviceTickets)
+        .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
+        .where(eq(serviceTickets.ticketNumber, serviceNumber as string))
+        .limit(1);
+
+      if (!serviceTicket.length) {
         return res.status(404).json({ message: 'Service not found' });
       }
+
+      const service = serviceTicket[0];
+      
+      // Return limited info for customer
+      res.json({
+        ticketNumber: service.service_tickets.ticketNumber,
+        customerName: service.customers?.name,
+        deviceType: service.service_tickets.deviceType,
+        deviceBrand: service.service_tickets.deviceBrand,
+        deviceModel: service.service_tickets.deviceModel,
+        problem: service.service_tickets.problem,
+        diagnosis: service.service_tickets.diagnosis,
+        status: service.service_tickets.status,
+        estimatedCost: service.service_tickets.estimatedCost,
+        estimatedCompletion: service.service_tickets.estimatedCompletion,
+        completedAt: service.service_tickets.completedAt,
+        createdAt: service.service_tickets.createdAt,
+      });
 
       // Get customer info
       const customer = service.customerId ? await storage.getCustomerById(service.customerId) : null;

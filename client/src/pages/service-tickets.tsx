@@ -48,6 +48,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { ServicePartsSelector } from "@/components/service-parts-selector";
 import ServiceReceipt from "@/components/ServiceReceipt";
+import ServiceReceiptNew from "@/components/ServiceReceiptNew";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,
@@ -896,26 +897,25 @@ export default function ServiceTickets() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Nota Service - #{receiptData?.id?.slice(-8)}
+              Tanda Terima Service - {receiptData?.ticketNumber}
             </DialogTitle>
           </DialogHeader>
           {receiptData && (
-            <ServiceReceipt 
-              serviceData={{
-                id: receiptData.id,
-                serviceNumber: receiptData.id.slice(-8),
-                device: `${receiptData.deviceBrand} ${receiptData.deviceModel}`,
-                problem: receiptData.problem,
-                diagnosis: receiptData.diagnosis || "",
-                status: receiptData.status,
-                totalCost: receiptData.estimatedCost || "0",
-                estimatedCompletion: receiptData.estimatedCompletion || undefined,
-                completedAt: receiptData.completedAt || undefined,
-                createdAt: receiptData.createdAt,
-                customer: customers.find((c: Customer) => c.id === receiptData.customerId),
-                parts: []
+            <ServiceReceiptNew
+              serviceTicket={receiptData}
+              customer={customers.find((c: Customer) => c.id === receiptData.customerId) || {
+                id: receiptData.customerId,
+                name: 'Customer',
+                phone: '',
+                email: '',
+                address: ''
               }}
-              storeConfig={storeConfig}
+              storeConfig={storeConfig || {
+                name: 'LaptopPOS Service',
+                address: 'Alamat Toko',
+                phone: '0123456789',
+                email: 'info@laptoppos.com'
+              }}
             />
           )}
         </DialogContent>
