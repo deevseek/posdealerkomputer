@@ -4,16 +4,8 @@ import Header from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -22,350 +14,180 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Package, AlertTriangle, Edit, Trash2, Barcode, PackagePlus } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { insertProductSchema, insertCategorySchema, type Product, type Category } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { Search, Package, AlertTriangle, History, TrendingUp } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { isUnauthorizedError } from "@/lib/authUtils";
-
-const productFormSchema = insertProductSchema.extend({
-  sellingPrice: z.string().min(1, "Selling price is required"),
-  purchasePrice: z.string().min(1, "Purchase price is required"),
-  stock: z.string().min(0, "Stock must be 0 or greater"),
-  minStock: z.string().min(0, "Minimum stock must be 0 or greater"),
-});
-
-const categoryFormSchema = insertCategorySchema;
-
-const stockAdjustmentSchema = z.object({
-  quantity: z.string().min(1, "Quantity is required").transform(val => parseInt(val)),
-  purchasePrice: z.string().optional(),
-  notes: z.string().min(1, "Notes are required"),
-});
 
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [showProductDialog, setShowProductDialog] = useState(false);
-  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [showStockDialog, setShowStockDialog] = useState(false);
-  const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
-  const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  // Products with stock info
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/products", searchQuery],
     queryFn: async () => {
       const url = searchQuery ? `/api/products?search=${encodeURIComponent(searchQuery)}` : '/api/products';
-      const response = await fetch(url);
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch products');
       return response.json();
     },
     retry: false,
   });
 
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery({
-    queryKey: ["/api/categories"],
+  // Stock movements for tracking
+  const { data: stockMovements = [] } = useQuery({
+    queryKey: ["/api/reports/stock-movements"],
     retry: false,
   });
 
-  const productForm = useForm({
-    resolver: zodResolver(productFormSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-      categoryId: "",
-      purchasePrice: "",
-      sellingPrice: "",
-      stock: "0",
-      minStock: "5",
-    },
+  // Purchase orders untuk show incoming stock
+  const { data: purchaseOrders = [] } = useQuery({
+    queryKey: ["/api/purchase-orders"],
+    retry: false,
   });
 
-  const categoryForm = useForm({
-    resolver: zodResolver(categoryFormSchema),
-    defaultValues: {
-      name: "",
-      description: "",
-    },
-  });
-
-  const stockForm = useForm({
-    resolver: zodResolver(stockAdjustmentSchema),
-    defaultValues: {
-      quantity: "",
-      notes: "",
-    },
-  });
-
-  const createProductMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const productData = {
-        ...data,
-        purchasePrice: data.purchasePrice,
-        sellingPrice: data.sellingPrice,
-        stock: parseInt(data.stock),
-        minStock: parseInt(data.minStock),
-      };
-      return apiRequest('POST', '/api/products', productData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setShowProductDialog(false);
-      setEditingProduct(null);
-      productForm.reset();
-      toast({ title: "Success", description: "Product created successfully" });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({ title: "Error", description: "Failed to create product", variant: "destructive" });
-    },
-  });
-
-  const updateProductMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const productData = {
-        ...data,
-        purchasePrice: data.purchasePrice,
-        sellingPrice: data.sellingPrice,
-        stock: parseInt(data.stock),
-        minStock: parseInt(data.minStock),
-      };
-      return apiRequest('PUT', `/api/products/${id}`, productData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setShowProductDialog(false);
-      setEditingProduct(null);
-      productForm.reset();
-      toast({ title: "Success", description: "Product updated successfully" });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({ title: "Error", description: "Failed to update product", variant: "destructive" });
-    },
-  });
-
-  const deleteProductMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/products/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Success", description: "Product deleted successfully" });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({ title: "Error", description: "Failed to delete product", variant: "destructive" });
-    },
-  });
-
-  const adjustStockMutation = useMutation({
-    mutationFn: async (data: { productId: string; quantity: number; purchasePrice?: string; notes: string }) => {
-      return apiRequest('POST', `/api/products/${data.productId}/adjust-stock`, {
-        quantity: data.quantity,
-        purchasePrice: data.purchasePrice,
-        notes: data.notes,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setShowStockDialog(false);
-      setAdjustingProduct(null);
-      stockForm.reset();
-      toast({ title: "Success", description: "Stock berhasil ditambahkan" });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized", 
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({ title: "Error", description: "Failed to adjust stock", variant: "destructive" });
-    },
-  });
-
-  const createCategoryMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest('POST', '/api/categories', data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
-      setShowCategoryDialog(false);
-      categoryForm.reset();
-      toast({ title: "Success", description: "Category created successfully" });
-    },
-    onError: (error) => {
-      if (isUnauthorizedError(error as Error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({ title: "Error", description: "Failed to create category", variant: "destructive" });
-    },
-  });
-
-  const handleProductSubmit = (data: any) => {
-    if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, data });
-    } else {
-      createProductMutation.mutate(data);
-    }
-  };
-
-  const handleCategorySubmit = (data: any) => {
-    createCategoryMutation.mutate(data);
-  };
-
-  const handleEditProduct = (product: Product) => {
-    setEditingProduct(product);
-    productForm.reset({
-      name: product.name,
-      description: product.description || "",
-      categoryId: product.categoryId || "",
-      purchasePrice: product.purchasePrice || "",
-      sellingPrice: product.sellingPrice || "",
-      stock: product.stock?.toString() || "0",
-      minStock: product.minStock?.toString() || "5",
-    });
-    setShowProductDialog(true);
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    if (confirm("Are you sure you want to delete this product?")) {
-      deleteProductMutation.mutate(id);
-    }
-  };
-
-  const handleNewProduct = () => {
-    setEditingProduct(null);
-    productForm.reset();
-    setShowProductDialog(true);
-  };
-
-  const handleAdjustStock = (product: Product) => {
-    setAdjustingProduct(product);
-    stockForm.reset({
-      quantity: "",
-      purchasePrice: product.purchasePrice || "",
-      notes: `Tambah stok ${product.name}`,
-    });
-    setShowStockDialog(true);
-  };
-
-  const handleStockSubmit = (data: any) => {
-    if (adjustingProduct) {
-      adjustStockMutation.mutate({
-        productId: adjustingProduct.id,
-        quantity: data.quantity,
-        purchasePrice: data.purchasePrice,
-        notes: data.notes,
-      });
-    }
-  };
-
-  const getStockStatus = (product: Product) => {
+  const getStockStatus = (product: any) => {
     const stock = product.stock || 0;
     const minStock = product.minStock || 5;
-    if (stock <= 0) return { text: "Out of Stock", variant: "destructive" as const };
-    if (stock <= minStock) return { text: "Low Stock", variant: "secondary" as const };
-    return { text: "In Stock", variant: "default" as const };
+    
+    if (stock <= 0) {
+      return { text: "Out of Stock", variant: "destructive" as const, color: "text-red-600" };
+    }
+    if (stock <= minStock) {
+      return { text: "Low Stock", variant: "secondary" as const, color: "text-orange-600" };
+    }
+    return { text: "In Stock", variant: "default" as const, color: "text-green-600" };
   };
+
+  const filteredProducts = products.filter((product: any) =>
+    product.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    product.sku?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const lowStockProducts = products.filter((product: any) => {
+    const stock = product.stock || 0;
+    const minStock = product.minStock || 5;
+    return stock <= minStock;
+  });
+
+  const incomingStock = purchaseOrders.filter((po: any) => 
+    po.status === 'confirmed' || po.status === 'partial_received'
+  );
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Manajemen Inventori" 
-          breadcrumb="Beranda / Inventori"
-          action={
-            <div className="flex space-x-2">
-              <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" data-testid="button-add-category">
-                    Tambah Kategori
-                  </Button>
-                </DialogTrigger>
-              </Dialog>
-              <Button onClick={handleNewProduct} data-testid="button-add-product">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Product
-              </Button>
-            </div>
-          }
+          title="Inventory Management" 
+          breadcrumb="Home / Inventory"
         />
         <main className="flex-1 overflow-y-auto p-6">
-          <Tabs defaultValue="products" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+          <Tabs defaultValue="overview" className="space-y-6">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
-              <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
-              <TabsTrigger value="stock" data-testid="tab-stock">Stock Alerts</TabsTrigger>
+              <TabsTrigger value="movements" data-testid="tab-movements">Stock Movements</TabsTrigger>
+              <TabsTrigger value="incoming" data-testid="tab-incoming">Incoming Stock</TabsTrigger>
             </TabsList>
 
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Total Products */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+                    <Package className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{products.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Active products in inventory
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Low Stock Alerts */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Low Stock Alerts</CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-red-600">{lowStockProducts.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Products need restocking
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Incoming Stock */}
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Incoming Orders</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-blue-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-blue-600">{incomingStock.length}</div>
+                    <p className="text-xs text-muted-foreground">
+                      POs ready for receiving
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Low Stock Products */}
+              {lowStockProducts.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center text-red-600">
+                      <AlertTriangle className="w-5 h-5 mr-2" />
+                      Low Stock Products
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-right">Current Stock</TableHead>
+                          <TableHead className="text-right">Min Stock</TableHead>
+                          <TableHead>Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lowStockProducts.map((product: any) => {
+                          const stockStatus = getStockStatus(product);
+                          return (
+                            <TableRow key={product.id}>
+                              <TableCell className="font-medium">
+                                {product.name}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <span className={stockStatus.color}>
+                                  {product.stock || 0}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {product.minStock || 5}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={stockStatus.variant}>
+                                  {stockStatus.text}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            {/* Products Tab */}
             <TabsContent value="products" className="space-y-6">
               {/* Search Bar */}
               <Card>
@@ -374,17 +196,13 @@ export default function Inventory() {
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input
-                        placeholder="Search products by name, SKU, or barcode..."
+                        placeholder="Search products by name or SKU..."
                         className="pl-10"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         data-testid="input-product-search"
                       />
                     </div>
-                    <Button variant="outline" data-testid="button-barcode-scan">
-                      <Barcode className="w-4 h-4 mr-2" />
-                      Scan Barcode
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -392,7 +210,7 @@ export default function Inventory() {
               {/* Products Table */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Products ({products.length})</CardTitle>
+                  <CardTitle>Products Inventory ({filteredProducts.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {productsLoading ? (
@@ -405,19 +223,18 @@ export default function Inventory() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Category</TableHead>
-                          <TableHead>SKU/Barcode</TableHead>
-                          <TableHead className="text-right">Stock</TableHead>
-                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead>Product Name</TableHead>
+                          <TableHead>SKU</TableHead>
+                          <TableHead className="text-right">Current Stock</TableHead>
+                          <TableHead className="text-right">Min Stock</TableHead>
+                          <TableHead className="text-right">Purchase Price</TableHead>
+                          <TableHead className="text-right">Selling Price</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {products.map((product: Product) => {
+                        {filteredProducts.map((product: any) => {
                           const stockStatus = getStockStatus(product);
-                          const category = (categories as Category[])?.find((c: Category) => c.id === product.categoryId);
                           
                           return (
                             <TableRow key={product.id}>
@@ -431,74 +248,31 @@ export default function Inventory() {
                                   </p>
                                 </div>
                               </TableCell>
-                              <TableCell data-testid={`product-category-${product.id}`}>
-                                {category?.name || "-"}
-                              </TableCell>
-                              <TableCell>
-                                <div className="text-sm">
-                                  {product.sku && <p>SKU: {product.sku}</p>}
-                                  {product.barcode && <p>Barcode: {product.barcode}</p>}
-                                </div>
+                              <TableCell data-testid={`product-sku-${product.id}`}>
+                                {product.sku || "-"}
                               </TableCell>
                               <TableCell className="text-right">
                                 <span 
-                                  className={`font-medium ${
-                                    stockStatus.variant === 'destructive' ? 'text-destructive' :
-                                    stockStatus.variant === 'secondary' ? 'text-secondary' :
-                                    'text-foreground'
-                                  }`}
+                                  className={`font-bold text-lg ${stockStatus.color}`}
                                   data-testid={`product-stock-${product.id}`}
                                 >
-                                  {product.stock}
+                                  {product.stock || 0}
                                 </span>
-                                <p className="text-xs text-muted-foreground">
-                                  Min: {product.minStock}
-                                </p>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {product.minStock || 5}
                               </TableCell>
                               <TableCell className="text-right">
-                                <div className="text-sm">
-                                  <p className="font-medium">
-                                    Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Cost: Rp {Number(product.purchasePrice || 0).toLocaleString('id-ID')}
-                                  </p>
-                                </div>
+                                Rp {Number(product.purchasePrice || 0).toLocaleString('id-ID')}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}
                               </TableCell>
                               <TableCell>
                                 <Badge variant={stockStatus.variant}>
                                   {stockStatus.text}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end space-x-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleAdjustStock(product)}
-                                    data-testid={`button-adjust-stock-${product.id}`}
-                                    title="Tambah Stock"
-                                  >
-                                    <PackagePlus className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleEditProduct(product)}
-                                    data-testid={`button-edit-product-${product.id}`}
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDeleteProduct(product.id)}
-                                    data-testid={`button-delete-product-${product.id}`}
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
                             </TableRow>
                           );
                         })}
@@ -509,126 +283,124 @@ export default function Inventory() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="categories" className="space-y-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Categories ({categories.length})</CardTitle>
-                  <Button onClick={() => setShowCategoryDialog(true)} data-testid="button-add-category">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Tambah Kategori
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {categoriesLoading ? (
-                    <div className="space-y-3">
-                      {[...Array(3)].map((_, i) => (
-                        <div key={i} className="h-12 bg-muted rounded animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Name</TableHead>
-                          <TableHead>Description</TableHead>
-                          <TableHead className="text-right">Products</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {categories.map((category: Category) => {
-                          const productCount = products.filter((p: Product) => p.categoryId === category.id).length;
-                          
-                          return (
-                            <TableRow key={category.id}>
-                              <TableCell className="font-medium" data-testid={`category-name-${category.id}`}>
-                                {category.name}
-                              </TableCell>
-                              <TableCell data-testid={`category-description-${category.id}`}>
-                                {category.description || "-"}
-                              </TableCell>
-                              <TableCell className="text-right" data-testid={`category-product-count-${category.id}`}>
-                                {productCount}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end space-x-2">
-                                  <Button variant="outline" size="sm" data-testid={`button-edit-category-${category.id}`}>
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                  <Button variant="outline" size="sm" data-testid={`button-delete-category-${category.id}`}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="stock" className="space-y-6">
+            {/* Stock Movements Tab */}
+            <TabsContent value="movements" className="space-y-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
-                    <AlertTriangle className="w-5 h-5 text-destructive mr-2" />
-                    Low Stock Alerts
+                    <History className="w-5 h-5 mr-2" />
+                    Stock Movement History
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Date</TableHead>
                         <TableHead>Product</TableHead>
-                        <TableHead className="text-right">Current Stock</TableHead>
-                        <TableHead className="text-right">Min Stock</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead className="text-right">Quantity</TableHead>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Notes</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {products
-                        .filter((product: Product) => product.stock <= (product.minStock || 5))
-                        .map((product: Product) => {
-                          const stockStatus = getStockStatus(product);
-                          
-                          return (
-                            <TableRow key={product.id}>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium">{product.name}</p>
-                                  <p className="text-sm text-muted-foreground">
-                                    SKU: {product.sku || "N/A"}
-                                  </p>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <span 
-                                  className={stockStatus.variant === 'destructive' ? 'text-destructive font-medium' : 'text-secondary font-medium'}
-                                  data-testid={`low-stock-current-${product.id}`}
-                                >
-                                  {product.stock}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right" data-testid={`low-stock-min-${product.id}`}>
-                                {product.minStock}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={stockStatus.variant}>
-                                  {stockStatus.text}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button size="sm" data-testid={`button-reorder-${product.id}`}>
-                                  Reorder Stock
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
+                      {stockMovements.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No stock movements recorded yet
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        stockMovements.slice(0, 20).map((movement: any) => (
+                          <TableRow key={movement.id}>
+                            <TableCell className="text-sm">
+                              {new Date(movement.createdAt).toLocaleDateString('id-ID')}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {movement.productName || movement.productId}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={movement.movementType === 'in' ? 'default' : 'secondary'}>
+                                {movement.movementType === 'in' ? 'IN' : 'OUT'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {movement.movementType === 'in' ? '+' : '-'}{movement.quantity}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {movement.referenceType === 'purchase' ? 'Purchase Order' : movement.referenceType}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {movement.notes}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Incoming Stock Tab */}
+            <TabsContent value="incoming" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Package className="w-5 h-5 mr-2 text-blue-600" />
+                    Incoming Stock from Purchase Orders
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PO Number</TableHead>
+                        <TableHead>Supplier</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Items</TableHead>
+                        <TableHead className="text-right">Total Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {incomingStock.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No incoming stock from purchase orders
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        incomingStock.map((po: any) => (
+                          <TableRow key={po.id}>
+                            <TableCell className="font-medium">
+                              {po.poNumber}
+                            </TableCell>
+                            <TableCell>
+                              {po.supplierName || po.supplierId}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {new Date(po.orderDate).toLocaleDateString('id-ID')}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={
+                                po.status === 'confirmed' ? 'default' : 
+                                po.status === 'partial_received' ? 'secondary' : 'outline'
+                              }>
+                                {po.status === 'confirmed' ? 'Ready to Receive' :
+                                 po.status === 'partial_received' ? 'Partially Received' : po.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {po.itemCount || 0} items
+                            </TableCell>
+                            <TableCell className="text-right">
+                              Rp {Number(po.totalAmount || 0).toLocaleString('id-ID')}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -637,320 +409,6 @@ export default function Inventory() {
           </Tabs>
         </main>
       </div>
-
-      {/* Product Dialog */}
-      <Dialog open={showProductDialog} onOpenChange={setShowProductDialog}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingProduct ? "Edit Product" : "Add New Product"}
-            </DialogTitle>
-          </DialogHeader>
-          <Form {...productForm}>
-            <form onSubmit={productForm.handleSubmit(handleProductSubmit)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={productForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Product Name *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter product name" {...field} data-testid="input-product-name" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={productForm.control}
-                  name="categoryId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-product-category">
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((category: Category) => (
-                            <SelectItem key={category.id} value={category.id}>
-                              {category.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              
-              <FormField
-                control={productForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Product description" {...field} data-testid="textarea-product-description" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Auto-generated:</strong> SKU dan Barcode akan dibuat otomatis saat produk disimpan
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={productForm.control}
-                  name="purchasePrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Purchase Price *</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0" {...field} data-testid="input-purchase-price" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={productForm.control}
-                  name="sellingPrice"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Selling Price *</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0" {...field} data-testid="input-selling-price" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={productForm.control}
-                  name="stock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Current Stock</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="0" {...field} data-testid="input-current-stock" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={productForm.control}
-                  name="minStock"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Minimum Stock</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="5" {...field} data-testid="input-min-stock" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-6">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowProductDialog(false)}
-                  data-testid="button-cancel-product"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createProductMutation.isPending || updateProductMutation.isPending}
-                  data-testid="button-save-product"
-                >
-                  {editingProduct ? "Update Product" : "Create Product"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Stock Adjustment Dialog */}
-      <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Tambah Stock - {adjustingProduct?.name}
-            </DialogTitle>
-          </DialogHeader>
-          <Form {...stockForm}>
-            <form onSubmit={stockForm.handleSubmit(handleStockSubmit)} className="space-y-4">
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="font-medium">Current Stock:</p>
-                    <p className="text-2xl font-bold text-blue-600">{adjustingProduct?.stock || 0}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Minimum Stock:</p>
-                    <p className="text-lg">{adjustingProduct?.minStock || 5}</p>
-                  </div>
-                </div>
-              </div>
-
-              <FormField
-                control={stockForm.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Quantity to Add *</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="Masukkan jumlah yang akan ditambah" 
-                        {...field} 
-                        data-testid="input-stock-quantity" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={stockForm.control}
-                name="purchasePrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Harga Pembelian Baru (Opsional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        step="0.01"
-                        placeholder="Masukkan harga pembelian untuk HPP rata-rata" 
-                        {...field} 
-                        data-testid="input-purchase-price" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                    <p className="text-xs text-muted-foreground">
-                      Kosongkan jika ingin menggunakan harga lama: Rp {Number(adjustingProduct?.purchasePrice || 0).toLocaleString('id-ID')}
-                    </p>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={stockForm.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes *</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Keterangan penambahan stock..." 
-                        {...field} 
-                        data-testid="input-stock-notes" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end space-x-3 pt-6">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowStockDialog(false)}
-                  data-testid="button-cancel-stock"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={adjustStockMutation.isPending}
-                  data-testid="button-save-stock"
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {adjustStockMutation.isPending ? "Adding..." : "Add Stock"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Category Dialog */}
-      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add New Category</DialogTitle>
-          </DialogHeader>
-          <Form {...categoryForm}>
-            <form onSubmit={categoryForm.handleSubmit(handleCategorySubmit)} className="space-y-4">
-              <FormField
-                control={categoryForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter category name" {...field} data-testid="input-category-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={categoryForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Category description" {...field} data-testid="textarea-category-description" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="flex justify-end space-x-3 pt-6">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={() => setShowCategoryDialog(false)}
-                  data-testid="button-cancel-category"
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="submit" 
-                  disabled={createCategoryMutation.isPending}
-                  data-testid="button-save-category"
-                >
-                  Create Category
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
