@@ -90,7 +90,7 @@ export default function PurchasingPage() {
 
   // Mutations
   const createPOMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/purchase-orders", { method: "POST", body: data }),
+    mutationFn: (data: any) => apiRequest("POST", "/api/purchase-orders", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
       setIsAddPOOpen(false);
@@ -103,7 +103,7 @@ export default function PurchasingPage() {
   });
 
   const approvePOMutation = useMutation({
-    mutationFn: (id: string) => apiRequest(`/api/purchase-orders/${id}/approve`, { method: "POST" }),
+    mutationFn: (id: string) => apiRequest("POST", `/api/purchase-orders/${id}/approve`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
       toast({ title: "Purchase order berhasil disetujui" });
@@ -114,7 +114,7 @@ export default function PurchasingPage() {
   });
 
   const addItemMutation = useMutation({
-    mutationFn: (data: any) => apiRequest(`/api/purchase-orders/${selectedPO?.id}/items`, { method: "POST", body: data }),
+    mutationFn: (data: any) => apiRequest("POST", `/api/purchase-orders/${selectedPO?.id}/items`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders", selectedPO?.id, "items"] });
       setIsAddItemOpen(false);
