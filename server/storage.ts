@@ -58,7 +58,7 @@ import {
   type InsertFinancialRecord,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -327,6 +327,11 @@ export class DatabaseStorage implements IStorage {
     return product;
   }
 
+  async getProductBySku(sku: string): Promise<Product | undefined> {
+    const [product] = await db.select().from(products).where(eq(products.sku, sku));
+    return product;
+  }
+
   async getProductByBarcode(barcode: string): Promise<Product | undefined> {
     const [product] = await db.select().from(products).where(eq(products.barcode, barcode));
     return product;
@@ -352,7 +357,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
+          sql`${products.totalStock} <= ${products.minStock}`
         )
       )
       .orderBy(asc(products.name));
@@ -605,18 +610,18 @@ export class DatabaseStorage implements IStorage {
     const movements = await db
       .select({
         quantity: stockMovements.quantity,
-        purchasePrice: stockMovements.purchasePrice
+        unitCost: stockMovements.unitCost
       })
       .from(stockMovements)
       .where(and(
         eq(stockMovements.productId, productId),
-        eq(stockMovements.type, 'in'),
-        isNotNull(stockMovements.purchasePrice)
+        eq(stockMovements.movementType, 'in'),
+        isNotNull(stockMovements.unitCost)
       ));
 
     if (movements.length === 0) {
       // If no stock movements with price found, fallback to product's purchase price
-      const [product] = await db.select({ purchasePrice: products.purchasePrice })
+      const [product] = await db.select({ purchasePrice: products.lastPurchasePrice })
         .from(products)
         .where(eq(products.id, productId));
       return parseFloat(product?.purchasePrice || '0');
@@ -627,7 +632,7 @@ export class DatabaseStorage implements IStorage {
     let totalQuantity = 0;
     
     for (const movement of movements) {
-      const price = parseFloat(movement.purchasePrice || '0');
+      const price = parseFloat(movement.unitCost || '0');
       const quantity = movement.quantity;
       totalWeightedCost += price * quantity;
       totalQuantity += quantity;
@@ -809,7 +814,7 @@ export class DatabaseStorage implements IStorage {
           await tx
             .update(products)
             .set({ 
-              stock: sql`${products.stock} - ${item.quantity}`,
+              stock: sql`${products.totalStock} - ${item.quantity}`,
               updatedAt: new Date()
             })
             .where(eq(products.id, item.productId));
@@ -923,7 +928,7 @@ export class DatabaseStorage implements IStorage {
             throw new Error(`Product dengan ID ${part.productId} tidak ditemukan`);
           }
           
-          const currentStock = product.stock || 0;
+          const currentStock = product.totalStock || 0;
           if (currentStock < part.quantity) {
             throw new Error(`Stock ${product.name} tidak cukup. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
           }
@@ -1004,7 +1009,7 @@ export class DatabaseStorage implements IStorage {
                   ticket.id,
                   product.name,
                   part.quantity,
-                  product.purchasePrice || '0', // modal price
+                  product.lastPurchasePrice || '0', // modal price
                   part.unitPrice, // selling price
                   ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
                 );
@@ -1068,11 +1073,6 @@ export class DatabaseStorage implements IStorage {
     }
     
     return await query.orderBy(desc(stockMovements.createdAt));
-  }
-
-  async createStockMovement(movementData: InsertStockMovement): Promise<StockMovement> {
-    const [movement] = await db.insert(stockMovements).values(movementData).returning();
-    return movement;
   }
 
   // Financial Records (delegated to FinanceManager but interface still needed)
@@ -1358,7 +1358,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
+          sql`${products.totalStock} <= ${products.minStock}`
         )
       );
 
@@ -1369,10 +1369,10 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
+          sql`${products.totalStock} <= ${products.minStock}`
         )
       )
-      .orderBy(products.stock);
+      .orderBy(products.totalStock);
 
     const [totalResult] = await db
       .select({ count: count() })
@@ -1382,11 +1382,11 @@ export class DatabaseStorage implements IStorage {
     // Calculate total asset value (stock × purchase price)
     const assetValueResult = await db
       .select({
-        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.purchasePrice}, 0))`,
-        totalQuantity: sql<number>`SUM(${products.stock})`
+        totalValue: sql<number>`SUM(${products.totalStock} * COALESCE(${products.lastPurchasePrice}, 0))`,
+        totalQuantity: sql<number>`SUM(${products.totalStock})`
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
+      .where(and(eq(products.isActive, true), gte(products.totalStock, 0)));
 
     const totalAssetValue = Number(assetValueResult[0]?.totalValue || 0);
     const totalStockQuantity = Number(assetValueResult[0]?.totalQuantity || 0);
@@ -1450,7 +1450,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
+          sql`${products.totalStock} <= ${products.minStock}`
         )
       );
     
