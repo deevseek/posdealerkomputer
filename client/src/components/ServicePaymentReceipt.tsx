@@ -124,14 +124,36 @@ export default function ServicePaymentReceipt({
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
+      // Wait a bit to ensure content is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const element = document.getElementById('service-payment-receipt-content');
-      if (!element) return;
+      if (!element) {
+        console.error('Receipt element not found');
+        alert('Error: Receipt element not found. Please try again.');
+        return;
+      }
 
+      // Make sure element is visible
+      element.style.display = 'block';
+      element.style.visibility = 'visible';
+      
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: true,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
       });
+
+      // Check if canvas has content
+      if (canvas.width === 0 || canvas.height === 0) {
+        console.error('Canvas is empty');
+        alert('Error: Failed to capture receipt content. Please try again.');
+        return;
+      }
 
       const imgData = canvas.toDataURL('image/png');
       const pageWidth = paperSizes[paperSize].width;
@@ -150,6 +172,7 @@ export default function ServicePaymentReceipt({
       pdf.save(`Nota-Pembayaran-Service-${serviceTicket.ticketNumber}-${pageWidth}mm.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try again or contact support.');
     } finally {
       setIsGenerating(false);
     }
@@ -321,6 +344,12 @@ export default function ServicePaymentReceipt({
               id="service-payment-receipt-content"
               className={`mx-auto bg-white p-4 ${getReceiptWidth()} ${getTextSize()}`}
               ref={receiptRef}
+              style={{ 
+                minHeight: '400px',
+                display: 'block',
+                visibility: 'visible',
+                position: 'relative'
+              }}
             >
               {/* Header */}
               <div className="text-center space-y-1 mb-4">

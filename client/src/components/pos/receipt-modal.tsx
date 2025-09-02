@@ -62,14 +62,36 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
   const generatePDF = async () => {
     setIsGenerating(true);
     try {
+      // Wait a bit to ensure content is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const element = document.getElementById('purchase-receipt-content');
-      if (!element) return;
+      if (!element) {
+        console.error('Receipt element not found');
+        alert('Error: Receipt element not found. Please try again.');
+        return;
+      }
 
+      // Make sure element is visible
+      element.style.display = 'block';
+      element.style.visibility = 'visible';
+      
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: true,
+        width: element.scrollWidth,
+        height: element.scrollHeight,
       });
+
+      // Check if canvas has content
+      if (canvas.width === 0 || canvas.height === 0) {
+        console.error('Canvas is empty');
+        alert('Error: Failed to capture receipt content. Please try again.');
+        return;
+      }
 
       const imgData = canvas.toDataURL('image/png');
       const pageWidth = paperSizes[paperSize].width;
@@ -88,6 +110,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
       pdf.save(`Nota-Pembayaran-POS-${transaction.transactionNumber || transaction.id}-${pageWidth}mm.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try again or contact support.');
     } finally {
       setIsGenerating(false);
     }
@@ -271,7 +294,16 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
           {/* Preview Receipt */}
           <div className="flex justify-center">
             <div className={`${getReceiptWidth()} mx-auto bg-white border rounded-lg overflow-hidden shadow-lg`}>
-              <div className="p-4 font-mono" id="purchase-receipt-content">
+              <div 
+                className="p-4 font-mono" 
+                id="purchase-receipt-content"
+                style={{
+                  minHeight: '300px',
+                  display: 'block',
+                  visibility: 'visible',
+                  position: 'relative'
+                }}
+              >
                 {/* Store Header */}
                 <div className={`text-center ${getTextSize()} space-y-1`}>
                   <h3 className="font-bold" data-testid="text-store-name">
