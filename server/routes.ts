@@ -575,18 +575,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/products', isAuthenticated, async (req, res) => {
     try {
       const { search } = req.query;
-      let products;
-      
-      if (search) {
-        products = await storage.searchProducts(search as string);
-      } else {
-        products = await storage.getProducts();
-      }
-      
+      const products = await storage.getProducts(search as string);
       res.json(products);
     } catch (error) {
       console.error("Error fetching products:", error);
       res.status(500).json({ message: "Failed to fetch products" });
+    }
+  });
+
+  app.get('/api/products/:id', isAuthenticated, async (req, res) => {
+    try {
+      const product = await storage.getProductById(req.params.id);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      res.json(product);
+    } catch (error) {
+      console.error("Error fetching product:", error);
+      res.status(500).json({ message: "Failed to fetch product" });
     }
   });
 
@@ -650,21 +656,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/products/:id/adjust-stock', isAuthenticated, async (req: any, res) => {
+  // Location routes
+  app.get('/api/locations', isAuthenticated, async (req, res) => {
     try {
-      const { quantity, notes, purchasePrice } = req.body;
-      
-      if (!quantity || quantity <= 0) {
-        return res.status(400).json({ message: 'Quantity must be greater than 0' });
-      }
-
-      const userId = req.session.user.id;
-      const updatedProduct = await storage.adjustStock(req.params.id, Number(quantity), notes, userId, purchasePrice);
-      
-      res.json(updatedProduct);
+      const locations = await storage.getLocations();
+      res.json(locations);
     } catch (error) {
-      console.error("Error adjusting stock:", error);
-      res.status(500).json({ message: "Failed to adjust stock" });
+      console.error("Error fetching locations:", error);
+      res.status(500).json({ message: "Failed to fetch locations" });
+    }
+  });
+
+  app.post('/api/locations', isAuthenticated, async (req, res) => {
+    try {
+      const locationData = req.body; // Create proper schema later
+      const location = await storage.createLocation(locationData);
+      res.json(location);
+    } catch (error) {
+      console.error("Error creating location:", error);
+      res.status(500).json({ message: "Failed to create location" });
+    }
+  });
+
+  // Purchase Order routes
+  app.get('/api/purchase-orders', isAuthenticated, async (req, res) => {
+    try {
+      const orders = await storage.getPurchaseOrders();
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching purchase orders:", error);
+      res.status(500).json({ message: "Failed to fetch purchase orders" });
+    }
+  });
+
+  app.get('/api/purchase-orders/:id', isAuthenticated, async (req, res) => {
+    try {
+      const order = await storage.getPurchaseOrderById(req.params.id);
+      if (!order) {
+        return res.status(404).json({ message: "Purchase order not found" });
+      }
+      res.json(order);
+    } catch (error) {
+      console.error("Error fetching purchase order:", error);
+      res.status(500).json({ message: "Failed to fetch purchase order" });
+    }
+  });
+
+  app.post('/api/purchase-orders', isAuthenticated, async (req: any, res) => {
+    try {
+      const orderData = {
+        ...req.body,
+        requestedBy: req.session.user.id
+      };
+      const order = await storage.createPurchaseOrder(orderData);
+      res.json(order);
+    } catch (error) {
+      console.error("Error creating purchase order:", error);
+      res.status(500).json({ message: "Failed to create purchase order" });
+    }
+  });
+
+  app.post('/api/purchase-orders/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const order = await storage.approvePurchaseOrder(req.params.id, req.session.user.id);
+      res.json(order);
+    } catch (error) {
+      console.error("Error approving purchase order:", error);
+      res.status(500).json({ message: "Failed to approve purchase order" });
+    }
+  });
+
+  // Purchase Order Items routes
+  app.get('/api/purchase-orders/:id/items', isAuthenticated, async (req, res) => {
+    try {
+      const items = await storage.getPurchaseOrderItems(req.params.id);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching purchase order items:", error);
+      res.status(500).json({ message: "Failed to fetch purchase order items" });
+    }
+  });
+
+  app.post('/api/purchase-orders/:id/items', isAuthenticated, async (req, res) => {
+    try {
+      const itemData = {
+        ...req.body,
+        purchaseOrderId: req.params.id
+      };
+      const item = await storage.createPurchaseOrderItem(itemData);
+      res.json(item);
+    } catch (error) {
+      console.error("Error creating purchase order item:", error);
+      res.status(500).json({ message: "Failed to create purchase order item" });
+    }
+  });
+
+  // Product Batch routes
+  app.get('/api/product-batches', isAuthenticated, async (req, res) => {
+    try {
+      const { productId } = req.query;
+      const batches = await storage.getProductBatches(productId as string);
+      res.json(batches);
+    } catch (error) {
+      console.error("Error fetching product batches:", error);
+      res.status(500).json({ message: "Failed to fetch product batches" });
+    }
+  });
+
+  app.post('/api/product-batches', isAuthenticated, async (req, res) => {
+    try {
+      const batch = await storage.createProductBatch(req.body);
+      res.json(batch);
+    } catch (error) {
+      console.error("Error creating product batch:", error);
+      res.status(500).json({ message: "Failed to create product batch" });
+    }
+  });
+
+  // Inventory Adjustment routes
+  app.get('/api/inventory-adjustments', isAuthenticated, async (req, res) => {
+    try {
+      const adjustments = await storage.getInventoryAdjustments();
+      res.json(adjustments);
+    } catch (error) {
+      console.error("Error fetching inventory adjustments:", error);
+      res.status(500).json({ message: "Failed to fetch inventory adjustments" });
+    }
+  });
+
+  app.post('/api/inventory-adjustments', isAuthenticated, async (req: any, res) => {
+    try {
+      const adjustmentData = {
+        ...req.body,
+        createdBy: req.session.user.id
+      };
+      const adjustment = await storage.createInventoryAdjustment(adjustmentData);
+      res.json(adjustment);
+    } catch (error) {
+      console.error("Error creating inventory adjustment:", error);
+      res.status(500).json({ message: "Failed to create inventory adjustment" });
+    }
+  });
+
+  app.post('/api/inventory-adjustments/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const adjustment = await storage.approveInventoryAdjustment(req.params.id, req.session.user.id);
+      res.json(adjustment);
+    } catch (error) {
+      console.error("Error approving inventory adjustment:", error);
+      res.status(500).json({ message: "Failed to approve inventory adjustment" });
     }
   });
 

@@ -1,0 +1,597 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, ShoppingCart, Package, Truck, CheckCircle, Clock, AlertCircle, Eye, Edit, Trash2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { z } from "zod";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+// Schema for forms
+const purchaseOrderSchema = z.object({
+  supplierId: z.string().min(1, "Supplier wajib dipilih"),
+  expectedDeliveryDate: z.string().min(1, "Tanggal pengiriman wajib diisi"),
+  notes: z.string().optional(),
+});
+
+const purchaseOrderItemSchema = z.object({
+  productId: z.string().min(1, "Produk wajib dipilih"),
+  quantity: z.number().min(1, "Kuantitas minimal 1"),
+  unitCost: z.string().min(1, "Harga satuan wajib diisi"),
+  notes: z.string().optional(),
+});
+
+export default function PurchasingPage() {
+  const [selectedTab, setSelectedTab] = useState("orders");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPO, setSelectedPO] = useState<any>(null);
+  const [isAddPOOpen, setIsAddPOOpen] = useState(false);
+  const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [viewPOOpen, setViewPOOpen] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  // Forms
+  const poForm = useForm({
+    resolver: zodResolver(purchaseOrderSchema),
+    defaultValues: {
+      supplierId: "",
+      expectedDeliveryDate: "",
+      notes: "",
+    },
+  });
+
+  const itemForm = useForm({
+    resolver: zodResolver(purchaseOrderItemSchema),
+    defaultValues: {
+      productId: "",
+      quantity: 1,
+      unitCost: "",
+      notes: "",
+    },
+  });
+
+  // Queries
+  const { data: purchaseOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: ["/api/purchase-orders"],
+    enabled: selectedTab === "orders",
+  });
+
+  const { data: suppliers } = useQuery({
+    queryKey: ["/api/suppliers"],
+  });
+
+  const { data: products } = useQuery({
+    queryKey: ["/api/products"],
+  });
+
+  const { data: selectedPOItems } = useQuery({
+    queryKey: ["/api/purchase-orders", selectedPO?.id, "items"],
+    enabled: !!selectedPO?.id,
+  });
+
+  // Mutations
+  const createPOMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("/api/purchase-orders", { method: "POST", body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      setIsAddPOOpen(false);
+      poForm.reset();
+      toast({ title: "Purchase order berhasil dibuat" });
+    },
+    onError: (error) => {
+      toast({ title: "Gagal membuat purchase order", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approvePOMutation = useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/purchase-orders/${id}/approve`, { method: "POST" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      toast({ title: "Purchase order berhasil disetujui" });
+    },
+    onError: (error) => {
+      toast({ title: "Gagal menyetujui purchase order", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addItemMutation = useMutation({
+    mutationFn: (data: any) => apiRequest(`/api/purchase-orders/${selectedPO?.id}/items`, { method: "POST", body: data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders", selectedPO?.id, "items"] });
+      setIsAddItemOpen(false);
+      itemForm.reset();
+      toast({ title: "Item berhasil ditambahkan" });
+    },
+    onError: (error) => {
+      toast({ title: "Gagal menambahkan item", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const onSubmitPO = (data: any) => {
+    createPOMutation.mutate(data);
+  };
+
+  const onSubmitItem = (data: any) => {
+    addItemMutation.mutate({
+      ...data,
+      unitCost: parseFloat(data.unitCost),
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "draft":
+        return <Badge variant="secondary" data-testid={`badge-status-draft`}>Draft</Badge>;
+      case "pending":
+        return <Badge variant="outline" data-testid={`badge-status-pending`}>Pending</Badge>;
+      case "confirmed":
+        return <Badge variant="default" data-testid={`badge-status-confirmed`}>Confirmed</Badge>;
+      case "delivered":
+        return <Badge variant="default" className="bg-green-500" data-testid={`badge-status-delivered`}>Delivered</Badge>;
+      case "cancelled":
+        return <Badge variant="destructive" data-testid={`badge-status-cancelled`}>Cancelled</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const filteredOrders = purchaseOrders?.filter((order: any) =>
+    order.poNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    order.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="container mx-auto p-6 space-y-6" data-testid="purchasing-page">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Purchasing Management</h1>
+          <p className="text-muted-foreground">Kelola purchase order, supplier, dan penerimaan barang</p>
+        </div>
+        <div className="flex gap-2">
+          <Dialog open={isAddPOOpen} onOpenChange={setIsAddPOOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-po">
+                <Plus className="h-4 w-4 mr-2" />
+                Buat Purchase Order
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Buat Purchase Order Baru</DialogTitle>
+              </DialogHeader>
+              <Form {...poForm}>
+                <form onSubmit={poForm.handleSubmit(onSubmitPO)} className="space-y-4">
+                  <FormField
+                    control={poForm.control}
+                    name="supplierId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Supplier</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-supplier">
+                              <SelectValue placeholder="Pilih supplier" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {suppliers?.map((supplier: any) => (
+                              <SelectItem key={supplier.id} value={supplier.id}>
+                                {supplier.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={poForm.control}
+                    name="expectedDeliveryDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tanggal Pengiriman Diharapkan</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} data-testid="input-delivery-date" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={poForm.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Catatan</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Catatan tambahan" {...field} data-testid="input-po-notes" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" disabled={createPOMutation.isPending} data-testid="button-save-po">
+                      {createPOMutation.isPending ? "Menyimpan..." : "Buat Purchase Order"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsAddPOOpen(false)}>
+                      Batal
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="orders" className="flex items-center gap-2" data-testid="tab-orders">
+            <ShoppingCart className="h-4 w-4" />
+            Purchase Orders
+          </TabsTrigger>
+          <TabsTrigger value="receiving" className="flex items-center gap-2" data-testid="tab-receiving">
+            <Truck className="h-4 w-4" />
+            Receiving
+          </TabsTrigger>
+          <TabsTrigger value="suppliers" className="flex items-center gap-2" data-testid="tab-suppliers">
+            <Package className="h-4 w-4" />
+            Suppliers
+          </TabsTrigger>
+          <TabsTrigger value="reports" className="flex items-center gap-2" data-testid="tab-reports">
+            <Eye className="h-4 w-4" />
+            Reports
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="orders" className="space-y-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+            <div className="flex-1">
+              <Input
+                placeholder="Cari purchase order berdasarkan nomor PO atau catatan..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-lg"
+                data-testid="input-search-po"
+              />
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Purchase Orders</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {ordersLoading ? (
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-200 rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>PO Number</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Tanggal Order</TableHead>
+                      <TableHead>Expected Delivery</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOrders?.map((order: any) => (
+                      <TableRow key={order.id} data-testid={`row-po-${order.id}`}>
+                        <TableCell className="font-medium" data-testid={`text-po-number-${order.id}`}>
+                          {order.poNumber}
+                        </TableCell>
+                        <TableCell>{order.supplierId}</TableCell>
+                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{getStatusBadge(order.status)}</TableCell>
+                        <TableCell>Rp {Number(order.totalAmount || 0).toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedPO(order);
+                                setViewPOOpen(true);
+                              }}
+                              data-testid={`button-view-po-${order.id}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            {order.status === "pending" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => approvePOMutation.mutate(order.id)}
+                                data-testid={`button-approve-po-${order.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              data-testid={`button-edit-po-${order.id}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="receiving" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Goods Receiving</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8">
+                <Truck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Goods Receiving</h3>
+                <p className="text-muted-foreground">Fitur penerimaan barang akan segera hadir</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="suppliers" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Supplier Management</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8">
+                <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Supplier Management</h3>
+                <p className="text-muted-foreground">Fitur manajemen supplier akan segera hadir</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reports" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total PO</CardTitle>
+                <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="stat-total-po">{purchaseOrders?.length || 0}</div>
+                <p className="text-xs text-muted-foreground">Purchase orders</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending PO</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600" data-testid="stat-pending-po">
+                  {purchaseOrders?.filter((po: any) => po.status === "pending").length || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Menunggu persetujuan</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Confirmed PO</CardTitle>
+                <CheckCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-confirmed-po">
+                  {purchaseOrders?.filter((po: any) => po.status === "confirmed").length || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Sudah dikonfirmasi</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Nilai PO</CardTitle>
+                <Package className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="stat-total-po-value">
+                  Rp {purchaseOrders?.reduce((sum: number, po: any) => sum + Number(po.totalAmount || 0), 0).toLocaleString() || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Nilai total PO bulan ini</p>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* View PO Dialog */}
+      <Dialog open={viewPOOpen} onOpenChange={setViewPOOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Purchase Order Detail - {selectedPO?.poNumber}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Supplier</Label>
+                <p className="text-sm font-medium">{selectedPO?.supplierId}</p>
+              </div>
+              <div>
+                <Label>Status</Label>
+                <div className="mt-1">{selectedPO && getStatusBadge(selectedPO.status)}</div>
+              </div>
+              <div>
+                <Label>Tanggal Order</Label>
+                <p className="text-sm">{selectedPO && new Date(selectedPO.orderDate).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <Label>Expected Delivery</Label>
+                <p className="text-sm">{selectedPO && new Date(selectedPO.expectedDeliveryDate).toLocaleDateString()}</p>
+              </div>
+            </div>
+            
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Items</h3>
+                <Dialog open={isAddItemOpen} onOpenChange={setIsAddItemOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" data-testid="button-add-item">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Tambah Item
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Tambah Item ke PO</DialogTitle>
+                    </DialogHeader>
+                    <Form {...itemForm}>
+                      <form onSubmit={itemForm.handleSubmit(onSubmitItem)} className="space-y-4">
+                        <FormField
+                          control={itemForm.control}
+                          name="productId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Produk</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-product">
+                                    <SelectValue placeholder="Pilih produk" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {products?.map((product: any) => (
+                                    <SelectItem key={product.id} value={product.id}>
+                                      {product.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={itemForm.control}
+                            name="quantity"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Kuantitas</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    type="number" 
+                                    {...field} 
+                                    onChange={(e) => field.onChange(Number(e.target.value))}
+                                    data-testid="input-quantity"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={itemForm.control}
+                            name="unitCost"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Harga Satuan</FormLabel>
+                                <FormControl>
+                                  <Input type="number" placeholder="0" {...field} data-testid="input-unit-cost" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        <FormField
+                          control={itemForm.control}
+                          name="notes"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Catatan</FormLabel>
+                              <FormControl>
+                                <Textarea placeholder="Catatan item" {...field} data-testid="input-item-notes" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className="flex gap-2 pt-4">
+                          <Button type="submit" disabled={addItemMutation.isPending} data-testid="button-save-item">
+                            {addItemMutation.isPending ? "Menyimpan..." : "Tambah Item"}
+                          </Button>
+                          <Button type="button" variant="outline" onClick={() => setIsAddItemOpen(false)}>
+                            Batal
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produk</TableHead>
+                    <TableHead>Kuantitas</TableHead>
+                    <TableHead>Harga Satuan</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selectedPOItems?.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell>{item.productId}</TableCell>
+                      <TableCell>{item.quantity}</TableCell>
+                      <TableCell>Rp {Number(item.unitCost).toLocaleString()}</TableCell>
+                      <TableCell>Rp {(item.quantity * Number(item.unitCost)).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

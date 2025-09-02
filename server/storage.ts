@@ -376,38 +376,221 @@ export class DatabaseStorage implements IStorage {
     await db.update(products).set({ isActive: false }).where(eq(products.id, id));
   }
 
-  async adjustStock(productId: string, quantity: number, notes: string, userId: string, purchasePrice?: string): Promise<Product> {
+  // Locations
+  async getLocations(): Promise<Location[]> {
+    return await db.select().from(locations).where(eq(locations.isActive, true)).orderBy(asc(locations.name));
+  }
+
+  async getLocationById(id: string): Promise<Location | undefined> {
+    const [location] = await db.select().from(locations).where(eq(locations.id, id));
+    return location;
+  }
+
+  async createLocation(locationData: InsertLocation): Promise<Location> {
+    const [location] = await db.insert(locations).values(locationData).returning();
+    return location;
+  }
+
+  async updateLocation(id: string, locationData: Partial<InsertLocation>): Promise<Location> {
+    const [location] = await db
+      .update(locations)
+      .set(locationData)
+      .where(eq(locations.id, id))
+      .returning();
+    return location;
+  }
+
+  async deleteLocation(id: string): Promise<void> {
+    await db.update(locations).set({ isActive: false }).where(eq(locations.id, id));
+  }
+
+  // Product Batches
+  async getProductBatches(productId?: string): Promise<ProductBatch[]> {
+    if (productId) {
+      return await db.select().from(productBatches).where(eq(productBatches.productId, productId)).orderBy(desc(productBatches.receivedDate));
+    }
+    return await db.select().from(productBatches).orderBy(desc(productBatches.receivedDate));
+  }
+
+  async getProductBatchById(id: string): Promise<ProductBatch | undefined> {
+    const [batch] = await db.select().from(productBatches).where(eq(productBatches.id, id));
+    return batch;
+  }
+
+  async createProductBatch(batchData: InsertProductBatch): Promise<ProductBatch> {
+    const [batch] = await db.insert(productBatches).values(batchData).returning();
+    return batch;
+  }
+
+  async updateProductBatch(id: string, batchData: Partial<InsertProductBatch>): Promise<ProductBatch> {
+    const [batch] = await db
+      .update(productBatches)
+      .set({ ...batchData, updatedAt: new Date() })
+      .where(eq(productBatches.id, id))
+      .returning();
+    return batch;
+  }
+
+  // Purchase Orders
+  async getPurchaseOrders(): Promise<PurchaseOrder[]> {
+    return await db.select().from(purchaseOrders).orderBy(desc(purchaseOrders.orderDate));
+  }
+
+  async getPurchaseOrderById(id: string): Promise<PurchaseOrder | undefined> {
+    const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.id, id));
+    return po;
+  }
+
+  async createPurchaseOrder(poData: InsertPurchaseOrder): Promise<PurchaseOrder> {
+    // Generate PO number
+    const count = await db.select({ count: count() }).from(purchaseOrders);
+    const poNumber = `PO-${String(count[0].count + 1).padStart(5, '0')}`;
+    
+    const [po] = await db.insert(purchaseOrders).values({
+      ...poData,
+      poNumber,
+    }).returning();
+    return po;
+  }
+
+  async updatePurchaseOrder(id: string, poData: Partial<InsertPurchaseOrder>): Promise<PurchaseOrder> {
+    const [po] = await db
+      .update(purchaseOrders)
+      .set({ ...poData, updatedAt: new Date() })
+      .where(eq(purchaseOrders.id, id))
+      .returning();
+    return po;
+  }
+
+  async deletePurchaseOrder(id: string): Promise<void> {
+    await db.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
+  }
+
+  async approvePurchaseOrder(id: string, approvedBy: string): Promise<PurchaseOrder> {
+    const [po] = await db
+      .update(purchaseOrders)
+      .set({ 
+        status: 'confirmed',
+        approvedBy: approvedBy,
+        approvedDate: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(purchaseOrders.id, id))
+      .returning();
+    return po;
+  }
+
+  // Purchase Order Items
+  async getPurchaseOrderItems(poId: string): Promise<PurchaseOrderItem[]> {
+    return await db.select().from(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, poId));
+  }
+
+  async createPurchaseOrderItem(itemData: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
+    const [item] = await db.insert(purchaseOrderItems).values(itemData).returning();
+    return item;
+  }
+
+  async updatePurchaseOrderItem(id: string, itemData: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem> {
+    const [item] = await db
+      .update(purchaseOrderItems)
+      .set(itemData)
+      .where(eq(purchaseOrderItems.id, id))
+      .returning();
+    return item;
+  }
+
+  async deletePurchaseOrderItem(id: string): Promise<void> {
+    await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, id));
+  }
+
+  // Inventory Adjustments
+  async getInventoryAdjustments(): Promise<InventoryAdjustment[]> {
+    return await db.select().from(inventoryAdjustments).orderBy(desc(inventoryAdjustments.createdAt));
+  }
+
+  async getInventoryAdjustmentById(id: string): Promise<InventoryAdjustment | undefined> {
+    const [adjustment] = await db.select().from(inventoryAdjustments).where(eq(inventoryAdjustments.id, id));
+    return adjustment;
+  }
+
+  async createInventoryAdjustment(adjustmentData: InsertInventoryAdjustment): Promise<InventoryAdjustment> {
+    // Generate adjustment number
+    const count = await db.select({ count: count() }).from(inventoryAdjustments);
+    const adjustmentNumber = `ADJ-${String(count[0].count + 1).padStart(5, '0')}`;
+    
+    const [adjustment] = await db.insert(inventoryAdjustments).values({
+      ...adjustmentData,
+      adjustmentNumber,
+    }).returning();
+    return adjustment;
+  }
+
+  async approveInventoryAdjustment(id: string, approvedBy: string): Promise<InventoryAdjustment> {
     return await db.transaction(async (tx) => {
-      // Get current product
-      const [product] = await tx.select().from(products).where(eq(products.id, productId));
-      if (!product) {
-        throw new Error('Product not found');
+      // Get adjustment and items
+      const [adjustment] = await tx.select().from(inventoryAdjustments).where(eq(inventoryAdjustments.id, id));
+      if (!adjustment) {
+        throw new Error('Adjustment not found');
       }
 
-      // Update stock
-      const [updatedProduct] = await tx
-        .update(products)
+      const items = await tx.select().from(inventoryAdjustmentItems).where(eq(inventoryAdjustmentItems.adjustmentId, id));
+
+      // Update product stocks based on adjustment
+      for (const item of items) {
+        await tx
+          .update(products)
+          .set({ 
+            totalStock: sql`${products.totalStock} + ${item.adjustmentQuantity}`,
+            availableStock: sql`${products.availableStock} + ${item.adjustmentQuantity}`,
+            updatedAt: new Date()
+          })
+          .where(eq(products.id, item.productId));
+
+        // Create stock movement
+        await tx.insert(stockMovements).values({
+          productId: item.productId,
+          batchId: item.batchId,
+          locationId: item.locationId,
+          movementType: item.adjustmentQuantity > 0 ? 'in' : 'out',
+          quantity: Math.abs(item.adjustmentQuantity),
+          unitCost: item.unitCost,
+          referenceId: id,
+          referenceType: 'adjustment',
+          notes: `Inventory adjustment: ${adjustment.reason}`,
+          userId: approvedBy,
+        });
+      }
+
+      // Update adjustment status
+      const [updatedAdjustment] = await tx
+        .update(inventoryAdjustments)
         .set({ 
-          stock: sql`${products.stock} + ${quantity}`,
+          status: 'approved',
+          approvedBy: approvedBy,
+          approvedDate: new Date(),
           updatedAt: new Date()
         })
-        .where(eq(products.id, productId))
+        .where(eq(inventoryAdjustments.id, id))
         .returning();
 
-      // Create stock movement record
-      await tx.insert(stockMovements).values({
-        productId: productId,
-        type: 'in',
-        quantity: quantity,
-        purchasePrice: purchasePrice || product.purchasePrice, // Use provided price or current product price
-        reference: `STOCK-ADJ-${Date.now()}`,
-        referenceType: 'adjustment',
-        notes: notes || `Penambahan stock +${quantity}`,
-        userId: userId,
-      });
-
-      return updatedProduct;
+      return updatedAdjustment;
     });
+  }
+
+  // Inventory Adjustment Items
+  async getInventoryAdjustmentItems(adjustmentId: string): Promise<InventoryAdjustmentItem[]> {
+    return await db.select().from(inventoryAdjustmentItems).where(eq(inventoryAdjustmentItems.adjustmentId, adjustmentId));
+  }
+
+  async createInventoryAdjustmentItem(itemData: InsertInventoryAdjustmentItem): Promise<InventoryAdjustmentItem> {
+    const [item] = await db.insert(inventoryAdjustmentItems).values(itemData).returning();
+    return item;
+  }
+
+  // Enhanced stock movement with new system
+  async createStockMovement(movementData: InsertStockMovement): Promise<StockMovement> {
+    const [movement] = await db.insert(stockMovements).values(movementData).returning();
+    return movement;
   }
 
   async getAveragePurchasePrice(productId: string): Promise<number> {

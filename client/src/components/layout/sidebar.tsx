@@ -19,7 +19,8 @@ import {
   UserCog,
   Layers,
   LogOut,
-  User
+  User,
+  ShoppingCart
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -31,6 +32,7 @@ const navigation = [
   { name: "POS", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
   { name: "Service", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
   { name: "Inventori", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
+  { name: "Purchasing", href: "/purchasing", icon: ShoppingCart, roles: ["admin", "purchasing", "owner"] },
   { name: "Keuangan & Payroll", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
   { name: "Pelanggan", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
   { name: "Supplier", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
