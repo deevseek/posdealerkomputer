@@ -619,9 +619,9 @@ export class DatabaseStorage implements IStorage {
       userId: 'system', // Should be current user
     });
 
-    // Update product stock
+    // Update product stock (use main stock field for inventory consistency)
     const [product] = await db
-      .select({ currentStock: products.currentStock })
+      .select({ stock: products.stock })
       .from(products)
       .where(eq(products.id, item.productId));
 
@@ -629,7 +629,7 @@ export class DatabaseStorage implements IStorage {
       await db
         .update(products)
         .set({ 
-          currentStock: (product.currentStock || 0) + receivedQuantity,
+          stock: (product.stock || 0) + receivedQuantity,
           updatedAt: new Date()
         })
         .where(eq(products.id, item.productId));
