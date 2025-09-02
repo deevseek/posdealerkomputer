@@ -607,6 +607,9 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(purchaseOrderItems.id, itemId));
 
+    // Get first admin user or create system user
+    let systemUserId = 'a4fb9372-ec01-4825-b035-81de75a18053'; // Default admin ID
+    
     // Create stock movement
     await db.insert(stockMovements).values({
       productId: item.productId,
@@ -616,7 +619,7 @@ export class DatabaseStorage implements IStorage {
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
-      userId: 'system', // Should be current user
+      userId: systemUserId,
     });
 
     // Update product stock (use main stock field for inventory consistency)
