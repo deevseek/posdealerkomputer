@@ -39,9 +39,13 @@ interface ServiceReceiptProps {
     phone: string;
     email: string;
   };
+  technician?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
-export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig }: ServiceReceiptProps) {
+export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig, technician }: ServiceReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [qrCodeDataURL, setQrCodeDataURL] = useState<string>('');
   const [paperFormat, setPaperFormat] = useState<'a4' | 'thermal-58' | 'thermal-80'>('a4');
@@ -108,7 +112,8 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
               <style>
                 @page {
                   size: ${paperFormat === 'a4' ? 'A4' : `${formatStyles.width} auto`};
-                  margin: ${isThermal ? '0' : '10mm'};
+                  margin: ${isThermal ? '0' : '8mm'};
+                  page-break-inside: avoid;
                 }
                 body { 
                   font-family: ${isThermal ? 'monospace' : 'Arial, sans-serif'}; 
@@ -117,9 +122,13 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   font-size: ${formatStyles.fontSize};
                   line-height: ${formatStyles.lineHeight};
                   ${isThermal ? 'width: ' + formatStyles.width + '; box-sizing: border-box;' : ''}
+                  page-break-inside: avoid;
+                  overflow: hidden;
                 }
                 .receipt { 
-                  ${isThermal ? 'width: 100%;' : 'max-width: 600px; margin: 0 auto;'}
+                  ${isThermal ? 'width: 100%;' : 'max-width: 580px; margin: 0 auto;'}
+                  page-break-inside: avoid;
+                  overflow: hidden;
                 }
                 .header { text-align: center; margin-bottom: ${isThermal ? '8px' : '20px'}; }
                 .header h1 { margin: 0; font-size: ${isThermal ? '14px' : '24px'}; font-weight: bold; }
@@ -150,8 +159,19 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                 .border-b { border-bottom: ${isThermal ? '1px dashed #000' : '2px solid #000'}; }
                 .border-t { border-top: 1px solid #000; }
                 @media print {
-                  body { print-color-adjust: exact; }
+                  body { 
+                    print-color-adjust: exact; 
+                    height: auto !important;
+                    overflow: visible !important;
+                  }
                   .no-print { display: none; }
+                  .receipt {
+                    page-break-inside: avoid;
+                    height: auto !important;
+                  }
+                  * {
+                    page-break-inside: avoid;
+                  }
                 }
               </style>
             </head>
@@ -349,7 +369,7 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
             <div className="signature-box">
               <div className={`label ${isThermal ? 'mb-8 text-xs' : 'mb-12'}`}>Teknisi</div>
               <div className="border-t border-black">
-                <div className={`mt-1 text-center ${isThermal ? 'text-xs' : ''}`}>({storeConfig.name})</div>
+                <div className={`mt-1 text-center ${isThermal ? 'text-xs' : ''}`}>({technician?.name || 'Teknisi'})</div>
               </div>
             </div>
           </div>

@@ -155,6 +155,11 @@ export default function ServiceTickets() {
     retry: false,
   });
 
+  const { data: users = [] } = useQuery({
+    queryKey: ["/api/users"],
+    retry: false,
+  });
+
   const form = useForm({
     resolver: zodResolver(serviceTicketFormSchema),
     defaultValues: {
@@ -951,6 +956,7 @@ export default function ServiceTickets() {
                 phone: '0123456789',
                 email: 'info@laptoppos.com'
               }}
+              technician={receiptData.technicianId ? users.find((u: any) => u.id === receiptData.technicianId) : null}
             />
           )}
         </DialogContent>
