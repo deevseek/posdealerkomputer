@@ -167,6 +167,36 @@ export default function Settings() {
                     data-testid="input-email"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="taxRate">PPN / Tax Rate (%)</Label>
+                    <Input
+                      id="taxRate"
+                      name="taxRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      defaultValue={(storeConfig as any)?.taxRate || "11.00"}
+                      placeholder="11.00"
+                      data-testid="input-tax-rate"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="defaultDiscount">Diskon Default (%)</Label>
+                    <Input
+                      id="defaultDiscount"
+                      name="defaultDiscount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      defaultValue={(storeConfig as any)?.defaultDiscount || "0.00"}
+                      placeholder="0.00"
+                      data-testid="input-default-discount"
+                    />
+                  </div>
+                </div>
                 <Button 
                   type="submit" 
                   disabled={updateStoreMutation.isPending}

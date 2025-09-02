@@ -159,7 +159,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
-  const tax = subtotal * 0.11;
+  const taxRate = Number((storeConfig as any)?.taxRate || 11) / 100;
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
   const handleProcessTransaction = () => {
@@ -431,7 +432,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                   <span data-testid="text-subtotal">Rp {subtotal.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Tax (11%):</span>
+                  <span>Tax ({((storeConfig as any)?.taxRate || 11)}%):</span>
                   <span data-testid="text-tax">Rp {tax.toLocaleString('id-ID')}</span>
                 </div>
                 <div className="flex justify-between font-semibold border-t pt-2">
