@@ -830,13 +830,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       
       // Manual validation and transformation
-      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost } = req.body;
+      const { customerId, deviceType, deviceBrand, deviceModel, serialNumber, completeness, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost } = req.body;
       
       const ticketData = {
         customerId: customerId || "",
         deviceType: deviceType || "",
         deviceBrand: deviceBrand || null,
         deviceModel: deviceModel || null,
+        serialNumber: serialNumber || null,
+        completeness: completeness || null,
         problem: problem || "",
         diagnosis: diagnosis || null,
         solution: solution || null,
@@ -892,7 +894,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Raw update body:", JSON.stringify(req.body, null, 2));
       
       // Manual validation and transformation for update
-      const { customerId, deviceType, deviceBrand, deviceModel, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost, parts } = req.body;
+      const { customerId, deviceType, deviceBrand, deviceModel, serialNumber, completeness, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost, parts } = req.body;
       
       const ticketData: any = {};
       
@@ -900,6 +902,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (deviceType !== undefined) ticketData.deviceType = deviceType;
       if (deviceBrand !== undefined) ticketData.deviceBrand = deviceBrand || null;
       if (deviceModel !== undefined) ticketData.deviceModel = deviceModel || null;
+      if (serialNumber !== undefined) ticketData.serialNumber = serialNumber || null;
+      if (completeness !== undefined) ticketData.completeness = completeness || null;
       if (problem !== undefined) ticketData.problem = problem;
       if (diagnosis !== undefined) ticketData.diagnosis = diagnosis || null;
       if (solution !== undefined) ticketData.solution = solution || null;
