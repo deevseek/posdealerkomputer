@@ -31,7 +31,7 @@ export const sessions = pgTable(
 export const userRoleEnum = pgEnum('user_role', ['admin', 'kasir', 'teknisi', 'purchasing', 'finance', 'owner']);
 export const transactionTypeEnum = pgEnum('transaction_type', ['sale', 'service', 'purchase', 'return']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'transfer', 'qris', 'installment']);
-export const serviceStatusEnum = pgEnum('service_status', ['pending', 'in_progress', 'completed', 'delivered', 'cancelled']);
+export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts', 'completed', 'delivered', 'cancelled']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
 export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
 
