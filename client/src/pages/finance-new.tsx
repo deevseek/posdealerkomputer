@@ -458,12 +458,18 @@ export default function FinanceNew() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Karyawan</CardTitle>
-            <Users className="h-4 w-4 text-purple-600" />
+            <CardTitle className="text-sm font-medium">Total Transaksi</CardTitle>
+            <Calendar className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
-              {employees?.length || 0}
+              {summary?.transactionCount || 0}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Income: {summary?.breakdown?.sources ? 
+                Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} |{' '}
+              Expense: {(summary?.transactionCount || 0) - (summary?.breakdown?.sources ? 
+                Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0)}
             </div>
           </CardContent>
         </Card>
@@ -500,6 +506,14 @@ export default function FinanceNew() {
               <p className="text-sm text-blue-800">
                 <strong>Catatan:</strong> Saat service ticket diselesaikan, sistem otomatis mencatat 3 transaksi: 
                 biaya modal parts sebagai pengeluaran, penjualan parts sebagai pemasukan, dan ongkos kerja sebagai pemasukan.
+              </p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-800">
+                <strong>Data Terkini:</strong> Total Pendapatan mencakup semua pemasukan dari penjualan produk (POS) dan layanan service. 
+                Saat ini ada {summary?.breakdown?.sources ? 
+                  Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} transaksi pemasukan 
+                dengan total {formatCurrency(summary?.totalIncome || '0')}.
               </p>
             </div>
             <div className="p-3 bg-orange-50 rounded-lg">
