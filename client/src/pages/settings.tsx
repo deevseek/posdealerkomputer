@@ -50,7 +50,11 @@ export default function Settings() {
       return response.json();
     },
     onSuccess: () => {
+      // Invalidate all store config queries across all components
       queryClient.invalidateQueries({ queryKey: ['/api/store-config'] });
+      queryClient.invalidateQueries({ queryKey: ['store-config-transaction'] });
+      queryClient.invalidateQueries({ queryKey: ['store-config-landing'] });
+      queryClient.invalidateQueries({ queryKey: ['store-config-settings'] });
       toast({
         title: "Berhasil",
         description: "Pengaturan toko berhasil diupdate",
@@ -74,7 +78,9 @@ export default function Settings() {
       address: formData.get('address'),
       phone: formData.get('phone'),
       email: formData.get('email'),
+      taxRate: formData.get('taxRate'),
     };
+    console.log('Updating store config with:', data); // Debug log
     updateStoreMutation.mutate(data);
   };
 

@@ -49,7 +49,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     queryKey: ["/api/products"],
   });
 
-  // Fetch store config for tax rate - WITH BETTER CACHING
+  // Fetch store config for tax rate - WITH PROPER REFRESH
   const { data: storeConfig } = useQuery({
     queryKey: ['store-config-transaction'],
     queryFn: async () => {
@@ -57,9 +57,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       if (!response.ok) return { taxRate: 0 };
       return response.json();
     },
-    staleTime: Infinity,
-    refetchInterval: false,
-    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes instead of Infinity
+    refetchOnWindowFocus: true,
     retry: false,
   });
 
