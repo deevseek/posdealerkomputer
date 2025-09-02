@@ -291,61 +291,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stock movements report - SIMPLIFIED
+  // Stock movements report - Clean implementation
   app.get('/api/reports/stock-movements', isAuthenticated, async (req, res) => {
     try {
-      // RETURN EMPTY ARRAY to avoid complex query errors  
-      res.json([]);
-      return;
+      // Get stock movements with product names
+      const movementData = await db
+        .select({
+          id: stockMovements.id,
+          productId: stockMovements.productId,
+          productName: products.name,
+          movementType: stockMovements.movementType,
+          quantity: stockMovements.quantity,
+          unitCost: stockMovements.unitCost,
+          referenceType: stockMovements.referenceType,
+          referenceId: stockMovements.referenceId,
+          notes: stockMovements.notes,
+          createdAt: stockMovements.createdAt,
+        })
+        .from(stockMovements)
+        .leftJoin(products, eq(stockMovements.productId, products.id))
+        .orderBy(desc(stockMovements.createdAt));
       
-      // Apply filters
-      const conditions = [];
-      
-      if (startDate && endDate) {
-        conditions.push(
-          and(
-            gte(stockMovements.createdAt, new Date(startDate as string)),
-            lte(stockMovements.createdAt, new Date(endDate as string))
-          )
-        );
-      }
-      
-      if (productId) {
-        conditions.push(eq(stockMovements.productId, productId as string));
-      }
-      
-      if (referenceType) {
-        conditions.push(eq(stockMovements.referenceType, referenceType as any));
-      }
-      
-      if (conditions.length > 0) {
-        query = query.where(and(...conditions)) as any;
-      }
-      
-      const movements = await query;
-      
-      // Calculate summary
-      const summary = movements.reduce((acc, movement) => {
-        const key = movement.referenceType || 'unknown';
-        if (!acc[key]) {
-          acc[key] = { totalOut: 0, totalIn: 0, count: 0 };
-        }
-        
-        if (movement.type === 'out') {
-          acc[key].totalOut += movement.quantity;
-        } else if (movement.type === 'in') {
-          acc[key].totalIn += movement.quantity;
-        }
-        acc[key].count += 1;
-        
-        return acc;
-      }, {} as Record<string, { totalOut: number; totalIn: number; count: number }>);
-      
-      res.json({
-        movements,
-        summary,
-        totalMovements: movements.length
-      });
+      res.json(movementData);
     } catch (error) {
       console.error('Error fetching stock movements:', error);
       res.status(500).json({ message: 'Failed to fetch stock movements' });

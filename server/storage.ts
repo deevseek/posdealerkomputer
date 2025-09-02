@@ -612,6 +612,20 @@ export class DatabaseStorage implements IStorage {
       userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
     });
 
+    // CREATE FINANCE RECORD for purchase expense
+    const totalCost = parseFloat(item.unitCost || item.unitPrice || '0') * receivedQuantity;
+    if (totalCost > 0) {
+      await db.insert(financialRecords).values({
+        type: 'expense',
+        amount: totalCost.toString(),
+        description: `Purchase: ${receivedQuantity} units received`,
+        category: 'Inventory Purchase',
+        reference: item.purchaseOrderId,
+        referenceType: 'purchase_order',
+        userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
+      });
+    }
+
     // DIRECT UPDATE: Use SQL arithmetic to ensure stock update works
     await db
       .update(products)
@@ -754,6 +768,36 @@ export class DatabaseStorage implements IStorage {
   // Enhanced stock movement with new system
   async createStockMovement(movementData: InsertStockMovement): Promise<StockMovement> {
     const [movement] = await db.insert(stockMovements).values(movementData).returning();
+    
+    // CREATE FINANCE TRANSACTION for stock movements that have cost impact
+    if (movement.unitCost && parseFloat(movement.unitCost) > 0) {
+      const totalCost = parseFloat(movement.unitCost) * movement.quantity;
+      let transactionType: 'income' | 'expense' = 'expense';
+      let description = `Stock movement: ${movement.movementType}`;
+      
+      if (movement.movementType === 'out') {
+        // When stock goes out, it's usually a sale (income) or expense (cost of goods sold)
+        transactionType = movement.referenceType === 'sale' ? 'income' : 'expense';
+        description = movement.referenceType === 'sale' ? 
+          `Sale: ${movement.quantity} units` : 
+          `Stock out: ${movement.quantity} units`;
+      } else {
+        // When stock comes in, it's usually a purchase (expense)
+        transactionType = 'expense';
+        description = `Stock in: ${movement.quantity} units`;
+      }
+      
+      await db.insert(financialRecords).values({
+        type: transactionType,
+        amount: totalCost.toString(),
+        description,
+        category: movement.referenceType === 'sale' ? 'Sales Revenue' : 'Inventory',
+        reference: movement.referenceId,
+        referenceType: movement.referenceType,
+        userId: movement.userId,
+      });
+    }
+    
     return movement;
   }
 
