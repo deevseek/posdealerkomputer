@@ -612,21 +612,14 @@ export class DatabaseStorage implements IStorage {
       userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
     });
 
-    // SIMPLIFIED: Update product stock with select all
-    const [product] = await db
-      .select()
-      .from(products)
+    // DIRECT UPDATE: Use SQL arithmetic to ensure stock update works
+    await db
+      .update(products)
+      .set({ 
+        stock: sql`${products.stock} + ${receivedQuantity}`,
+        updatedAt: new Date()
+      })
       .where(eq(products.id, item.productId));
-
-    if (product) {
-      await db
-        .update(products)
-        .set({ 
-          stock: (product.stock || 0) + receivedQuantity,
-          updatedAt: new Date()
-        })
-        .where(eq(products.id, item.productId));
-    }
 
     // Check if PO should be updated to received status
     await this.updatePurchaseOrderStatus(item.purchaseOrderId);
