@@ -341,21 +341,23 @@ export default function FinanceNew() {
       };
     } else {
       // Cek apakah ini transaksi aset atau expense berdasarkan kategori dan deskripsi
-      const isAsset = [
-        // Kategori inventory/persediaan
-        'Cost of Goods Sold', 'Inventory', 'Persediaan', 'Stock', 'Barang',
-        // Kategori aset fisik
-        'Peralatan', 'Equipment', 'Kendaraan', 'Vehicle', 'Furniture', 
-        'Aset', 'Assets', 'Fixed Asset',
-        // Kategori kas dan bank
-        'Kas', 'Cash', 'Bank', 'Tunai',
-        // Kategori piutang
-        'Piutang', 'Receivable', 'Tagihan'
-      ].some(keyword => 
-        transaction.category?.toLowerCase().includes(keyword.toLowerCase()) || 
-        transaction.subcategory?.toLowerCase().includes(keyword.toLowerCase()) || 
-        transaction.description?.toLowerCase().includes(keyword.toLowerCase())
-      ) || transaction.category === 'Cost of Goods Sold' || transaction.category === 'Inventory Purchase';
+      const isAsset = 
+        // Deteksi langsung berdasarkan kategori exact match
+        transaction.category === 'Cost of Goods Sold' ||
+        transaction.category === 'Inventory Purchase' ||
+        transaction.subcategory === 'Cost of Goods Sold' ||
+        transaction.subcategory === 'Inventory Purchase' ||
+        // Deteksi berdasarkan kata kunci dalam kategori/deskripsi
+        [
+          'cost of goods sold', 'inventory', 'persediaan', 'stock', 'barang',
+          'peralatan', 'equipment', 'kendaraan', 'vehicle', 'furniture', 
+          'aset', 'assets', 'fixed asset', 'kas', 'cash', 'bank', 'tunai',
+          'piutang', 'receivable', 'tagihan', 'purchase'
+        ].some(keyword => 
+          transaction.category?.toLowerCase().includes(keyword) || 
+          transaction.subcategory?.toLowerCase().includes(keyword) || 
+          transaction.description?.toLowerCase().includes(keyword)
+        );
       
       if (isAsset) {
         return {
