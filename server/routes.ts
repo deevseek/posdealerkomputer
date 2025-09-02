@@ -301,7 +301,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: stockMovements.id,
           productId: stockMovements.productId,
           productName: products.name,
-          type: stockMovements.movementType, // Frontend expects 'type'
+          movementType: stockMovements.movementType, // Frontend expects 'movementType'
           quantity: stockMovements.quantity,
           unitCost: stockMovements.unitCost,
           referenceType: stockMovements.referenceType,
