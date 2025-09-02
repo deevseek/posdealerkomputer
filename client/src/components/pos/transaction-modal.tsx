@@ -156,17 +156,26 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       return;
     }
 
+    // Debug: Log product data to see the format
+    console.log('Adding product to cart:', product);
+    console.log('sellingPrice type:', typeof product.sellingPrice, 'value:', product.sellingPrice);
+    
     const existingItem = items.find(item => item.productId === product.id);
     if (existingItem) {
       updateQuantity(product.id, 1);
     } else {
+      const sellingPrice = typeof product.sellingPrice === 'string' 
+        ? parseFloat(product.sellingPrice) 
+        : (product.sellingPrice || 0);
+      
       const newItem: TransactionItem = {
         productId: product.id,
         name: product.name,
-        sellingPrice: product.sellingPrice,
+        sellingPrice: sellingPrice,
         quantity: 1,
         stock: product.stock,
       };
+      console.log('Created newItem:', newItem);
       setItems(prev => [...prev, newItem]);
     }
     setProductSearch("");
@@ -394,7 +403,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                     <div className="flex-1">
                       <div className="font-medium">{item.name}</div>
                       <div className="text-xs text-muted-foreground">
-                        Rp {item.sellingPrice.toLocaleString('id-ID')} × {item.quantity} = Rp {(item.sellingPrice * item.quantity).toLocaleString('id-ID')}
+                        Rp {(item.sellingPrice || 0).toLocaleString('id-ID')} × {item.quantity} = Rp {(item.sellingPrice * item.quantity).toLocaleString('id-ID')}
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
