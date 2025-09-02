@@ -524,17 +524,10 @@ export default function PurchasingPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={async () => {
+                            onClick={() => {
                               setSelectedPO(order);
-                              // Fetch items for this PO
-                              try {
-                                const items = await apiRequest(`/api/purchase-orders/${order.id}/items`);
-                                setSelectedPOItems(items);
-                                setReceivingPOOpen(true);
-                                setReceivingItems([]);
-                              } catch (error) {
-                                toast({ title: "Failed to load PO items", variant: "destructive" });
-                              }
+                              setReceivingPOOpen(true);
+                              setReceivingItems([]);
                             }}
                             data-testid={`button-receive-po-${order.id}`}
                           >
