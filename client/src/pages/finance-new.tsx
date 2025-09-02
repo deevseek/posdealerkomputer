@@ -466,10 +466,13 @@ export default function FinanceNew() {
               {summary?.transactionCount || 0}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Income: {summary?.breakdown?.sources ? 
-                Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} |{' '}
-              Expense: {(summary?.transactionCount || 0) - (summary?.breakdown?.sources ? 
-                Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0)}
+              {summary?.breakdown?.categories ? (() => {
+                const incomeCount = Object.values(summary.breakdown.categories).reduce(
+                  (sum, cat) => sum + (cat.income > 0 ? cat.count : 0), 0);
+                const expenseCount = Object.values(summary.breakdown.categories).reduce(
+                  (sum, cat) => sum + (cat.expense > 0 ? cat.count : 0), 0);
+                return `Income: ${incomeCount} | Expense: ${expenseCount}`;
+              })() : 'Income: 0 | Expense: 0'}
             </div>
           </CardContent>
         </Card>
