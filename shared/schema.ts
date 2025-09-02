@@ -441,6 +441,7 @@ export const inventoryAdjustmentItems = pgTable("inventory_adjustment_items", {
 });
 
 // Financial Records - Complete rebuild
+// Financial Records - Legacy compatibility (keep for migration)
 export const financialRecords = pgTable("financial_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   type: varchar("type", { length: 20 }).notNull(), // income, expense, transfer
@@ -451,6 +452,7 @@ export const financialRecords = pgTable("financial_records", {
   reference: varchar("reference"), // Reference to transaction, service ticket, payroll, etc.
   referenceType: varchar("reference_type", { length: 50 }), // sale, service, payroll, expense, etc.
   accountId: varchar("account_id").references(() => accounts.id),
+  journalEntryId: varchar("journal_entry_id").references(() => journalEntries.id), // Link to journal entry
   paymentMethod: varchar("payment_method", { length: 50 }), // cash, bank_transfer, credit_card, etc.
   status: varchar("status", { length: 20 }).default("confirmed"), // pending, confirmed, cancelled
   tags: text("tags").array(), // For better categorization
@@ -464,14 +466,41 @@ export const accounts: any = pgTable("accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   code: varchar("code", { length: 20 }).unique().notNull(),
   name: varchar("name", { length: 100 }).notNull(),
-  type: varchar("type", { length: 30 }).notNull(), // asset, liability, equity, income, expense
-  subtype: varchar("subtype", { length: 50 }), // current_asset, fixed_asset, etc.
+  type: varchar("type", { length: 30 }).notNull(), // asset, liability, equity, revenue, expense
+  subtype: varchar("subtype", { length: 50 }), // current_asset, fixed_asset, operating_revenue, etc.
   parentId: varchar("parent_id").references((): any => accounts.id),
+  normalBalance: varchar("normal_balance", { length: 10 }).notNull(), // debit or credit
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0"),
   isActive: boolean("is_active").default(true),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Journal Entries for Double-Entry Bookkeeping
+export const journalEntries = pgTable("journal_entries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  journalNumber: varchar("journal_number", { length: 50 }).unique().notNull(),
+  date: timestamp("date").notNull(),
+  description: text("description").notNull(),
+  reference: varchar("reference"), // Reference to source transaction
+  referenceType: varchar("reference_type", { length: 50 }), // sale, purchase, service, payroll, etc.
+  totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  status: varchar("status", { length: 20 }).default("posted"), // draft, posted, reversed
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Journal Entry Lines (Debit/Credit entries)
+export const journalEntryLines = pgTable("journal_entry_lines", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  journalEntryId: varchar("journal_entry_id").references(() => journalEntries.id).notNull(),
+  accountId: varchar("account_id").references(() => accounts.id).notNull(),
+  description: text("description").notNull(),
+  debitAmount: decimal("debit_amount", { precision: 15, scale: 2 }).default("0"),
+  creditAmount: decimal("credit_amount", { precision: 15, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Employees for Payroll
@@ -555,6 +584,27 @@ export const accountsRelations = relations(accounts, ({ one, many }) => ({
   }),
   children: many(accounts),
   financialRecords: many(financialRecords),
+  journalEntryLines: many(journalEntryLines),
+}));
+
+export const journalEntriesRelations = relations(journalEntries, ({ one, many }) => ({
+  user: one(users, {
+    fields: [journalEntries.userId],
+    references: [users.id],
+  }),
+  lines: many(journalEntryLines),
+  financialRecords: many(financialRecords),
+}));
+
+export const journalEntryLinesRelations = relations(journalEntryLines, ({ one }) => ({
+  journalEntry: one(journalEntries, {
+    fields: [journalEntryLines.journalEntryId],
+    references: [journalEntries.id],
+  }),
+  account: one(accounts, {
+    fields: [journalEntryLines.accountId],
+    references: [accounts.id],
+  }),
 }));
 
 export const employeesRelations = relations(employees, ({ one, many }) => ({
@@ -592,6 +642,10 @@ export const financialRecordsRelations = relations(financialRecords, ({ one }) =
   user: one(users, {
     fields: [financialRecords.userId],
     references: [users.id],
+  }),
+  journalEntry: one(journalEntries, {
+    fields: [financialRecords.journalEntryId],
+    references: [journalEntries.id],
   }),
 }));
 
@@ -796,6 +850,25 @@ export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords
   updatedAt: true,
 });
 
+export const insertJournalEntrySchema = createInsertSchema(journalEntries).omit({
+  id: true,
+  journalNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertJournalEntryLineSchema = createInsertSchema(journalEntryLines).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAccountSchema2 = createInsertSchema(accounts).omit({
+  id: true,
+  balance: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertRoleSchema = createInsertSchema(roles).omit({
   id: true,
   createdAt: true,
@@ -864,6 +937,12 @@ export type InsertPayrollRecord = z.infer<typeof insertPayrollRecordSchema>;
 export type PayrollRecord = typeof payrollRecords.$inferSelect;
 export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
+export type JournalEntry = typeof journalEntries.$inferSelect;
+export type InsertJournalEntryLine = z.infer<typeof insertJournalEntryLineSchema>;
+export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount2 = z.infer<typeof insertAccountSchema2>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;
 

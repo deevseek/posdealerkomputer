@@ -5,6 +5,12 @@ import {
   payrollRecords, 
   attendanceRecords,
   products,
+  accounts,
+  journalEntries,
+  journalEntryLines,
+  transactions,
+  transactionItems,
+  serviceTickets,
   type InsertFinancialRecord,
   type FinancialRecord,
   type InsertEmployee,
@@ -12,12 +18,428 @@ import {
   type InsertPayrollRecord,
   type PayrollRecord,
   type InsertAttendanceRecord,
-  type AttendanceRecord
+  type AttendanceRecord,
+  type JournalEntry,
+  type InsertJournalEntry,
+  type JournalEntryLine,
+  type InsertJournalEntryLine,
+  type Account
 } from "@shared/schema";
 import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
 
+// Default Chart of Accounts codes
+const ACCOUNT_CODES = {
+  CASH: '1111',
+  BANK: '1112',
+  ACCOUNTS_RECEIVABLE: '1120',
+  INVENTORY: '1130',
+  ACCOUNTS_PAYABLE: '2110',
+  SALES_REVENUE: '4110',
+  SERVICE_REVENUE: '4210',
+  COST_OF_GOODS_SOLD: '5110',
+  PAYROLL_EXPENSE: '5210',
+  OTHER_EXPENSE: '5290',
+};
+
 export class FinanceManager {
-  // Financial Transactions
+  // Helper method to get account by code
+  private async getAccountByCode(code: string): Promise<Account | null> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.code, code)).limit(1);
+    return account || null;
+  }
+  
+  // Create Journal Entry with double-entry bookkeeping
+  async createJournalEntry(data: {
+    description: string;
+    reference?: string;
+    referenceType?: string;
+    lines: {
+      accountCode: string;
+      description: string;
+      debitAmount?: string;
+      creditAmount?: string;
+    }[];
+    userId: string;
+  }): Promise<{ success: boolean; journalEntry?: JournalEntry; error?: string }> {
+    try {
+      // Validate that debits equal credits
+      const totalDebits = data.lines.reduce((sum, line) => sum + Number(line.debitAmount || 0), 0);
+      const totalCredits = data.lines.reduce((sum, line) => sum + Number(line.creditAmount || 0), 0);
+      
+      if (Math.abs(totalDebits - totalCredits) > 0.01) {
+        return {
+          success: false,
+          error: `Debits (${totalDebits}) must equal Credits (${totalCredits})`
+        };
+      }
+      
+      const totalAmount = totalDebits;
+      const journalNumber = `JE-${Date.now()}`;
+      
+      // Create journal entry
+      const [journalEntry] = await db.insert(journalEntries).values({
+        journalNumber,
+        date: new Date(),
+        description: data.description,
+        reference: data.reference,
+        referenceType: data.referenceType,
+        totalAmount: totalAmount.toString(),
+        status: 'posted',
+        userId: data.userId
+      }).returning();
+      
+      // Create journal entry lines and update account balances
+      for (const lineData of data.lines) {
+        const account = await this.getAccountByCode(lineData.accountCode);
+        if (!account) {
+          return {
+            success: false,
+            error: `Account with code ${lineData.accountCode} not found`
+          };
+        }
+        
+        // Create journal entry line
+        await db.insert(journalEntryLines).values({
+          journalEntryId: journalEntry.id,
+          accountId: account.id,
+          description: lineData.description,
+          debitAmount: lineData.debitAmount || '0',
+          creditAmount: lineData.creditAmount || '0'
+        });
+        
+        // Update account balance based on normal balance
+        const debitAmount = Number(lineData.debitAmount || 0);
+        const creditAmount = Number(lineData.creditAmount || 0);
+        let balanceChange = 0;
+        
+        if (account.normalBalance === 'debit') {
+          balanceChange = debitAmount - creditAmount;
+        } else {
+          balanceChange = creditAmount - debitAmount;
+        }
+        
+        await db.update(accounts)
+          .set({ 
+            balance: sql`${accounts.balance} + ${balanceChange}`,
+            updatedAt: new Date()
+          })
+          .where(eq(accounts.id, account.id));
+      }
+      
+      return { success: true, journalEntry };
+      
+    } catch (error) {
+      console.error('Error creating journal entry:', error);
+      return {
+        success: false,
+        error: `Failed to create journal entry: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+  
+  // Enhanced transaction creation with automatic journal entries
+  async createTransactionWithJournal(data: {
+    type: 'income' | 'expense' | 'transfer';
+    category: string;
+    subcategory?: string;
+    amount: string;
+    description: string;
+    referenceType?: string;
+    reference?: string;
+    paymentMethod?: string;
+    tags?: string[];
+    userId: string;
+  }): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
+    try {
+      // Create the financial record
+      const [transaction] = await db.insert(financialRecords).values({
+        type: data.type,
+        category: data.category,
+        subcategory: data.subcategory,
+        amount: data.amount,
+        description: data.description,
+        reference: data.reference,
+        referenceType: data.referenceType,
+        paymentMethod: data.paymentMethod,
+        tags: data.tags,
+        status: 'confirmed',
+        userId: data.userId
+      }).returning();
+      
+      // Create corresponding journal entries
+      const amount = Number(data.amount);
+      let journalLines: Array<{
+        accountCode: string;
+        description: string;
+        debitAmount?: string;
+        creditAmount?: string;
+      }> = [];
+      
+      // Map categories to accounts and create journal entries
+      if (data.type === 'income') {
+        // Income: Debit Cash/Bank, Credit Revenue
+        const cashAccount = data.paymentMethod === 'cash' ? ACCOUNT_CODES.CASH : ACCOUNT_CODES.BANK;
+        const revenueAccount = data.category === 'Service Revenue' ? ACCOUNT_CODES.SERVICE_REVENUE : ACCOUNT_CODES.SALES_REVENUE;
+        
+        journalLines = [
+          {
+            accountCode: cashAccount,
+            description: `Receive payment - ${data.description}`,
+            debitAmount: amount.toString()
+          },
+          {
+            accountCode: revenueAccount,
+            description: data.description,
+            creditAmount: amount.toString()
+          }
+        ];
+      } else if (data.type === 'expense') {
+        // Expense: Debit Expense, Credit Cash/Bank
+        const cashAccount = data.paymentMethod === 'cash' ? ACCOUNT_CODES.CASH : ACCOUNT_CODES.BANK;
+        const expenseAccount = data.category === 'Payroll' ? ACCOUNT_CODES.PAYROLL_EXPENSE : ACCOUNT_CODES.OTHER_EXPENSE;
+        
+        journalLines = [
+          {
+            accountCode: expenseAccount,
+            description: data.description,
+            debitAmount: amount.toString()
+          },
+          {
+            accountCode: cashAccount,
+            description: `Payment - ${data.description}`,
+            creditAmount: amount.toString()
+          }
+        ];
+      }
+      
+      // Create journal entry if we have lines
+      if (journalLines.length > 0) {
+        const journalResult = await this.createJournalEntry({
+          description: `${data.type.toUpperCase()}: ${data.description}`,
+          reference: transaction.id,
+          referenceType: 'financial_transaction',
+          lines: journalLines,
+          userId: data.userId
+        });
+        
+        if (!journalResult.success) {
+          console.warn('Failed to create journal entry:', journalResult.error);
+        } else {
+          // Link the journal entry to the financial record
+          await db.update(financialRecords)
+            .set({ journalEntryId: journalResult.journalEntry?.id })
+            .where(eq(financialRecords.id, transaction.id));
+        }
+      }
+      
+      return { success: true, transaction };
+      
+    } catch (error) {
+      console.error('Error creating transaction with journal:', error);
+      return {
+        success: false,
+        error: `Failed to create transaction: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+  // Standard Accounting Reports
+  async getBalanceSheet(asOfDate?: Date): Promise<{
+    assets: { [category: string]: { accounts: Array<{ name: string; balance: number; code: string }>, total: number } },
+    liabilities: { [category: string]: { accounts: Array<{ name: string; balance: number; code: string }>, total: number } },
+    equity: { [category: string]: { accounts: Array<{ name: string; balance: number; code: string }>, total: number } },
+    totalAssets: number,
+    totalLiabilities: number,
+    totalEquity: number,
+    balanceCheck: boolean
+  }> {
+    const asOf = asOfDate || new Date();
+    
+    // Get all accounts with their current balances
+    const allAccounts = await db.select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      subtype: accounts.subtype,
+      balance: accounts.balance,
+      normalBalance: accounts.normalBalance
+    })
+    .from(accounts)
+    .where(and(
+      eq(accounts.isActive, true),
+      sql`${accounts.type} IN ('asset', 'liability', 'equity')`
+    ))
+    .orderBy(accounts.code);
+    
+    const assets: any = {};
+    const liabilities: any = {};
+    const equity: any = {};
+    
+    let totalAssets = 0;
+    let totalLiabilities = 0;
+    let totalEquity = 0;
+    
+    allAccounts.forEach(account => {
+      const balance = Number(account.balance);
+      const accountInfo = {
+        name: account.name,
+        balance: balance,
+        code: account.code
+      };
+      
+      if (account.type === 'asset') {
+        const category = account.subtype || 'Other Assets';
+        if (!assets[category]) {
+          assets[category] = { accounts: [], total: 0 };
+        }
+        assets[category].accounts.push(accountInfo);
+        assets[category].total += balance;
+        totalAssets += balance;
+      } else if (account.type === 'liability') {
+        const category = account.subtype || 'Other Liabilities';
+        if (!liabilities[category]) {
+          liabilities[category] = { accounts: [], total: 0 };
+        }
+        liabilities[category].accounts.push(accountInfo);
+        liabilities[category].total += balance;
+        totalLiabilities += balance;
+      } else if (account.type === 'equity') {
+        const category = account.subtype || 'Owner Equity';
+        if (!equity[category]) {
+          equity[category] = { accounts: [], total: 0 };
+        }
+        equity[category].accounts.push(accountInfo);
+        equity[category].total += balance;
+        totalEquity += balance;
+      }
+    });
+    
+    const balanceCheck = Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01;
+    
+    return {
+      assets,
+      liabilities,
+      equity,
+      totalAssets,
+      totalLiabilities,
+      totalEquity,
+      balanceCheck
+    };
+  }
+  
+  async getIncomeStatement(startDate?: Date, endDate?: Date): Promise<{
+    revenue: { [category: string]: { accounts: Array<{ name: string; amount: number; code: string }>, total: number } },
+    expenses: { [category: string]: { accounts: Array<{ name: string; amount: number; code: string }>, total: number } },
+    totalRevenue: number,
+    totalExpenses: number,
+    grossProfit: number,
+    netIncome: number
+  }> {
+    const start = startDate || new Date(new Date().getFullYear(), 0, 1); // Beginning of year
+    const end = endDate || new Date();
+    
+    // Get revenue and expense accounts with their activity in the period
+    const revenueAndExpenseAccounts = await db.select({
+      id: accounts.id,
+      code: accounts.code,
+      name: accounts.name,
+      type: accounts.type,
+      subtype: accounts.subtype,
+      normalBalance: accounts.normalBalance
+    })
+    .from(accounts)
+    .where(and(
+      eq(accounts.isActive, true),
+      sql`${accounts.type} IN ('revenue', 'expense')`
+    ))
+    .orderBy(accounts.code);
+    
+    const revenue: any = {};
+    const expenses: any = {};
+    let totalRevenue = 0;
+    let totalExpenses = 0;
+    
+    // Calculate account activity for the period
+    for (const account of revenueAndExpenseAccounts) {
+      // Get journal entry lines for this account in the period
+      const activityQuery = await db.select({
+        debitAmount: journalEntryLines.debitAmount,
+        creditAmount: journalEntryLines.creditAmount
+      })
+      .from(journalEntryLines)
+      .innerJoin(journalEntries, eq(journalEntryLines.journalEntryId, journalEntries.id))
+      .where(and(
+        eq(journalEntryLines.accountId, account.id),
+        gte(journalEntries.date, start),
+        lte(journalEntries.date, end),
+        eq(journalEntries.status, 'posted')
+      ));
+      
+      let periodActivity = 0;
+      activityQuery.forEach(line => {
+        const debit = Number(line.debitAmount);
+        const credit = Number(line.creditAmount);
+        
+        // For revenue accounts (normal credit balance), credit increases, debit decreases
+        // For expense accounts (normal debit balance), debit increases, credit decreases
+        if (account.normalBalance === 'credit') {
+          periodActivity += credit - debit;
+        } else {
+          periodActivity += debit - credit;
+        }
+      });
+      
+      // Only include accounts with activity
+      if (Math.abs(periodActivity) > 0.01) {
+        const accountInfo = {
+          name: account.name,
+          amount: periodActivity,
+          code: account.code
+        };
+        
+        if (account.type === 'revenue') {
+          const category = account.subtype || 'Other Revenue';
+          if (!revenue[category]) {
+            revenue[category] = { accounts: [], total: 0 };
+          }
+          revenue[category].accounts.push(accountInfo);
+          revenue[category].total += periodActivity;
+          totalRevenue += periodActivity;
+        } else if (account.type === 'expense') {
+          const category = account.subtype || 'Other Expenses';
+          if (!expenses[category]) {
+            expenses[category] = { accounts: [], total: 0 };
+          }
+          expenses[category].accounts.push(accountInfo);
+          expenses[category].total += periodActivity;
+          totalExpenses += periodActivity;
+        }
+      }
+    }
+    
+    // Calculate gross profit (Revenue - COGS)
+    const cogs = expenses['cost_of_goods_sold']?.total || 0;
+    const grossProfit = totalRevenue - cogs;
+    const netIncome = totalRevenue - totalExpenses;
+    
+    return {
+      revenue,
+      expenses,
+      totalRevenue,
+      totalExpenses,
+      grossProfit,
+      netIncome
+    };
+  }
+  
+  // Get Chart of Accounts
+  async getChartOfAccounts(): Promise<Account[]> {
+    return await db.select().from(accounts)
+      .where(eq(accounts.isActive, true))
+      .orderBy(accounts.code);
+  }
+  
+  // Financial Transactions (Enhanced)
   async createTransaction(data: {
     type: 'income' | 'expense' | 'transfer';
     category: string;
@@ -30,20 +452,14 @@ export class FinanceManager {
     tags?: string[];
     userId: string;
   }): Promise<FinancialRecord> {
-    const [record] = await db.insert(financialRecords).values({
-      type: data.type,
-      category: data.category,
-      subcategory: data.subcategory,
-      amount: data.amount,
-      description: data.description,
-      reference: data.reference,
-      referenceType: data.referenceType,
-      paymentMethod: data.paymentMethod,
-      tags: data.tags,
-      status: 'confirmed',
-      userId: data.userId
-    }).returning();
-    return record;
+    // Use the enhanced method that creates journal entries
+    const result = await this.createTransactionWithJournal(data);
+    
+    if (!result.success || !result.transaction) {
+      throw new Error(result.error || 'Failed to create transaction');
+    }
+    
+    return result.transaction;
   }
 
   async getTransactions(filters?: {

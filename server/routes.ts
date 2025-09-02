@@ -1300,6 +1300,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to clear records" });
     }
   });
+  
+  // Enhanced Accounting Reports API
+  app.get('/api/finance/balance-sheet', isAuthenticated, async (req, res) => {
+    try {
+      const { asOfDate } = req.query;
+      const asOf = asOfDate ? new Date(asOfDate as string) : undefined;
+      const balanceSheet = await storage.getBalanceSheet(asOf);
+      res.json(balanceSheet);
+    } catch (error) {
+      console.error("Error fetching balance sheet:", error);
+      res.status(500).json({ message: "Failed to fetch balance sheet" });
+    }
+  });
+  
+  app.get('/api/finance/income-statement', isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const start = startDate ? new Date(startDate as string) : undefined;
+      const end = endDate ? new Date(endDate as string) : undefined;
+      const incomeStatement = await storage.getIncomeStatement(start, end);
+      res.json(incomeStatement);
+    } catch (error) {
+      console.error("Error fetching income statement:", error);
+      res.status(500).json({ message: "Failed to fetch income statement" });
+    }
+  });
+  
+  app.get('/api/finance/chart-of-accounts', isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getChartOfAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching chart of accounts:", error);
+      res.status(500).json({ message: "Failed to fetch chart of accounts" });
+    }
+  });
+  
+  app.post('/api/finance/journal-entry', isAuthenticated, async (req, res) => {
+    try {
+      const data = req.body;
+      data.userId = req.session?.user?.id;
+      const result = await storage.createJournalEntry(data);
+      
+      if (result.success) {
+        res.status(201).json(result.journalEntry);
+      } else {
+        res.status(400).json({ message: result.error });
+      }
+    } catch (error) {
+      console.error("Error creating journal entry:", error);
+      res.status(500).json({ message: "Failed to create journal entry" });
+    }
+  });
 
   // Reset database (keep only users and roles)
   app.post('/api/admin/reset-database', isAuthenticated, async (req, res) => {

@@ -181,6 +181,12 @@ export interface IStorage {
   getFinancialReport(startDate: Date, endDate: Date): Promise<{ totalIncome: string; totalExpense: string; profit: string; records: any[] }>;
   getInventoryReport(): Promise<{ lowStockCount: number; lowStockProducts: any[]; totalProducts: number }>;
   
+  // Enhanced Accounting Reports
+  getBalanceSheet(asOfDate?: Date): Promise<any>;
+  getIncomeStatement(startDate?: Date, endDate?: Date): Promise<any>;
+  getChartOfAccounts(): Promise<any[]>;
+  createJournalEntry(data: any): Promise<{ success: boolean; journalEntry?: any; error?: string }>;
+  
   // Dashboard Statistics
   getDashboardStats(): Promise<{
     todaySales: string;
@@ -1709,6 +1715,32 @@ export class DatabaseStorage implements IStorage {
       lowStockCount: lowStockResult.count,
       monthlyProfit: monthlyProfit.toString(),
     };
+  }
+  
+  // Enhanced Accounting Methods Implementation
+  async getBalanceSheet(asOfDate?: Date): Promise<any> {
+    // Import and use FinanceManager to implement double-entry bookkeeping
+    const { FinanceManager } = await import('./financeManager');
+    const financeManager = new FinanceManager();
+    return await financeManager.getBalanceSheet(asOfDate);
+  }
+  
+  async getIncomeStatement(startDate?: Date, endDate?: Date): Promise<any> {
+    const { FinanceManager } = await import('./financeManager');
+    const financeManager = new FinanceManager();
+    return await financeManager.getIncomeStatement(startDate, endDate);
+  }
+  
+  async getChartOfAccounts(): Promise<any[]> {
+    const { FinanceManager } = await import('./financeManager');
+    const financeManager = new FinanceManager();
+    return await financeManager.getChartOfAccounts();
+  }
+  
+  async createJournalEntry(data: any): Promise<{ success: boolean; journalEntry?: any; error?: string }> {
+    const { FinanceManager } = await import('./financeManager');
+    const financeManager = new FinanceManager();
+    return await financeManager.createJournalEntry(data);
   }
 }
 
