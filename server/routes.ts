@@ -294,25 +294,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stock movements report - Clean implementation
   app.get('/api/reports/stock-movements', isAuthenticated, async (req, res) => {
     try {
-      // Get stock movements with product names
+      // Get stock movements with product names - match frontend expectations
       const movementData = await db
         .select({
           id: stockMovements.id,
           productId: stockMovements.productId,
           productName: products.name,
-          movementType: stockMovements.movementType,
+          type: stockMovements.movementType, // Frontend expects 'type'
           quantity: stockMovements.quantity,
           unitCost: stockMovements.unitCost,
           referenceType: stockMovements.referenceType,
-          referenceId: stockMovements.referenceId,
+          reference: stockMovements.referenceId, // Frontend expects 'reference'
           notes: stockMovements.notes,
           createdAt: stockMovements.createdAt,
+          userName: sql<string>`'Admin'`, // Add userName field
         })
         .from(stockMovements)
         .leftJoin(products, eq(stockMovements.productId, products.id))
         .orderBy(desc(stockMovements.createdAt));
       
-      res.json(movementData);
+      // Frontend expects { movements: [...] } structure
+      res.json({ movements: movementData });
     } catch (error) {
       console.error('Error fetching stock movements:', error);
       res.status(500).json({ message: 'Failed to fetch stock movements' });
