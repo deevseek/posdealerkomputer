@@ -1016,7 +1016,7 @@ export class DatabaseStorage implements IStorage {
           await tx
             .update(products)
             .set({ 
-              stock: sql`${products.totalStock} - ${item.quantity}`,
+              stock: sql`${products.stock} - ${item.quantity}`,
               updatedAt: new Date()
             })
             .where(eq(products.id, item.productId));
