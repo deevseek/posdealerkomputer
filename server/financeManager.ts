@@ -517,11 +517,24 @@ export class FinanceManager {
       .from(financialRecords)
       .where(and(eq(financialRecords.type, 'income'), whereClause));
     
-    // Total expense
-    const [expenseResult] = await db
-      .select({ total: sum(financialRecords.amount) })
+    // Total expense - calculate properly excluding asset purchases
+    const allExpenses = await db
+      .select({
+        category: financialRecords.category,
+        amount: financialRecords.amount
+      })
       .from(financialRecords)
       .where(and(eq(financialRecords.type, 'expense'), whereClause));
+    
+    // Exclude inventory purchases from expense calculation for profit
+    const actualExpenses = allExpenses.filter(expense => 
+      expense.category !== 'Inventory Purchase' &&
+      !expense.category?.toLowerCase().includes('purchase') &&
+      !expense.category?.toLowerCase().includes('asset')
+    );
+    
+    const totalExpenseAmount = actualExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+    const expenseResult = { total: totalExpenseAmount };
     
     // Count
     const [countResult] = await db
@@ -587,10 +600,10 @@ export class FinanceManager {
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
     const totalInventoryValue = inventoryBreakdown.reduce((total, item) => total + Number(item.totalValue), 0);
-    const totalInventoryCount = inventoryBreakdown.reduce((total, item) => total + item.stock, 0);
+    const totalInventoryCount = inventoryBreakdown.reduce((total, item) => total + (item.stock || 0), 0);
     
     const totalIncome = Number(incomeResult.total || 0);
-    const totalExpense = Number(expenseResult.total || 0);
+    const totalExpense = totalExpenseAmount;
 
     // Process category breakdown
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
@@ -644,7 +657,7 @@ export class FinanceManager {
         inventory[item.name] = {
           value: Number(item.totalValue),
           stock: item.stock,
-          avgCost: Number(item.purchasePrice || 0)
+          avgCost: Number(item.averageCost || 0)
         };
       }
     });
