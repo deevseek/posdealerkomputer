@@ -59,6 +59,7 @@ const categoryFormSchema = insertCategorySchema;
 
 const stockAdjustmentSchema = z.object({
   quantity: z.string().min(1, "Quantity is required").transform(val => parseInt(val)),
+  purchasePrice: z.string().optional(),
   notes: z.string().min(1, "Notes are required"),
 });
 
@@ -211,9 +212,10 @@ export default function Inventory() {
   });
 
   const adjustStockMutation = useMutation({
-    mutationFn: async (data: { productId: string; quantity: number; notes: string }) => {
+    mutationFn: async (data: { productId: string; quantity: number; purchasePrice?: string; notes: string }) => {
       return apiRequest('POST', `/api/products/${data.productId}/adjust-stock`, {
         quantity: data.quantity,
+        purchasePrice: data.purchasePrice,
         notes: data.notes,
       });
     },
@@ -308,6 +310,7 @@ export default function Inventory() {
     setAdjustingProduct(product);
     stockForm.reset({
       quantity: "",
+      purchasePrice: product.purchasePrice || "",
       notes: `Tambah stok ${product.name}`,
     });
     setShowStockDialog(true);
@@ -318,6 +321,7 @@ export default function Inventory() {
       adjustStockMutation.mutate({
         productId: adjustingProduct.id,
         quantity: data.quantity,
+        purchasePrice: data.purchasePrice,
         notes: data.notes,
       });
     }
@@ -822,6 +826,29 @@ export default function Inventory() {
                       />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={stockForm.control}
+                name="purchasePrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Harga Pembelian Baru (Opsional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        step="0.01"
+                        placeholder="Masukkan harga pembelian untuk HPP rata-rata" 
+                        {...field} 
+                        data-testid="input-purchase-price" 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                      Kosongkan jika ingin menggunakan harga lama: Rp {Number(adjustingProduct?.purchasePrice || 0).toLocaleString('id-ID')}
+                    </p>
                   </FormItem>
                 )}
               />

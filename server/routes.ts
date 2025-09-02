@@ -652,14 +652,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/products/:id/adjust-stock', isAuthenticated, async (req: any, res) => {
     try {
-      const { quantity, notes } = req.body;
+      const { quantity, notes, purchasePrice } = req.body;
       
       if (!quantity || quantity <= 0) {
         return res.status(400).json({ message: 'Quantity must be greater than 0' });
       }
 
       const userId = req.session.user.id;
-      const updatedProduct = await storage.adjustStock(req.params.id, Number(quantity), notes, userId);
+      const updatedProduct = await storage.adjustStock(req.params.id, Number(quantity), notes, userId, purchasePrice);
       
       res.json(updatedProduct);
     } catch (error) {
