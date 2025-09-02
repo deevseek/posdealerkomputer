@@ -159,17 +159,17 @@ export default function ServicePaymentReceipt({
       const pageWidth = paperSizes[paperSize].width;
       const pageHeight = paperSize === 'a4' ? 297 : (canvas.height / canvas.width) * pageWidth;
       
-      const pdf = new jsPDF('p', 'mm', paperSize === 'a4' ? 'a4' : [pageWidth, pageHeight]);
+      const pdf = new jsPDF('p', 'mm', paperSize === 'a4' ? [148, 210] : [pageWidth, pageHeight]);
       if (paperSize === 'a4') {
-        // For A4, fit to page with margins
-        const margin = 10;
-        const availableWidth = pageWidth - (2 * margin);
+        // For A5 size (half page), fit to page with margins
+        const margin = 4;
+        const availableWidth = 148 - (2 * margin); // A5 width
         const scaledHeight = (canvas.height / canvas.width) * availableWidth;
         pdf.addImage(imgData, 'PNG', margin, margin, availableWidth, scaledHeight);
       } else {
         pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, pageHeight);
       }
-      pdf.save(`Nota-Pembayaran-Service-${serviceTicket.ticketNumber}-${pageWidth}mm.pdf`);
+      pdf.save(`Nota-Pembayaran-Service-${serviceTicket.ticketNumber}-${paperSize === 'a4' ? 'A5' : pageWidth + 'mm'}.pdf`);
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Error generating PDF. Please try again or contact support.');
@@ -202,10 +202,10 @@ export default function ServicePaymentReceipt({
               position: absolute;
               left: 0;
               top: 0;
-              width: ${pageWidth}mm;
-              max-width: ${pageWidth}mm;
+              width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
+              max-width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
               font-family: ${paperSize === 'a4' ? 'Arial, sans-serif' : "'Courier New', monospace"};
-              font-size: ${fontSize};
+              font-size: ${paperSize === 'a4' ? '11px' : fontSize};
               line-height: ${paperSize === 'a4' ? '1.4' : '1.0'};
               color: #000;
               background: #fff;
@@ -218,8 +218,8 @@ export default function ServicePaymentReceipt({
               display: none !important; 
             }
             @page {
-              size: ${paperSize === 'a4' ? 'A4' : `${pageWidth}mm 350mm`};
-              margin: ${paperSize === 'a4' ? '10mm' : '1mm'};
+              size: ${paperSize === 'a4' ? '148mm 210mm' : `${pageWidth}mm 350mm`};
+              margin: ${paperSize === 'a4' ? '4mm' : '1mm'};
             }
             .text-center { text-align: center; }
             .font-bold { font-weight: bold; }
