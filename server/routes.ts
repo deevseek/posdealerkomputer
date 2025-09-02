@@ -639,6 +639,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Specialized pricing management endpoint
+  app.patch('/api/products/:id/pricing', isAuthenticated, async (req, res) => {
+    try {
+      const { sellingPrice, marginPercent } = req.body;
+      
+      // Calculate margin percentage if selling price provided
+      let updateData: any = {};
+      if (sellingPrice) updateData.sellingPrice = sellingPrice;
+      if (marginPercent) updateData.marginPercent = marginPercent;
+      
+      const product = await storage.updateProduct(req.params.id, updateData);
+      
+      // Return updated product with current HPP info
+      const currentHPP = await storage.getAveragePurchasePrice(req.params.id);
+      const updatedProduct = await storage.getProductById(req.params.id);
+      
+      res.json({
+        ...updatedProduct,
+        currentHPP: currentHPP
+      });
+    } catch (error) {
+      console.error("Error updating product pricing:", error);
+      res.status(500).json({ message: "Failed to update product pricing" });
+    }
+  });
+
   // Location routes
   app.get('/api/locations', isAuthenticated, async (req, res) => {
     try {

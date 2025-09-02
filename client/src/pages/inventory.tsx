@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Package, AlertTriangle, History, TrendingUp } from "lucide-react";
+import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -70,7 +70,7 @@ export default function Inventory() {
     return stock <= minStock;
   });
 
-  const incomingStock = purchaseOrders.filter((po: any) => 
+  const incomingStock = (purchaseOrders as any[]).filter((po: any) => 
     po.status === 'confirmed' || po.status === 'partial_received'
   );
 
@@ -84,9 +84,10 @@ export default function Inventory() {
         />
         <main className="flex-1 overflow-y-auto p-6">
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
+              <TabsTrigger value="pricing" data-testid="tab-pricing">HPP & Pricing</TabsTrigger>
               <TabsTrigger value="movements" data-testid="tab-movements">Stock Movements</TabsTrigger>
               <TabsTrigger value="incoming" data-testid="tab-incoming">Incoming Stock</TabsTrigger>
             </TabsList>
@@ -227,7 +228,7 @@ export default function Inventory() {
                           <TableHead>SKU</TableHead>
                           <TableHead className="text-right">Current Stock</TableHead>
                           <TableHead className="text-right">Min Stock</TableHead>
-                          <TableHead className="text-right">Purchase Price</TableHead>
+                          <TableHead className="text-right">HPP (Average Cost)</TableHead>
                           <TableHead className="text-right">Selling Price</TableHead>
                           <TableHead>Status</TableHead>
                         </TableRow>
@@ -263,7 +264,12 @@ export default function Inventory() {
                                 {product.minStock || 5}
                               </TableCell>
                               <TableCell className="text-right">
-                                Rp {Number(product.purchasePrice || 0).toLocaleString('id-ID')}
+                                <div className="space-y-1">
+                                  <div className="font-medium">Rp {Number(product.averageCost || 0).toLocaleString('id-ID')}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Last: Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}
+                                  </div>
+                                </div>
                               </TableCell>
                               <TableCell className="text-right">
                                 Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}
@@ -279,6 +285,119 @@ export default function Inventory() {
                       </TableBody>
                     </Table>
                   )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* HPP & Pricing Management Tab */}
+            <TabsContent value="pricing" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <DollarSign className="w-5 h-5 mr-2" />
+                    HPP & Pricing Management
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Manage Harga Pokok Penjualan (Cost of Goods Sold) and selling prices
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead className="text-right">Stock</TableHead>
+                        <TableHead className="text-right">Last Purchase Price</TableHead>
+                        <TableHead className="text-right">HPP (Average Cost)</TableHead>
+                        <TableHead className="text-right">Selling Price</TableHead>
+                        <TableHead className="text-right">Margin %</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product: any) => {
+                        const hpp = Number(product.averageCost || 0);
+                        const sellingPrice = Number(product.sellingPrice || 0);
+                        const marginPercent = hpp > 0 ? ((sellingPrice - hpp) / hpp * 100).toFixed(1) : 0;
+                        
+                        return (
+                          <TableRow key={product.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{product.name}</p>
+                                <p className="text-sm text-muted-foreground">{product.sku}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant="outline">{product.stock || 0}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="text-sm">
+                                Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-medium text-blue-600">
+                                Rp {hpp.toLocaleString('id-ID')}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-medium text-green-600">
+                                Rp {sellingPrice.toLocaleString('id-ID')}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={Number(marginPercent) > 20 ? "default" : "secondary"}>
+                                {marginPercent}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`edit-pricing-${product.id}`}
+                                onClick={() => {
+                                  // TODO: Open pricing edit dialog
+                                  alert(`Edit pricing for ${product.name} - Coming soon!`);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+              
+              {/* HPP Calculation Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">HPP Calculation Info</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                      <h4 className="font-semibold text-blue-700 dark:text-blue-300">HPP (Average Cost)</h4>
+                      <p className="text-blue-600 dark:text-blue-400">
+                        Calculated from weighted average of purchase prices over time
+                      </p>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg">
+                      <h4 className="font-semibold text-green-700 dark:text-green-300">Selling Price</h4>
+                      <p className="text-green-600 dark:text-green-400">
+                        Set by admin based on market research and margin targets
+                      </p>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950 p-4 rounded-lg">
+                      <h4 className="font-semibold text-amber-700 dark:text-amber-300">Margin %</h4>
+                      <p className="text-amber-600 dark:text-amber-400">
+                        Formula: (Selling Price - HPP) / HPP × 100%
+                      </p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -305,14 +424,14 @@ export default function Inventory() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {stockMovements.length === 0 ? (
+                      {(stockMovements as any[]).length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                             No stock movements recorded yet
                           </TableCell>
                         </TableRow>
                       ) : (
-                        stockMovements.slice(0, 20).map((movement: any) => (
+                        (stockMovements as any[]).slice(0, 20).map((movement: any) => (
                           <TableRow key={movement.id}>
                             <TableCell className="text-sm">
                               {new Date(movement.createdAt).toLocaleDateString('id-ID')}

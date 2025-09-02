@@ -600,12 +600,12 @@ export class DatabaseStorage implements IStorage {
       })
       .where(eq(purchaseOrderItems.id, itemId));
 
-    // SIMPLIFIED: Direct stock movement insert 
+    // Record stock movement with actual purchase price
     await db.insert(stockMovements).values({
       productId: item.productId,
       movementType: 'in',
       quantity: receivedQuantity,
-      unitCost: '0', // Simplified 
+      unitCost: item.unitPrice, // Use actual purchase price for HPP calculation
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
@@ -617,6 +617,17 @@ export class DatabaseStorage implements IStorage {
       .update(products)
       .set({ 
         stock: sql`${products.stock} + ${receivedQuantity}`,
+        lastPurchasePrice: item.unitPrice, // Update last purchase price
+        updatedAt: new Date()
+      })
+      .where(eq(products.id, item.productId));
+
+    // CALCULATE AND UPDATE HPP (Average Cost) after receiving new stock
+    const newAverageCost = await this.getAveragePurchasePrice(item.productId);
+    await db
+      .update(products)
+      .set({ 
+        averageCost: newAverageCost.toString(),
         updatedAt: new Date()
       })
       .where(eq(products.id, item.productId));
