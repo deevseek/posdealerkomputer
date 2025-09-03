@@ -1828,8 +1828,8 @@ Terima kasih!
       console.log('Starting database migration...');
       
       // Import child_process to run drizzle migration
-      const { exec } = require('child_process');
-      const { promisify } = require('util');
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
       const execAsync = promisify(exec);
 
       // Run drizzle push command to apply schema changes
