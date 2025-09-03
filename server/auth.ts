@@ -79,9 +79,24 @@ async function createDefaultAdminUser() {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  console.log("Auth check:", {
+    hasSession: !!req.session,
+    hasUser: !!req.session?.user,
+    userId: req.session?.user?.id,
+    sessionId: req.sessionID,
+    path: req.path,
+    method: req.method
+  });
+  
   if (req.session && req.session.user) {
     return next();
   }
+  
+  console.error("Authentication failed:", {
+    sessionExists: !!req.session,
+    userExists: !!req.session?.user,
+    path: req.path
+  });
   return res.status(401).json({ message: 'Unauthorized' });
 };
 

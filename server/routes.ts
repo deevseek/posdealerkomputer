@@ -1092,6 +1092,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get old ticket for status comparison
       const oldTicket = await storage.getServiceTicketById(req.params.id);
       const userId = req.session.user?.id;
+      
+      console.log("Session data:", { 
+        sessionExists: !!req.session, 
+        userExists: !!req.session.user, 
+        userId: userId,
+        sessionId: req.sessionID 
+      });
+      
+      if (!userId) {
+        console.error("No user ID in session for service ticket update");
+        return res.status(401).json({ message: "User session invalid. Please login again." });
+      }
+      
       const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts, userId);
       
       // Send WhatsApp notification for status change (async, don't block response)
