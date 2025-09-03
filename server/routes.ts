@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { whatsappService } from "./whatsappService";
+import QRCode from 'qrcode';
 // Conditional auth import based on environment
 import { isAuthenticated, authenticateUser, hashPassword } from "./auth";
 import {
@@ -1578,7 +1579,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (rawQrCode) {
         try {
           console.log('Converting QR code to data URL, raw length:', rawQrCode.length);
-          const QRCode = require('qrcode');
           qrCodeDataUrl = await QRCode.toDataURL(rawQrCode);
           console.log('QR conversion successful, data URL length:', qrCodeDataUrl ? qrCodeDataUrl.length : 0);
         } catch (qrError) {
