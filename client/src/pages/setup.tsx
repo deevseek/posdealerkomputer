@@ -194,9 +194,13 @@ export default function Setup() {
     onSuccess: () => {
       toast({
         title: "Setup Completed!",
-        description: "Application setup completed successfully. Redirecting to login...",
+        description: "Setup selesai! Mengarahkan ke halaman login dalam 3 detik...",
+        duration: 3000,
       });
-      setTimeout(() => setLocation('/login'), 2000);
+      // Immediate redirect to login page
+      setTimeout(() => {
+        window.location.href = '/login';
+      }, 3000);
     },
     onError: (error: Error) => {
       toast({
