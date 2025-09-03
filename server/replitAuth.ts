@@ -42,11 +42,13 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: isProduction, // Only require HTTPS in production
-      sameSite: isProduction ? 'none' : 'lax', // Allow cross-origin in production
+      secure: 'auto', // Let express-session detect HTTPS automatically
+      sameSite: 'lax', // Use lax instead of none for better compatibility
       maxAge: sessionTtl,
+      domain: undefined, // Let the browser determine the domain
     },
     name: 'laptoppos.session', // Custom session name
+    proxy: true, // Trust the proxy
   });
 }
 
