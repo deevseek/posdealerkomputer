@@ -1184,9 +1184,10 @@ export class DatabaseStorage implements IStorage {
           if (ticket.status === 'completed' || ticket.status === 'delivered') {
             const currentStock = product.totalStock || 0;
             
-            // Check stock only for completed services
+            // Check stock for completed services - allow negative stock but warn
             if (currentStock < part.quantity) {
-              throw new Error(`Stock ${product.name} tidak cukup untuk menyelesaikan servis. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
+              console.warn(`WARNING: Stock ${product.name} tidak cukup. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}. Melanjutkan dengan stock negatif.`);
+              // Don't throw error, just proceed with negative stock
             }
             
             // Update product stock
