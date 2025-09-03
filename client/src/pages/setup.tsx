@@ -578,7 +578,7 @@ export default function Setup() {
               </>
             )}
 
-            {currentStep === 3 && (
+            {currentStep === 4 && (
               <>
                 <CardHeader>
                   <div className="flex items-center">
@@ -590,13 +590,21 @@ export default function Setup() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg">
-                    <h3 className="font-semibold text-green-800 dark:text-green-200 mb-2">
-                      🎉 Congratulations!
+                  <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg text-center">
+                    <h3 className="font-semibold text-green-800 dark:text-green-200 mb-4 text-lg">
+                      🎉 Setup Selesai!
                     </h3>
-                    <p className="text-green-700 dark:text-green-300 text-sm">
-                      Your LaptopPOS system has been successfully configured. You can now log in with your admin credentials and start managing your business.
+                    <p className="text-green-700 dark:text-green-300 text-sm mb-4">
+                      Sistem LaptopPOS Anda sudah berhasil dikonfigurasi. Sekarang Anda bisa login dan mulai mengelola bisnis.
                     </p>
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border-2 border-green-200 dark:border-green-700">
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Klik tombol "Complete Setup" di bawah untuk menyelesaikan instalasi
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Anda akan diarahkan ke halaman login setelah setup selesai
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-4">
@@ -618,19 +626,21 @@ export default function Setup() {
                       Back
                     </Button>
                     <Button 
+                      size="lg"
+                      className="px-8 py-3 text-lg font-semibold bg-green-600 hover:bg-green-700 text-white"
                       onClick={() => completeSetupMutation.mutate()}
                       disabled={completeSetupMutation.isPending}
                       data-testid="button-complete-setup"
                     >
                       {completeSetupMutation.isPending ? (
                         <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Finishing...
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Menyelesaikan Setup...
                         </>
                       ) : (
                         <>
-                          Complete Setup
-                          <CheckCircle className="h-4 w-4 ml-2" />
+                          ✅ Complete Setup
+                          <CheckCircle className="h-5 w-5 ml-2" />
                         </>
                       )}
                     </Button>
