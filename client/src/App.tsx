@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
+import { useSetup } from "@/hooks/useSetup";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -21,9 +22,21 @@ import Settings from "@/pages/settings";
 import RolesPage from "@/pages/roles";
 import UsersPage from "@/pages/users";
 import ServiceStatus from "@/pages/ServiceStatus";
+import Setup from "@/pages/setup";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { needsSetup, isSetupLoading } = useSetup();
+
+  // Show setup if not completed (regardless of auth status)
+  if (needsSetup || isSetupLoading) {
+    return (
+      <Switch>
+        <Route path="/setup" component={Setup} />
+        <Route path="*" component={Setup} /> {/* Redirect all routes to setup */}
+      </Switch>
+    );
+  }
 
   return (
     <Switch>
@@ -48,6 +61,7 @@ function Router() {
         </>
       )}
       <Route path="/service-status" component={ServiceStatus} />
+      <Route path="/setup" component={Setup} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -1820,6 +1820,157 @@ Terima kasih!
     }
   });
 
+  // Setup Wizard Endpoints - untuk installer
+  
+  // Check setup status
+  app.get('/api/setup/status', async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      const userCount = await storage.getUserCount();
+      
+      const isSetupCompleted = Boolean(
+        config && 
+        config.name && 
+        config.setupCompleted !== false &&
+        userCount > 0
+      );
+      
+      res.json({
+        setupCompleted: isSetupCompleted,
+        hasStoreConfig: Boolean(config?.name),
+        hasAdminUser: userCount > 0,
+        storeName: config?.name,
+        setupSteps: config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {}
+      });
+    } catch (error) {
+      console.error('Error checking setup status:', error);
+      res.json({
+        setupCompleted: false,
+        hasStoreConfig: false,
+        hasAdminUser: false,
+        setupSteps: {}
+      });
+    }
+  });
+
+  // Setup store configuration
+  app.post('/api/setup/store', async (req, res) => {
+    try {
+      const { name, address, phone, email, taxRate } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ message: 'Store name is required' });
+      }
+
+      const existingConfig = await storage.getStoreConfig();
+      const setupSteps = existingConfig?.setupSteps ? JSON.parse(existingConfig.setupSteps) : {};
+      setupSteps.store = true;
+
+      await storage.upsertStoreConfig({
+        id: existingConfig?.id || undefined,
+        name,
+        address: address || '',
+        phone: phone || '',
+        email: email || '',
+        taxRate: taxRate || '11.00',
+        setupSteps: JSON.stringify(setupSteps),
+        setupCompleted: false, // Will be completed in final step
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Store configuration saved successfully' 
+      });
+    } catch (error) {
+      console.error('Error saving store config:', error);
+      res.status(500).json({ message: 'Failed to save store configuration' });
+    }
+  });
+
+  // Setup admin user
+  app.post('/api/setup/admin', async (req, res) => {
+    try {
+      const { username, password, email, firstName, lastName } = req.body;
+      
+      if (!username || !password || !email) {
+        return res.status(400).json({ message: 'Username, password, and email are required' });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      const emailExists = await storage.getUserByEmail(email);
+      if (emailExists) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
+      // Hash password and create user
+      const hashedPassword = await hashPassword(password);
+      
+      await storage.createUser({
+        username,
+        password: hashedPassword,
+        email,
+        firstName: firstName || 'System',
+        lastName: lastName || 'Administrator',
+        role: 'admin',
+        isActive: true,
+        profileImageUrl: null
+      });
+
+      // Update setup steps
+      const config = await storage.getStoreConfig();
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.admin = true;
+
+      if (config) {
+        await storage.upsertStoreConfig({
+          ...config,
+          setupSteps: JSON.stringify(setupSteps)
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Admin user created successfully' 
+      });
+    } catch (error) {
+      console.error('Error creating admin user:', error);
+      res.status(500).json({ message: 'Failed to create admin user' });
+    }
+  });
+
+  // Complete setup
+  app.post('/api/setup/complete', async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      
+      if (!config) {
+        return res.status(400).json({ message: 'Store configuration not found' });
+      }
+
+      const setupSteps = config.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.completed = true;
+
+      await storage.upsertStoreConfig({
+        ...config,
+        setupCompleted: true,
+        setupSteps: JSON.stringify(setupSteps)
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Setup completed successfully! You can now use the application.' 
+      });
+    } catch (error) {
+      console.error('Error completing setup:', error);
+      res.status(500).json({ message: 'Failed to complete setup' });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
