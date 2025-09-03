@@ -405,7 +405,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       )
       .orderBy(asc(products.name));
@@ -1616,7 +1616,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       );
 
@@ -1627,10 +1627,10 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       )
-      .orderBy(products.totalStock);
+      .orderBy(products.stock);
 
     const [totalResult] = await db
       .select({ count: count() })
@@ -1640,11 +1640,11 @@ export class DatabaseStorage implements IStorage {
     // Calculate total asset value (stock × purchase price)
     const assetValueResult = await db
       .select({
-        totalValue: sql<number>`SUM(${products.totalStock} * COALESCE(${products.lastPurchasePrice}, 0))`,
-        totalQuantity: sql<number>`SUM(${products.totalStock})`
+        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.lastPurchasePrice}, 0))`,
+        totalQuantity: sql<number>`SUM(${products.stock})`
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gte(products.totalStock, 0)));
+      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
     const totalAssetValue = Number(assetValueResult[0]?.totalValue || 0);
     const totalStockQuantity = Number(assetValueResult[0]?.totalQuantity || 0);
@@ -1709,7 +1709,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       );
     
