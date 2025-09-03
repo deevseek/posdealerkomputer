@@ -1182,7 +1182,7 @@ export class DatabaseStorage implements IStorage {
           
           // Only update stock and record movement for completed/delivered status
           if (ticket.status === 'completed' || ticket.status === 'delivered') {
-            const currentStock = product.totalStock || 0;
+            const currentStock = product.stock || 0;
             
             // Check stock for completed services - allow negative stock but warn
             if (currentStock < part.quantity) {
