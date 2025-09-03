@@ -165,7 +165,7 @@ export interface IStorage {
   getServiceTicketById(id: string): Promise<ServiceTicket | undefined>;
   getActiveServiceTickets(): Promise<ServiceTicket[]>;
   createServiceTicket(ticket: InsertServiceTicket): Promise<ServiceTicket>;
-  updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>): Promise<ServiceTicket>;
+  updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[], userId?: string): Promise<ServiceTicket>;
   deleteServiceTicket(id: string): Promise<void>;
   
   // Stock Movements
@@ -1143,7 +1143,7 @@ export class DatabaseStorage implements IStorage {
     return ticket;
   }
 
-  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[]): Promise<ServiceTicket> {
+  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[], userId?: string): Promise<ServiceTicket> {
     return await db.transaction(async (tx) => {
       const [ticket] = await tx
         .update(serviceTickets)
@@ -1206,7 +1206,7 @@ export class DatabaseStorage implements IStorage {
               referenceId: id,
               referenceType: 'service',
               notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
-              userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
             });
           } else {
             // For non-completed status, just reserve stock (optional - estimate only)
@@ -1250,7 +1250,7 @@ export class DatabaseStorage implements IStorage {
               ticket.id,
               ticket.laborCost,
               `${ticket.ticketNumber}: ${ticket.problem}`,
-              ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+              userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
             );
           }
           
@@ -1266,7 +1266,7 @@ export class DatabaseStorage implements IStorage {
                   part.quantity,
                   product.lastPurchasePrice || '0', // modal price
                   part.unitPrice, // selling price
-                  ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+                  userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
                 );
               }
             }

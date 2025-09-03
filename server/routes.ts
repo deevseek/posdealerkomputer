@@ -1091,7 +1091,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get old ticket for status comparison
       const oldTicket = await storage.getServiceTicketById(req.params.id);
-      const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts);
+      const userId = req.session.user?.id;
+      const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts, userId);
       
       // Send WhatsApp notification for status change (async, don't block response)
       if (status !== undefined && oldTicket && status !== oldTicket.status) {
