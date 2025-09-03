@@ -128,7 +128,7 @@ export interface IStorage {
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
   recalculatePurchaseOrderTotal(poId: string): Promise<void>;
-  receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void>;
+  receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void>;
   
   // Inventory Adjustments
   getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
@@ -624,7 +624,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void> {
+  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void> {
     // SIMPLIFIED: Get item details with select all - no complex field selection
     const [item] = await db
       .select()
@@ -653,7 +653,7 @@ export class DatabaseStorage implements IStorage {
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
-      userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
+      userId: userId,
     });
 
     // CREATE FINANCE RECORD for purchase expense
@@ -666,7 +666,7 @@ export class DatabaseStorage implements IStorage {
         category: 'Inventory Purchase',
         reference: item.purchaseOrderId,
         referenceType: 'purchase_order',
-        userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
+        userId: userId,
       });
     }
 

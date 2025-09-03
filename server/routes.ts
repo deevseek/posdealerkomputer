@@ -764,9 +764,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { itemId } = req.params;
       const { receivedQuantity } = req.body;
+      const userId = req.session.user?.id;
       
-      console.log("Receiving items:", { itemId, receivedQuantity });
-      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity));
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      console.log("Receiving items:", { itemId, receivedQuantity, userId });
+      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity), userId);
       res.json({ message: "Items received successfully" });
     } catch (error) {
       console.error("Error receiving items:", error);
