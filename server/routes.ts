@@ -545,19 +545,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/products/:id', isAuthenticated, async (req, res) => {
-    try {
-      const product = await storage.getProductById(req.params.id);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-      res.json(product);
-    } catch (error) {
-      console.error("Error fetching product:", error);
-      res.status(500).json({ message: "Failed to fetch product" });
-    }
-  });
-
   app.get('/api/products/low-stock', isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getLowStockProducts();
@@ -957,8 +944,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate transaction number
       const transactionNumber = `TRX-${Date.now()}`;
       
+      // Add transaction number and user ID to transaction data
+      const completeTransactionData = {
+        ...transactionData,
+        transactionNumber,
+        userId: req.session.user?.id
+      };
+      
       const transaction = await storage.createTransaction(
-        transactionData,
+        completeTransactionData,
         items
       );
       
