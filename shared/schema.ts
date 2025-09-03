@@ -951,7 +951,6 @@ export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
 export type JournalEntry = typeof journalEntries.$inferSelect;
 export type InsertJournalEntryLine = z.infer<typeof insertJournalEntryLineSchema>;
 export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
-export type Account = typeof accounts.$inferSelect;
 export type InsertAccount2 = z.infer<typeof insertAccountSchema2>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;

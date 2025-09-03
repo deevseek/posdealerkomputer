@@ -1820,6 +1820,39 @@ Terima kasih!
     }
   });
 
+  // Import default roles config
+  const { defaultRoleConfigs } = await import('./defaultRoles.js');
+
+  // Function to create default roles
+  async function createDefaultRoles() {
+    try {
+      console.log('Creating default roles...');
+      
+      for (const roleConfig of defaultRoleConfigs) {
+        // Check if role already exists
+        const existingRoles = await storage.getRoles();
+        const roleExists = existingRoles.some(role => role.name === roleConfig.name);
+        
+        if (!roleExists) {
+          await storage.createRole({
+            name: roleConfig.name,
+            displayName: roleConfig.displayName,
+            description: roleConfig.description,
+            permissions: roleConfig.permissions,
+            isActive: true
+          });
+          console.log(`✅ Created role: ${roleConfig.displayName}`);
+        } else {
+          console.log(`ℹ️ Role already exists: ${roleConfig.displayName}`);
+        }
+      }
+      
+      console.log('✅ Default roles setup completed');
+    } catch (error) {
+      console.error('Error creating default roles:', error);
+    }
+  }
+
   // Setup Wizard Endpoints - untuk installer
   
   // Database migration endpoint
@@ -1839,6 +1872,9 @@ Terima kasih!
       });
 
       console.log('Database migration completed successfully');
+
+      // Create default roles after migration
+      await createDefaultRoles();
 
       // Update setup steps
       const config = await storage.getStoreConfig();
