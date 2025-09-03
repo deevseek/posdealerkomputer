@@ -75,7 +75,7 @@ export default function Setup() {
         title: "Store Setup Complete",
         description: "Store configuration has been saved successfully",
       });
-      setCurrentStep(2);
+      setCurrentStep(3);
     },
     onError: (error: Error) => {
       toast({
@@ -105,7 +105,7 @@ export default function Setup() {
         title: "Database Migration Complete",
         description: "Database schema has been migrated successfully",
       });
-      setCurrentStep(3);
+      setCurrentStep(2);
     },
     onError: (error: Error) => {
       toast({
@@ -279,7 +279,7 @@ export default function Setup() {
                 ) : (
                   <Circle className="h-8 w-8 text-gray-400" />
                 )}
-                <span className="ml-2 font-medium text-gray-900 dark:text-white">Store</span>
+                <span className="ml-2 font-medium text-gray-900 dark:text-white">Database</span>
               </div>
               
               <ArrowRight className="h-4 w-4 text-gray-400" />
@@ -294,7 +294,7 @@ export default function Setup() {
                 ) : (
                   <Circle className="h-8 w-8 text-gray-400" />
                 )}
-                <span className="ml-2 font-medium text-gray-900 dark:text-white">Database</span>
+                <span className="ml-2 font-medium text-gray-900 dark:text-white">Store</span>
               </div>
               
               <ArrowRight className="h-4 w-4 text-gray-400" />
@@ -330,6 +330,62 @@ export default function Setup() {
           {/* Step Content */}
           <Card className="max-w-2xl mx-auto">
             {currentStep === 1 && (
+              <>
+                <CardHeader>
+                  <div className="flex items-center">
+                    <Database className="h-6 w-6 text-blue-600 mr-2" />
+                    <CardTitle>Database Migration</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Initialize your database tables and structure
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="text-center py-8">
+                    <Database className="h-16 w-16 text-blue-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Ready to Setup Database</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Click the button below to automatically migrate your database schema. 
+                      This will create all necessary tables and indexes for your application.
+                    </p>
+                    
+                    {databaseMigrationMutation.isPending && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
+                        <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Migrating database schema...</span>
+                        </div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                          This may take up to 1 minute. Please wait...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button 
+                      onClick={() => databaseMigrationMutation.mutate()}
+                      disabled={databaseMigrationMutation.isPending}
+                      data-testid="button-migrate-database"
+                    >
+                      {databaseMigrationMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Migrating...
+                        </>
+                      ) : (
+                        <>
+                          Migrate Database
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </>
+            )}
+
+            {currentStep === 2 && (
               <>
                 <CardHeader>
                   <div className="flex items-center">
@@ -389,7 +445,15 @@ export default function Setup() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end">
+                  <div className="flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setCurrentStep(1)}
+                      data-testid="button-back-store"
+                      disabled={storeSetupMutation.isPending}
+                    >
+                      Back
+                    </Button>
                     <Button 
                       onClick={handleStoreSetup}
                       disabled={storeSetupMutation.isPending}
@@ -403,70 +467,6 @@ export default function Setup() {
                       ) : (
                         <>
                           Continue
-                          <ArrowRight className="h-4 w-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </>
-            )}
-
-            {currentStep === 2 && (
-              <>
-                <CardHeader>
-                  <div className="flex items-center">
-                    <Database className="h-6 w-6 text-blue-600 mr-2" />
-                    <CardTitle>Database Migration</CardTitle>
-                  </div>
-                  <CardDescription>
-                    Initialize and migrate the database schema for your application
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="text-center py-8">
-                    <Database className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Ready to Setup Database</h3>
-                    <p className="text-muted-foreground mb-6">
-                      Click the button below to automatically migrate your database schema. 
-                      This will create all necessary tables and indexes for your application.
-                    </p>
-                    
-                    {databaseMigrationMutation.isPending && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
-                        <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Migrating database schema...</span>
-                        </div>
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                          This may take up to 1 minute. Please wait...
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setCurrentStep(1)}
-                      data-testid="button-back-database"
-                      disabled={databaseMigrationMutation.isPending}
-                    >
-                      Back
-                    </Button>
-                    <Button 
-                      onClick={() => databaseMigrationMutation.mutate()}
-                      disabled={databaseMigrationMutation.isPending}
-                      data-testid="button-migrate-database"
-                    >
-                      {databaseMigrationMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Migrating...
-                        </>
-                      ) : (
-                        <>
-                          Migrate Database
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </>
                       )}
