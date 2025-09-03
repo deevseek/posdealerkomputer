@@ -467,10 +467,12 @@ export default function FinanceNew() {
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               {summary?.breakdown?.categories ? (() => {
-                const incomeCount = Object.values(summary.breakdown.categories).reduce(
-                  (sum, cat) => sum + (cat.income > 0 ? cat.count : 0), 0);
-                const expenseCount = Object.values(summary.breakdown.categories).reduce(
-                  (sum, cat) => sum + (cat.expense > 0 ? cat.count : 0), 0);
+                const incomeCount = Object.values(summary.breakdown.categories)
+                  .filter(cat => cat.income > 0)
+                  .reduce((sum, cat) => sum + cat.count, 0);
+                const expenseCount = Object.values(summary.breakdown.categories)
+                  .filter(cat => cat.expense > 0)
+                  .reduce((sum, cat) => sum + cat.count, 0);
                 return `Income: ${incomeCount} | Expense: ${expenseCount}`;
               })() : 'Income: 0 | Expense: 0'}
             </div>
