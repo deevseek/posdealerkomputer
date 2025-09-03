@@ -64,6 +64,14 @@ async function createDefaultAdminUser() {
       });
       
       console.log(`✅ Default admin user created: ${adminUsername}/${adminPassword}`);
+    } else {
+      // Ensure existing admin has correct password (for deployment consistency)
+      const isValidPassword = await verifyPassword(adminPassword, existingUser.password || '');
+      if (!isValidPassword) {
+        const hashedPassword = await hashPassword(adminPassword);
+        await storage.updateUser(existingUser.id, { password: hashedPassword });
+        console.log(`✅ Admin password reset to default: ${adminUsername}/${adminPassword}`);
+      }
     }
   } catch (error) {
     console.error('Error creating default admin user:', error);
