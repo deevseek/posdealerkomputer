@@ -54,22 +54,24 @@ export class ObjectStorageService {
       )
     );
     if (paths.length === 0) {
-      throw new Error(
-        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
-          "tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths)."
+      console.warn(
+        "PUBLIC_OBJECT_SEARCH_PATHS not set. Object storage features will be disabled. " +
+          "Create a bucket in 'Object Storage' tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths) to enable object storage."
       );
+      return [];
     }
     return paths;
   }
 
   // Gets the private object directory.
-  getPrivateObjectDir(): string {
+  getPrivateObjectDir(): string | null {
     const dir = process.env.PRIVATE_OBJECT_DIR || "";
     if (!dir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
+      console.warn(
+        "PRIVATE_OBJECT_DIR not set. Private object storage features will be disabled. " +
+          "Create a bucket in 'Object Storage' tool and set PRIVATE_OBJECT_DIR env var to enable private object storage."
       );
+      return null;
     }
     return dir;
   }
@@ -131,13 +133,11 @@ export class ObjectStorageService {
   }
 
   // Gets the upload URL for an object entity.
-  async getObjectEntityUploadURL(): Promise<string> {
+  async getObjectEntityUploadURL(): Promise<string | null> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
+      console.warn("Cannot generate upload URL: PRIVATE_OBJECT_DIR not configured");
+      return null;
     }
 
     const objectId = randomUUID();
@@ -167,6 +167,9 @@ export class ObjectStorageService {
 
     const entityId = parts.slice(1).join("/");
     let entityDir = this.getPrivateObjectDir();
+    if (!entityDir) {
+      throw new ObjectNotFoundError();
+    }
     if (!entityDir.endsWith("/")) {
       entityDir = `${entityDir}/`;
     }
@@ -193,6 +196,9 @@ export class ObjectStorageService {
     const rawObjectPath = url.pathname;
   
     let objectEntityDir = this.getPrivateObjectDir();
+    if (!objectEntityDir) {
+      return rawObjectPath;
+    }
     if (!objectEntityDir.endsWith("/")) {
       objectEntityDir = `${objectEntityDir}/`;
     }

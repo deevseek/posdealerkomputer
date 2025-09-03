@@ -1477,6 +1477,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const filePath = req.params.filePath;
     const objectStorageService = new ObjectStorageService();
     try {
+      // Check if object storage is configured
+      const searchPaths = objectStorageService.getPublicObjectSearchPaths();
+      if (searchPaths.length === 0) {
+        return res.status(503).json({ error: "Object storage not configured" });
+      }
+      
       const file = await objectStorageService.searchPublicObject(filePath);
       if (!file) {
         return res.status(404).json({ error: "File not found" });
@@ -1491,6 +1497,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/objects/:objectPath(*)", async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     try {
+      // Check if private object storage is configured
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      if (!privateDir) {
+        return res.status(503).json({ error: "Private object storage not configured" });
+      }
+      
       const objectFile = await objectStorageService.getObjectEntityFile(
         req.path,
       );
@@ -1506,8 +1518,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    res.json({ uploadURL });
+    try {
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      if (!uploadURL) {
+        return res.status(503).json({ error: "Object storage not configured for uploads" });
+      }
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      return res.status(500).json({ error: "Failed to generate upload URL" });
+    }
   });
 
   app.put("/api/logos", isAuthenticated, async (req, res) => {
@@ -1517,6 +1537,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const objectStorageService = new ObjectStorageService();
+      
+      // Check if private object storage is configured
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      if (!privateDir) {
+        return res.status(503).json({ error: "Object storage not configured" });
+      }
+      
       const objectPath = objectStorageService.normalizeObjectEntityPath(
         req.body.logoURL,
       );
