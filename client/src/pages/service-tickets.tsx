@@ -51,6 +51,7 @@ import ServiceReceipt from "@/components/ServiceReceipt";
 import ServiceReceiptNew from "@/components/ServiceReceiptNew";
 import ServicePaymentReceipt from "@/components/ServicePaymentReceipt";
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
+import CustomerCreateModal from "@/components/customers/customer-create-modal";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,
@@ -132,6 +133,7 @@ export default function ServiceTickets() {
   const [paymentReceiptData, setPaymentReceiptData] = useState<ServiceTicket | null>(null);
   const [showStatusTracker, setShowStatusTracker] = useState(false);
   const [statusTrackerData, setStatusTrackerData] = useState<ServiceTicket | null>(null);
+  const [showCustomerCreateModal, setShowCustomerCreateModal] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -323,6 +325,11 @@ export default function ServiceTickets() {
       toast({ title: "Error", description: "Gagal menghapus tiket servis", variant: "destructive" });
     },
   });
+
+  const handleCustomerCreated = (newCustomer: any) => {
+    // Select the newly created customer
+    form.setValue("customerId", newCustomer.id);
+  };
 
   const handleSubmit = (data: any) => {
     // Validate required fields
@@ -716,6 +723,20 @@ export default function ServiceTickets() {
                     </FormItem>
                   )}
                 />
+                <div className="col-span-2">
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCustomerCreateModal(true)}
+                      data-testid="button-create-customer"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Tambah Customer Baru
+                    </Button>
+                  </div>
+                </div>
 
                 <FormField
                   control={form.control}
@@ -1014,6 +1035,12 @@ export default function ServiceTickets() {
           currentStatus={statusTrackerData.status}
         />
       )}
+
+      <CustomerCreateModal
+        open={showCustomerCreateModal}
+        onClose={() => setShowCustomerCreateModal(false)}
+        onCustomerCreated={handleCustomerCreated}
+      />
     </div>
   );
 }

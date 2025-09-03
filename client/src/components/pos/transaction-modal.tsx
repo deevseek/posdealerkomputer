@@ -20,6 +20,7 @@ import { Plus, Minus, X, Search, Barcode } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import CustomerCreateModal from "@/components/customers/customer-create-modal";
 
 interface TransactionModalProps {
   open: boolean;
@@ -42,6 +43,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   const [items, setItems] = useState<TransactionItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
+  const [showCustomerCreateModal, setShowCustomerCreateModal] = useState(false);
   const { toast } = useToast();
 
   // Fetch products
@@ -115,11 +117,16 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     setItems([]);
     setProductSearch("");
     setSelectedProducts([]);
+    setShowCustomerCreateModal(false);
   };
 
   const selectCustomer = (customer: any) => {
     setSelectedCustomer(customer);
     setCustomerSearch("");
+  };
+
+  const handleCustomerCreated = (newCustomer: any) => {
+    selectCustomer(newCustomer);
   };
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -294,21 +301,15 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                             </div>
                           ) : (
                             <div className="text-center py-4 space-y-2">
-                              <div className="text-muted-foreground">No customers found</div>
+                              <div className="text-muted-foreground">Tidak ada customer ditemukan</div>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  // TODO: Add new customer modal
-                                  toast({
-                                    title: "Feature Coming Soon",
-                                    description: "Add new customer functionality will be added",
-                                  });
-                                }}
+                                onClick={() => setShowCustomerCreateModal(true)}
                                 data-testid="button-add-new-customer"
                               >
                                 <Plus className="w-4 h-4 mr-2" />
-                                Add New Customer
+                                Tambah Customer Baru
                               </Button>
                             </div>
                           )}
@@ -483,6 +484,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
           </Button>
         </div>
       </DialogContent>
+
+      <CustomerCreateModal
+        open={showCustomerCreateModal}
+        onClose={() => setShowCustomerCreateModal(false)}
+        onCustomerCreated={handleCustomerCreated}
+      />
     </Dialog>
   );
 }
