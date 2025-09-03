@@ -280,16 +280,16 @@ export default function StockMovements() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {getMovementIcon(movement.type)}
-                          <span className="capitalize">{movement.type === 'out' ? 'Keluar' : 'Masuk'}</span>
+                          {getMovementIcon(movement.movementType)}
+                          <span className="capitalize">{movement.movementType === 'out' ? 'Keluar' : 'Masuk'}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         {getReferenceTypeBadge(movement.referenceType)}
                       </TableCell>
                       <TableCell className="font-bold">
-                        <span className={movement.type === 'out' ? 'text-red-600' : 'text-green-600'}>
-                          {movement.type === 'out' ? '-' : '+'}{movement.quantity}
+                        <span className={movement.movementType === 'out' ? 'text-red-600' : 'text-green-600'}>
+                          {movement.movementType === 'out' ? '-' : '+'}{movement.quantity}
                         </span>
                       </TableCell>
                       <TableCell className="font-mono text-sm">
