@@ -21,10 +21,21 @@ export class WhatsAppService {
       // Use file-based auth state
       const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
       
+      // Create proper logger with required methods
+      const logger = {
+        level: 'silent',
+        error: () => {},
+        warn: () => {},
+        info: () => {},
+        debug: () => {},
+        trace: () => {},
+        child: () => logger,
+      };
+
       this.socket = makeWASocket({
         auth: state,
         printQRInTerminal: false,
-        logger: { level: 'silent', child: () => ({ level: 'silent' } as any) } as any,
+        logger: logger as any,
       });
 
       // Connection updates
@@ -227,7 +238,7 @@ Service laptop Anda telah kami terima dengan detail lengkap sebagai berikut:
 📋 **INFORMASI SERVICE:**
 📝 Nomor Service: *${serviceTicket.ticketNumber}*
 📅 Tanggal Diterima: ${receivedDate}
-⏰ Status Saat Ini: *${statusLabels[serviceTicket.status] || 'Menunggu'}*
+⏰ Status Saat Ini: *${statusLabels[serviceTicket.status as keyof typeof statusLabels] || 'Menunggu'}*
 
 💻 **DETAIL PERANGKAT:**
 🏷️ Jenis: ${serviceTicket.deviceType}

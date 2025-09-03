@@ -95,8 +95,13 @@ Preferred communication style: Simple, everyday language.
   - `server/routes.ts`: Enhanced session validation with debugging for deployment differences  
   - `client/src/pages/dashboard.tsx`: Added WhatsApp connection status with real-time synchronization
   - `client/src/components/WhatsAppSettings.tsx`: Added dashboard invalidation for status sync
+- **Additional Fixes Added**: 
+  - `client/src/pages/stock-movements.tsx`: Fixed movement display field mismatch (movement.type → movement.movementType)
+  - `server/whatsappService.ts`: Fixed Baileys logger crash with proper logger methods implementation
 - **Impact**: 
   - Asset inventory value: 3.6M → 317.8M (8,828% improvement through correct field usage)
+  - Service stock movements display: Now correctly shows "Keluar" (out) instead of "Masuk" (in)
   - Service ticket completion with stock updates: Now works reliably in deployment
   - Dashboard data synchronization: All metrics now accurate in deployment environment
   - WhatsApp status integration: Real-time sync between dashboard and settings
+  - WhatsApp service stability: No more logger crashes preventing server startup
