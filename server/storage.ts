@@ -65,6 +65,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  upsertUser(user: Partial<InsertUser> & { id: string }): Promise<User>;
   
   // User management
   getUsers(): Promise<User[]>;
@@ -214,6 +215,43 @@ export class DatabaseStorage implements IStorage {
       .values(userData)
       .returning();
     return user;
+  }
+
+  async upsertUser(userData: Partial<InsertUser> & { id: string }): Promise<User> {
+    // Try to find existing user
+    const existingUser = await this.getUser(userData.id);
+    
+    if (existingUser) {
+      // User exists, update them
+      const [user] = await db
+        .update(users)
+        .set({ ...userData, updatedAt: new Date() })
+        .where(eq(users.id, userData.id))
+        .returning();
+      return user;
+    } else {
+      // User doesn't exist, create them with defaults
+      const newUserData: InsertUser = {
+        id: userData.id,
+        username: userData.email || `user_${userData.id}`,
+        email: userData.email || null,
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        password: '', // No password for Replit Auth users
+        role: 'admin', // Default to admin for first user, or could be 'kasir'
+        isActive: true,
+        profileImageUrl: userData.profileImageUrl || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...userData
+      };
+      
+      const [user] = await db
+        .insert(users)
+        .values(newUserData)
+        .returning();
+      return user;
+    }
   }
 
   // User management
