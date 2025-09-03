@@ -40,8 +40,9 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
       return response.json();
     },
     onSuccess: () => {
-      // Only invalidate WhatsApp status, not store config to prevent loop
+      // Invalidate WhatsApp status and dashboard stats for real-time sync
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Berhasil",
         description: "Pengaturan WhatsApp berhasil diubah",
@@ -70,6 +71,7 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Berhasil",
         description: "Proses koneksi WhatsApp dimulai. Scan QR code untuk menghubungkan.",
@@ -98,6 +100,7 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
       toast({
         title: "Berhasil",
         description: "WhatsApp berhasil diputuskan",

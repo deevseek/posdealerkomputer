@@ -191,9 +191,11 @@ export interface IStorage {
   // Dashboard Statistics
   getDashboardStats(): Promise<{
     todaySales: string;
+    todayRevenue: string;
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    whatsappConnected: boolean;
   }>;
 }
 
@@ -1665,6 +1667,7 @@ export class DatabaseStorage implements IStorage {
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    whatsappConnected: boolean;
   }> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1744,12 +1747,17 @@ export class DatabaseStorage implements IStorage {
       monthlyProfit = monthlySales - monthlyPurchases;
     }
     
+    // Get WhatsApp connection status from store config
+    const storeConfig = await this.getStoreConfig();
+    const whatsappConnected = storeConfig?.whatsappConnected || false;
+    
     return {
       todaySales: todayProductSalesResult.total || '0',
       todayRevenue: todayRevenueResult.total || '0',
       activeServices: activeServicesResult.count,
       lowStockCount: lowStockResult.count,
       monthlyProfit: monthlyProfit.toString(),
+      whatsappConnected,
     };
   }
   
