@@ -2,7 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { whatsappService } from "./whatsappService";
-import { setupAuth, isAuthenticated, authenticateUser, hashPassword } from "./auth";
+// Conditional auth import based on environment
+import { isAuthenticated, authenticateUser, hashPassword } from "./auth";
 import {
   ObjectStorageService,
   ObjectNotFoundError,
@@ -181,7 +182,16 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
-  await setupAuth(app);
+  // Setup authentication based on environment
+  if (process.env.REPLIT_DOMAINS) {
+    // Use Replit Auth for Replit deployment
+    const { setupAuth: setupReplitAuth } = await import('./replitAuth');
+    await setupReplitAuth(app);
+  } else {
+    // Use local auth for local deployment
+    const { setupAuth } = await import('./auth');
+    await setupAuth(app);
+  }
 
   // Auth routes
   app.post('/api/auth/login', async (req, res) => {

@@ -171,6 +171,12 @@ echo "3. Run the application:"
 echo "   For development: npm run dev"
 echo "   For production: npm start"
 echo
+echo "LOGIN CREDENTIALS:"
+echo "Username: admin"
+echo "Password: admin123"
+echo
+echo "IMPORTANT: Change the default password after first login!"
+echo
 echo "4. Optional - Install as system service:"
 echo "   sudo cp laptoppos.service /etc/systemd/system/"
 echo "   sudo systemctl daemon-reload"

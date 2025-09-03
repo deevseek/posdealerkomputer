@@ -86,6 +86,12 @@ echo 3. Import database: psql -d laptoppos -f laptoppos_database.sql
 echo 4. Edit .env file with your database credentials
 echo 5. Run: npm start
 echo.
+echo LOGIN CREDENTIALS:
+echo Username: admin
+echo Password: admin123
+echo.
+echo IMPORTANT: Change the default password after first login!
+echo.
 echo For development: npm run dev
 echo For production: npm start
 echo.

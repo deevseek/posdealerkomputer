@@ -30,6 +30,41 @@ export function getSession() {
 export async function setupAuth(app: Express) {
   app.set('trust proxy', 1);
   app.use(getSession());
+  
+  // Create default admin user if it doesn't exist (for local deployment)
+  await createDefaultAdminUser();
+}
+
+async function createDefaultAdminUser() {
+  try {
+    const adminUsername = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+    const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@laptoppos.com';
+    
+    // Check if admin user exists
+    const existingUser = await storage.getUserByUsername(adminUsername);
+    
+    if (!existingUser) {
+      // Create default admin user
+      const hashedPassword = await hashPassword(adminPassword);
+      
+      await storage.createUser({
+        id: 'admin-' + Date.now(),
+        username: adminUsername,
+        email: adminEmail,
+        firstName: 'System',
+        lastName: 'Administrator',
+        password: hashedPassword,
+        role: 'admin',
+        isActive: true,
+        profileImageUrl: null
+      });
+      
+      console.log(`✅ Default admin user created: ${adminUsername}/${adminPassword}`);
+    }
+  } catch (error) {
+    console.error('Error creating default admin user:', error);
+  }
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
