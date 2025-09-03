@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { LogIn, Laptop } from "lucide-react";
+import { LogIn, Laptop, Monitor } from "lucide-react";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username harus diisi"),
@@ -21,6 +21,19 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Check if we're in deployment (should use Replit Auth)
+  const isDeployment = window.location.hostname !== 'localhost' && 
+                      window.location.hostname !== '127.0.0.1' &&
+                      window.location.hostname.includes('replit');
+  
+  // Redirect to Replit Auth if in deployment
+  useEffect(() => {
+    if (isDeployment) {
+      window.location.href = '/api/login';
+      return;
+    }
+  }, [isDeployment]);
   
   // Get store config for app name - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
@@ -35,6 +48,29 @@ export default function Login() {
     refetchOnWindowFocus: false,
     retry: false,
   });
+  
+  // Show loading while redirecting to Replit Auth
+  if (isDeployment) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm dark:bg-slate-900/80">
+          <CardContent className="flex flex-col items-center space-y-4 pt-6">
+            <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center text-white text-2xl font-bold">
+              <Monitor className="w-8 h-8" />
+            </div>
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
+                {storeConfig?.name || 'LaptopPOS'}
+              </h1>
+              <p className="text-slate-600 dark:text-slate-300 text-sm">
+                Redirecting to Replit Authentication...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
