@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
@@ -26,6 +27,8 @@ export default function Setup() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
+  const [dbMigrationProgress, setDbMigrationProgress] = useState(0);
+  const [dbMigrationStatus, setDbMigrationStatus] = useState('');
   const [setupData, setSetupData] = useState({
     storeName: '',
     storeAddress: '',
@@ -86,30 +89,57 @@ export default function Setup() {
     },
   });
 
-  // Database migration mutation
+  // Database migration mutation with progress simulation
   const databaseMigrationMutation = useMutation({
     mutationFn: async () => {
+      // Simulate progress during migration
+      setDbMigrationProgress(0);
+      setDbMigrationStatus('Initializing database connection...');
+      
+      // Simulate progress steps
+      const progressSteps = [
+        { progress: 10, status: 'Connecting to database...' },
+        { progress: 25, status: 'Creating tables schema...' },
+        { progress: 45, status: 'Setting up user roles...' },
+        { progress: 65, status: 'Creating product tables...' },
+        { progress: 80, status: 'Setting up inventory system...' },
+        { progress: 95, status: 'Finalizing database structure...' }
+      ];
+
+      for (const step of progressSteps) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+        setDbMigrationProgress(step.progress);
+        setDbMigrationStatus(step.status);
+      }
+
       const response = await fetch('/api/setup/migrate-database', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
+      
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.message || 'Failed to migrate database');
       }
+      
+      setDbMigrationProgress(100);
+      setDbMigrationStatus('Database migration completed!');
+      
       return response.json();
     },
     onSuccess: () => {
       toast({
-        title: "Database Migration Complete",
-        description: "Database schema has been migrated successfully",
+        title: "Database Setup Complete",
+        description: "Database schema has been pushed successfully",
       });
       setCurrentStep(2);
     },
     onError: (error: Error) => {
+      setDbMigrationProgress(0);
+      setDbMigrationStatus('');
       toast({
-        title: "Migration Error",
+        title: "Database Setup Error", 
         description: error.message,
         variant: "destructive",
       });
@@ -334,30 +364,51 @@ export default function Setup() {
                 <CardHeader>
                   <div className="flex items-center">
                     <Database className="h-6 w-6 text-blue-600 mr-2" />
-                    <CardTitle>Database Migration</CardTitle>
+                    <CardTitle>Database Setup</CardTitle>
                   </div>
                   <CardDescription>
-                    Initialize your database tables and structure
+                    Push schema dan buat semua tabel database yang diperlukan
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="text-center py-8">
                     <Database className="h-16 w-16 text-blue-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Ready to Setup Database</h3>
+                    <h3 className="text-lg font-medium mb-2">Siap Setup Database</h3>
                     <p className="text-muted-foreground mb-6">
-                      Click the button below to automatically migrate your database schema. 
-                      This will create all necessary tables and indexes for your application.
+                      Klik tombol di bawah untuk melakukan database push otomatis. 
+                      Ini akan membuat semua tabel dan indeks yang diperlukan aplikasi Anda.
                     </p>
                     
                     {databaseMigrationMutation.isPending && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
-                        <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <span>Migrating database schema...</span>
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg mb-6">
+                        <div className="space-y-4">
+                          {/* Progress Bar */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                Database Push Progress
+                              </span>
+                              <span className="text-sm text-blue-600 dark:text-blue-400">
+                                {dbMigrationProgress}%
+                              </span>
+                            </div>
+                            <Progress 
+                              value={dbMigrationProgress} 
+                              className="w-full h-2 bg-blue-100 dark:bg-blue-900"
+                            />
+                          </div>
+                          
+                          {/* Status Text */}
+                          <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                            <span className="text-sm">{dbMigrationStatus || 'Initializing...'}</span>
+                          </div>
+                          
+                          {/* Info Text */}
+                          <p className="text-xs text-blue-600 dark:text-blue-400 text-center">
+                            Sedang melakukan database push - mohon tunggu sebentar...
+                          </p>
                         </div>
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                          This may take up to 1 minute. Please wait...
-                        </p>
                       </div>
                     )}
                   </div>
@@ -371,11 +422,11 @@ export default function Setup() {
                       {databaseMigrationMutation.isPending ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Migrating...
+                          Pushing Schema...
                         </>
                       ) : (
                         <>
-                          Migrate Database
+                          🚀 Push Database
                           <ArrowRight className="h-4 w-4 ml-2" />
                         </>
                       )}
