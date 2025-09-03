@@ -1822,6 +1822,49 @@ Terima kasih!
 
   // Setup Wizard Endpoints - untuk installer
   
+  // Database migration endpoint
+  app.post('/api/setup/migrate-database', async (req, res) => {
+    try {
+      console.log('Starting database migration...');
+      
+      // Import child_process to run drizzle migration
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+
+      // Run drizzle push command to apply schema changes
+      await execAsync('npm run db:push --force', {
+        cwd: process.cwd(),
+        timeout: 60000, // 1 minute timeout
+      });
+
+      console.log('Database migration completed successfully');
+
+      // Update setup steps
+      const config = await storage.getStoreConfig();
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.database = true;
+
+      if (config) {
+        await storage.upsertStoreConfig({
+          ...config,
+          setupSteps: JSON.stringify(setupSteps)
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Database migration completed successfully' 
+      });
+    } catch (error) {
+      console.error('Database migration failed:', error);
+      res.status(500).json({ 
+        message: 'Database migration failed', 
+        error: (error as Error).message 
+      });
+    }
+  });
+
   // Check setup status
   app.get('/api/setup/status', async (req, res) => {
     try {
@@ -1840,7 +1883,8 @@ Terima kasih!
         hasStoreConfig: Boolean(config?.name),
         hasAdminUser: userCount > 0,
         storeName: config?.name,
-        setupSteps: config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {}
+        setupSteps: config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {},
+        databaseMigrated: config?.setupSteps ? JSON.parse(config.setupSteps || '{}').database : false
       });
     } catch (error) {
       console.error('Error checking setup status:', error);

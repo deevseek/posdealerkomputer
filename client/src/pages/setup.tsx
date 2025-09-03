@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CheckCircle, Circle, Store, User, Settings, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Circle, Store, User, Settings, ArrowRight, Loader2, Database } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,10 @@ interface SetupStatus {
   hasStoreConfig: boolean;
   hasAdminUser: boolean;
   storeName?: string;
+  databaseMigrated?: boolean;
   setupSteps: {
     store?: boolean;
+    database?: boolean;
     admin?: boolean;
     completed?: boolean;
   };
@@ -84,6 +86,36 @@ export default function Setup() {
     },
   });
 
+  // Database migration mutation
+  const databaseMigrationMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/setup/migrate-database', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to migrate database');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Database Migration Complete",
+        description: "Database schema has been migrated successfully",
+      });
+      setCurrentStep(3);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Migration Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   // Admin setup mutation
   const adminSetupMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -104,7 +136,7 @@ export default function Setup() {
         title: "Admin User Created",
         description: "Admin user has been created successfully",
       });
-      setCurrentStep(3);
+      setCurrentStep(4);
     },
     onError: (error: Error) => {
       toast({
@@ -236,7 +268,7 @@ export default function Setup() {
 
           {/* Progress Steps */}
           <div className="flex justify-center mb-12">
-            <div className="flex items-center space-x-8">
+            <div className="flex items-center space-x-4">
               <div className="flex items-center">
                 {currentStep > 1 ? (
                   <CheckCircle className="h-8 w-8 text-green-600" />
@@ -247,10 +279,10 @@ export default function Setup() {
                 ) : (
                   <Circle className="h-8 w-8 text-gray-400" />
                 )}
-                <span className="ml-2 font-medium text-gray-900 dark:text-white">Store Setup</span>
+                <span className="ml-2 font-medium text-gray-900 dark:text-white">Store</span>
               </div>
               
-              <ArrowRight className="h-5 w-5 text-gray-400" />
+              <ArrowRight className="h-4 w-4 text-gray-400" />
               
               <div className="flex items-center">
                 {currentStep > 2 ? (
@@ -262,15 +294,30 @@ export default function Setup() {
                 ) : (
                   <Circle className="h-8 w-8 text-gray-400" />
                 )}
-                <span className="ml-2 font-medium text-gray-900 dark:text-white">Admin User</span>
+                <span className="ml-2 font-medium text-gray-900 dark:text-white">Database</span>
               </div>
               
-              <ArrowRight className="h-5 w-5 text-gray-400" />
+              <ArrowRight className="h-4 w-4 text-gray-400" />
               
               <div className="flex items-center">
-                {currentStep === 3 ? (
+                {currentStep > 3 ? (
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                ) : currentStep === 3 ? (
                   <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
                     <span className="text-white font-semibold">3</span>
+                  </div>
+                ) : (
+                  <Circle className="h-8 w-8 text-gray-400" />
+                )}
+                <span className="ml-2 font-medium text-gray-900 dark:text-white">Admin</span>
+              </div>
+              
+              <ArrowRight className="h-4 w-4 text-gray-400" />
+              
+              <div className="flex items-center">
+                {currentStep === 4 ? (
+                  <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
+                    <span className="text-white font-semibold">4</span>
                   </div>
                 ) : (
                   <Circle className="h-8 w-8 text-gray-400" />
@@ -369,6 +416,70 @@ export default function Setup() {
               <>
                 <CardHeader>
                   <div className="flex items-center">
+                    <Database className="h-6 w-6 text-blue-600 mr-2" />
+                    <CardTitle>Database Migration</CardTitle>
+                  </div>
+                  <CardDescription>
+                    Initialize and migrate the database schema for your application
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="text-center py-8">
+                    <Database className="h-16 w-16 text-blue-600 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Ready to Setup Database</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Click the button below to automatically migrate your database schema. 
+                      This will create all necessary tables and indexes for your application.
+                    </p>
+                    
+                    {databaseMigrationMutation.isPending && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
+                        <div className="flex items-center justify-center space-x-2 text-blue-700 dark:text-blue-300">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <span>Migrating database schema...</span>
+                        </div>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                          This may take up to 1 minute. Please wait...
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-between">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setCurrentStep(1)}
+                      data-testid="button-back-database"
+                      disabled={databaseMigrationMutation.isPending}
+                    >
+                      Back
+                    </Button>
+                    <Button 
+                      onClick={() => databaseMigrationMutation.mutate()}
+                      disabled={databaseMigrationMutation.isPending}
+                      data-testid="button-migrate-database"
+                    >
+                      {databaseMigrationMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Migrating...
+                        </>
+                      ) : (
+                        <>
+                          Migrate Database
+                          <ArrowRight className="h-4 w-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </>
+            )}
+
+            {currentStep === 3 && (
+              <>
+                <CardHeader>
+                  <div className="flex items-center">
                     <User className="h-6 w-6 text-blue-600 mr-2" />
                     <CardTitle>Create Admin User</CardTitle>
                   </div>
@@ -440,7 +551,7 @@ export default function Setup() {
                   <div className="flex justify-between">
                     <Button 
                       variant="outline" 
-                      onClick={() => setCurrentStep(1)}
+                      onClick={() => setCurrentStep(2)}
                       data-testid="button-back-admin"
                     >
                       Back
@@ -501,7 +612,7 @@ export default function Setup() {
                   <div className="flex justify-between">
                     <Button 
                       variant="outline" 
-                      onClick={() => setCurrentStep(2)}
+                      onClick={() => setCurrentStep(3)}
                       data-testid="button-back-complete"
                     >
                       Back
