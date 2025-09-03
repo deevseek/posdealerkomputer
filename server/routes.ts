@@ -1571,10 +1571,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get WhatsApp status
   app.get('/api/whatsapp/status', isAuthenticated, async (req, res) => {
     try {
+      const rawQrCode = whatsappService.getQRCode();
+      let qrCodeDataUrl = null;
+      
+      // Convert raw QR string to data URL for frontend display
+      if (rawQrCode) {
+        try {
+          console.log('Converting QR code to data URL, raw length:', rawQrCode.length);
+          const QRCode = require('qrcode');
+          qrCodeDataUrl = await QRCode.toDataURL(rawQrCode);
+          console.log('QR conversion successful, data URL length:', qrCodeDataUrl ? qrCodeDataUrl.length : 0);
+        } catch (qrError) {
+          console.error('Error converting QR code to data URL:', qrError);
+        }
+      } else {
+        console.log('No raw QR code available for conversion');
+      }
+      
       res.json({
         connected: whatsappService.isConnected(),
         connectionState: whatsappService.getConnectionState(),
-        qrCode: whatsappService.getQRCode(),
+        qrCode: qrCodeDataUrl,
       });
     } catch (error) {
       console.error('Error getting WhatsApp status:', error);
