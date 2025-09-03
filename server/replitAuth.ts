@@ -31,6 +31,10 @@ export function getSession() {
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  
+  // Detect if we're in production (Replit deployment)
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.REPLIT_DEPLOYMENT === 'true' || !!process.env.REPLIT_DOMAINS;
+  
   return session({
     secret: process.env.SESSION_SECRET!,
     store: sessionStore,
@@ -38,9 +42,11 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: isProduction, // Only require HTTPS in production
+      sameSite: isProduction ? 'none' : 'lax', // Allow cross-origin in production
       maxAge: sessionTtl,
     },
+    name: 'laptoppos.session', // Custom session name
   });
 }
 
@@ -67,7 +73,8 @@ async function upsertUser(
 }
 
 export async function setupAuth(app: Express) {
-  app.set("trust proxy", 1);
+  // Trust proxy for Replit deployment
+  app.set("trust proxy", true);
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
