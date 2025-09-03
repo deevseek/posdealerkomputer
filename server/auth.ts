@@ -21,9 +21,12 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false, // Set to true in production with HTTPS
+      secure: 'auto', // Auto-detect HTTPS for deployment compatibility
+      sameSite: 'lax', // Better compatibility with modern browsers
       maxAge: sessionTtl,
     },
+    name: 'laptoppos.session', // Custom session name
+    proxy: true, // Trust proxy for deployment
   });
 }
 

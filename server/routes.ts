@@ -182,16 +182,9 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
-  // Setup authentication based on environment
-  if (process.env.REPLIT_DOMAINS) {
-    // Use Replit Auth for Replit deployment
-    const { setupAuth: setupReplitAuth } = await import('./replitAuth');
-    await setupReplitAuth(app);
-  } else {
-    // Use local auth for local deployment
-    const { setupAuth } = await import('./auth');
-    await setupAuth(app);
-  }
+  // Always use local authentication for universal deployment compatibility
+  const { setupAuth } = await import('./auth');
+  await setupAuth(app);
 
   // Auth routes
   app.post('/api/auth/login', async (req, res) => {
