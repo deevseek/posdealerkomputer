@@ -421,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error exporting XLSX:", error);
       res.status(500).json({ 
         message: "Failed to export XLSX", 
-        error: error.message 
+        error: (error as Error).message 
       });
     }
   });
@@ -463,8 +463,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error exporting PDF:", error);
       res.status(500).json({ 
         message: "Failed to export PDF", 
-        error: error.message,
-        stack: error.stack 
+        error: (error as Error).message,
+        stack: (error as Error).stack 
       });
     }
   });
@@ -537,7 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/products', isAuthenticated, async (req, res) => {
     try {
       const { search } = req.query;
-      const products = await storage.getProducts(search as string);
+      const products = await storage.getProducts();
       res.json(products);
     } catch (error) {
       console.error("Error fetching products:", error);
@@ -768,7 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Item berhasil dihapus" });
     } catch (error) {
       console.error("Error deleting purchase order item:", error);
-      res.status(500).json({ message: "Gagal menghapus item", error: error.message });
+      res.status(500).json({ message: "Gagal menghapus item", error: (error as Error).message });
     }
   });
 
@@ -783,7 +783,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Items received successfully" });
     } catch (error) {
       console.error("Error receiving items:", error);
-      res.status(500).json({ message: "Failed to receive items", error: error.message });
+      res.status(500).json({ message: "Failed to receive items", error: (error as Error).message });
     }
   });
 
@@ -958,7 +958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const transactionNumber = `TRX-${Date.now()}`;
       
       const transaction = await storage.createTransaction(
-        { ...transactionData, transactionNumber, userId: req.session.user.id },
+        transactionData,
         items
       );
       
@@ -1276,7 +1276,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/finance/transactions', isAuthenticated, async (req, res) => {
     try {
-      const userId = req.session.user.id;
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       const transaction = await financeManager.createTransaction({
         ...req.body,
         userId
@@ -1754,26 +1757,29 @@ Terima kasih!
         createdAt: service.service_tickets.createdAt,
       });
 
-      // Get customer info
-      const customer = service.customerId ? await storage.getCustomerById(service.customerId) : null;
+      // Get customer info and parts from the service ticket
+      const ticket = service.service_tickets;
+      const customer = service.customers;
       
       // Get used parts
-      const parts = await storage.getServiceTicketParts(service.id);
+      const parts = await storage.getServiceTicketParts(ticket.id);
       
       // Return limited info for customer
       res.json({
-        serviceNumber: service.serviceNumber,
-        customerName: customer?.name || service.customerName,
-        device: service.device,
-        problem: service.problem,
-        diagnosis: service.diagnosis,
-        status: service.status,
-        estimatedCompletion: service.estimatedCompletion,
-        completedAt: service.completedAt,
-        totalCost: service.totalCost,
-        createdAt: service.createdAt,
+        ticketNumber: ticket.ticketNumber,
+        customerName: customer?.name,
+        deviceType: ticket.deviceType,
+        deviceBrand: ticket.deviceBrand,
+        deviceModel: ticket.deviceModel,
+        problem: ticket.problem,
+        diagnosis: ticket.diagnosis,
+        status: ticket.status,
+        estimatedCost: ticket.estimatedCost,
+        estimatedCompletion: ticket.estimatedCompletion,
+        completedAt: ticket.completedAt,
+        createdAt: ticket.createdAt,
         parts: parts.map(part => ({
-          name: part.product.name,
+          name: part.productName,
           quantity: part.quantity,
           unitPrice: part.unitPrice
         }))
