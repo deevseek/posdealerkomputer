@@ -96,6 +96,7 @@ const TRANSACTION_CATEGORIES = {
   ],
   expense: [
     'Operational Expense',
+    'Daily Operations',
     'Payroll',
     'Rent & Utilities',
     'Marketing',
@@ -108,6 +109,17 @@ const TRANSACTION_CATEGORIES = {
     'Other Expense'
   ]
 };
+
+const DAILY_OPERATIONS_SUBCATEGORIES = [
+  'Listrik & Air',
+  'Bensin & Transportasi',
+  'Makan & Minum',
+  'Salam Tempel (Gratifikasi)',
+  'Titipan Dibawah Meja',
+  'Perlengkapan Kantor',
+  'Komunikasi & Internet',
+  'Lain-lain'
+];
 
 const PAYMENT_METHODS = [
   'cash',
@@ -666,11 +678,47 @@ export default function FinanceNew() {
         </TabsList>
 
         <TabsContent value="transactions" className="space-y-4">
+          {/* Quick Daily Expense Entry */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Pengeluaran Harian Cepat</CardTitle>
+              <CardDescription>
+                Tambah pengeluaran operasional sehari-hari dengan cepat
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {DAILY_OPERATIONS_SUBCATEGORIES.map((subcat) => (
+                  <Button
+                    key={subcat}
+                    variant="outline"
+                    className="h-20 flex flex-col items-center justify-center text-xs"
+                    onClick={() => {
+                      setTransactionForm({
+                        type: 'expense',
+                        category: 'Daily Operations',
+                        subcategory: subcat,
+                        amount: '',
+                        description: subcat,
+                        paymentMethod: 'cash',
+                        tags: []
+                      });
+                      setShowTransactionDialog(true);
+                    }}
+                    data-testid={`quick-expense-${subcat.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                  >
+                    <span className="font-medium text-center">{subcat}</span>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold">Transaksi Keuangan</h2>
             <Dialog open={showTransactionDialog} onOpenChange={setShowTransactionDialog}>
               <DialogTrigger asChild>
-                <Button>
+                <Button data-testid="button-add-transaction">
                   <Plus className="h-4 w-4 mr-2" />
                   Tambah Transaksi
                 </Button>
@@ -707,7 +755,7 @@ export default function FinanceNew() {
                     <Select
                       value={transactionForm.category}
                       onValueChange={(value) => 
-                        setTransactionForm(prev => ({ ...prev, category: value }))
+                        setTransactionForm(prev => ({ ...prev, category: value, subcategory: '' }))
                       }
                     >
                       <SelectTrigger>
@@ -720,6 +768,27 @@ export default function FinanceNew() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {transactionForm.category === 'Daily Operations' && (
+                    <div>
+                      <Label htmlFor="subcategory">Sub-Kategori</Label>
+                      <Select
+                        value={transactionForm.subcategory}
+                        onValueChange={(value) => 
+                          setTransactionForm(prev => ({ ...prev, subcategory: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Pilih sub-kategori" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DAILY_OPERATIONS_SUBCATEGORIES.map((subcat) => (
+                            <SelectItem key={subcat} value={subcat}>{subcat}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <Label htmlFor="amount">Jumlah</Label>

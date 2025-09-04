@@ -116,7 +116,7 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   page-break-inside: avoid;
                 }
                 body { 
-                  font-family: ${isThermal ? 'monospace' : 'Arial, sans-serif'}; 
+                  font-family: ${isThermal ? '"Courier New", monospace' : '"Arial", sans-serif'}; 
                   margin: 0; 
                   padding: ${formatStyles.padding}; 
                   font-size: ${formatStyles.fontSize};
@@ -124,6 +124,8 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   ${isThermal ? 'width: ' + formatStyles.width + '; box-sizing: border-box;' : ''}
                   page-break-inside: avoid;
                   overflow: hidden;
+                  color: #000;
+                  background: #fff;
                 }
                 .receipt { 
                   ${isThermal ? 'width: 100%;' : 'max-width: 580px; margin: 0 auto;'}
@@ -138,19 +140,20 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                 }
                 .header h1 { 
                   margin: 0; 
-                  font-size: ${isThermal ? '14px' : '24px'}; 
+                  font-size: ${isThermal ? '13px' : '22px'}; 
                   font-weight: bold;
-                  margin-bottom: ${isThermal ? '2px' : '4px'};
+                  margin-bottom: ${isThermal ? '3px' : '6px'};
+                  text-transform: uppercase;
                 }
                 .header h2 { 
-                  margin: ${isThermal ? '2px 0 4px' : '5px 0 8px'}; 
-                  font-size: ${isThermal ? '12px' : '18px'}; 
+                  margin: ${isThermal ? '3px 0 5px' : '6px 0 10px'}; 
+                  font-size: ${isThermal ? '11px' : '16px'}; 
                   font-weight: bold;
                 }
                 .header p { 
-                  margin: ${isThermal ? '1px 0' : '2px 0'}; 
-                  font-size: ${isThermal ? '9px' : '12px'}; 
-                  line-height: 1.3;
+                  margin: ${isThermal ? '2px 0' : '3px 0'}; 
+                  font-size: ${isThermal ? '9px' : '11px'}; 
+                  line-height: 1.4;
                 }
                 .info-grid { 
                   ${isThermal 

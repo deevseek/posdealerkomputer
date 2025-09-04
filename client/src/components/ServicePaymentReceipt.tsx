@@ -204,15 +204,15 @@ export default function ServicePaymentReceipt({
               top: 0;
               width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
               max-width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
-              font-family: ${paperSize === 'a4' ? 'Arial, sans-serif' : "'Courier New', monospace"};
+              font-family: ${paperSize === 'a4' ? '"Arial", sans-serif' : '"Courier New", monospace'};
               font-size: ${paperSize === 'a4' ? '11px' : fontSize};
-              line-height: ${paperSize === 'a4' ? '1.4' : '1.0'};
+              line-height: ${paperSize === 'a4' ? '1.4' : '1.2'};
               color: #000;
               background: #fff;
               page-break-inside: avoid;
               height: auto;
               max-height: ${paperSize === 'a4' ? '270mm' : '300mm'};
-              padding: ${paperSize === 'a4' ? '10mm' : '2mm'};
+              padding: ${paperSize === 'a4' ? '8mm' : '3mm'};
             }
             .no-print { 
               display: none !important; 

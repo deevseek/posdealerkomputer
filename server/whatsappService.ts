@@ -8,6 +8,7 @@ export class WhatsAppService {
   private isConnecting = false;
   private qrCode: string | null = null;
   private connectionState: string = 'close';
+  private heartbeatInterval: NodeJS.Timeout | null = null;
 
   async initialize() {
     if (this.isConnecting) {
@@ -16,6 +17,7 @@ export class WhatsAppService {
     }
 
     this.isConnecting = true;
+    console.log('🔌 Initializing WhatsApp connection...');
     
     try {
       // Use file-based auth state
@@ -68,9 +70,12 @@ export class WhatsAppService {
           this.connectionState = 'open';
           this.isConnecting = false;
           this.qrCode = null;
-          console.log('WhatsApp connected successfully');
+          console.log('✅ WhatsApp connected successfully');
           await this.updateConnectionStatus(true);
           await this.clearQRFromDatabase();
+          
+          // Start connection health monitoring
+          this.startConnectionMonitoring();
         }
       });
 
@@ -84,14 +89,6 @@ export class WhatsAppService {
     }
   }
 
-  async disconnect() {
-    if (this.socket) {
-      await this.socket.logout();
-      this.socket = null;
-    }
-    await this.updateConnectionStatus(false);
-    await this.clearQRFromDatabase();
-  }
 
   async sendMessage(phoneNumber: string, message: string): Promise<boolean> {
     // Enhanced connection checking
@@ -103,10 +100,18 @@ export class WhatsAppService {
       // Auto-reconnect if disconnected but not already connecting
       if (!this.isConnecting && this.connectionState === 'close') {
         console.log('Attempting WhatsApp auto-reconnect...');
-        this.initialize(); // Don't await, let it connect async
+        await this.initialize(); // Wait for reconnection attempt
+        
+        // Check again after reconnection attempt
+        if (this.connectionState === 'open' && this.socket) {
+          console.log('WhatsApp reconnected successfully, retrying message send...');
+        } else {
+          console.log('WhatsApp reconnection failed, message cannot be sent');
+          return false;
+        }
+      } else {
+        return false;
       }
-      
-      return false;
     }
 
     try {
@@ -282,8 +287,8 @@ ${customer.address ? `🏠 Alamat: ${customer.address}` : ''}
 
 🔍 **CEK STATUS SERVICE:**
 Anda dapat memantau perkembangan service kapan saja melalui:
-${statusUrl}
-Masukkan nomor service: *${serviceTicket.ticketNumber}*
+${statusUrl}?ticket=${serviceTicket.ticketNumber}
+*Klik link di atas untuk langsung melihat status service Anda*
 
 ⚠️ **PENTING:**
 • Harap simpan nomor service untuk tracking
@@ -419,6 +424,36 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
       console.error(`❌ Status update notification error for ${customerPhone}:`, error);
       return false;
     }
+  }
+
+  private startConnectionMonitoring() {
+    // Clear existing heartbeat if any
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+    }
+
+    // Check connection every 30 seconds
+    this.heartbeatInterval = setInterval(() => {
+      if (this.connectionState !== 'open' && !this.isConnecting) {
+        console.log('🩺 WhatsApp connection lost, attempting reconnection...');
+        this.initialize();
+      }
+    }, 30000);
+  }
+
+  async disconnect() {
+    // Clear heartbeat monitoring
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+
+    if (this.socket) {
+      await this.socket.logout();
+      this.socket = null;
+    }
+    await this.updateConnectionStatus(false);
+    await this.clearQRFromDatabase();
   }
 }
 
