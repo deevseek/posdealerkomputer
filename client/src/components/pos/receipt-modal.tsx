@@ -170,18 +170,26 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
             .items-center { align-items: center; }
             .border-t { 
               border-top: 1px dashed #333; 
-              margin: 1px 0 !important; 
+              margin: ${paperSize === 'a4' ? '4px' : '2px'} 0 !important; 
             }
             .border-solid { border-style: solid; }
             .border-gray-800 { border-color: #333; }
             .text-gray-600 { color: #666; }
-            .space-y-1 > * + * { margin-top: 1px !important; }
-            .py-2 { padding: 1px 0 !important; }
-            .my-2 { margin: 1px 0 !important; }
-            .mb-2 { margin-bottom: 1px !important; }
-            .mt-6 { margin-top: 2px !important; }
-            h3 { font-size: ${fontSize}; margin: 1px 0 !important; }
-            div { margin: 0 !important; padding: 0 !important; }
+            .space-y-1 > * + * { margin-top: ${paperSize === 'a4' ? '2px' : '1px'} !important; }
+            .py-2 { padding: ${paperSize === 'a4' ? '3px' : '1px'} 0 !important; }
+            .my-2 { margin: ${paperSize === 'a4' ? '4px' : '2px'} 0 !important; }
+            h3 { 
+              font-size: ${paperSize === 'a4' ? '16px' : fontSize}; 
+              margin: ${paperSize === 'a4' ? '8px' : '3px'} 0 !important; 
+              text-align: center;
+              font-weight: bold;
+            }
+            .header-spacing { 
+              margin-bottom: ${paperSize === 'a4' ? '12px' : '6px'} !important; 
+            }
+            .section-spacing { 
+              margin: ${paperSize === 'a4' ? '8px' : '4px'} 0 !important; 
+            }
             p { margin: 0 !important; padding: 0 !important; }
           }
           @media screen {
@@ -305,22 +313,38 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                 }}
               >
                 {/* Store Header */}
-                <div className={`text-center ${getTextSize()} space-y-1`}>
-                  <h3 className="font-bold" data-testid="text-store-name">
-                    {(storeConfig as any)?.name || 'LaptopPOS Service Center'}
+                <div className={`text-center header-spacing`}>
+                  <h3 className="font-bold" data-testid="text-store-name" style={{ 
+                    fontSize: paperSize === 'a4' ? '18px' : '12px',
+                    marginBottom: paperSize === 'a4' ? '4px' : '2px'
+                  }}>
+                    {(storeConfig as any)?.name || 'LaptopPOS SERVICE CENTER'}
                   </h3>
-                  {(storeConfig as any)?.address && (
-                    <div data-testid="text-store-address">
-                      {(storeConfig as any).address}
+                  <div className={paperSize === 'a4' ? 'text-sm' : 'text-xs'} style={{ 
+                    fontSize: paperSize === 'a4' ? '11px' : '8px',
+                    lineHeight: '1.3'
+                  }}>
+                    {(storeConfig as any)?.address && (
+                      <div data-testid="text-store-address" style={{ marginBottom: '1px' }}>
+                        {(storeConfig as any).address}
+                      </div>
+                    )}
+                    <div style={{ marginBottom: '1px' }}>
+                      {(storeConfig as any)?.phone && (
+                        <span data-testid="text-store-phone">Tel: {(storeConfig as any).phone}</span>
+                      )}
+                      {(storeConfig as any)?.email && (storeConfig as any)?.phone && <span> | </span>}
+                      {(storeConfig as any)?.email && (
+                        <span data-testid="text-store-email">Email: {(storeConfig as any).email}</span>
+                      )}
                     </div>
-                  )}
-                  <div className="space-y-0">
-                    {(storeConfig as any)?.phone && (
-                      <div data-testid="text-store-phone">Tel: {(storeConfig as any).phone}</div>
-                    )}
-                    {(storeConfig as any)?.email && (
-                      <div data-testid="text-store-email">{(storeConfig as any).email}</div>
-                    )}
+                  </div>
+                  <div style={{ 
+                    marginTop: paperSize === 'a4' ? '6px' : '3px',
+                    fontSize: paperSize === 'a4' ? '12px' : '9px',
+                    fontWeight: 'bold'
+                  }}>
+                    === NOTA PENJUALAN ===
                   </div>
                 </div>
 
@@ -423,10 +447,26 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                 <div className="border-t border-dashed border-gray-400 my-2"></div>
 
                 {/* Footer */}
-                <div className={`text-center ${getTextSize()} text-gray-600 space-y-1 mt-6`}>
-                  <div>Terima kasih atas pembelian Anda!</div>
-                  <div>Barang yang sudah dibeli tidak dapat dikembalikan</div>
-                  <div data-testid="text-print-date">Cetak: {format(new Date(), 'dd/MM/yy HH:mm', { locale: idLocale })}</div>
+                <div className="text-center section-spacing" style={{
+                  fontSize: paperSize === 'a4' ? '10px' : '7px',
+                  color: '#666',
+                  marginTop: paperSize === 'a4' ? '12px' : '6px'
+                }}>
+                  <div style={{ marginBottom: '2px', fontWeight: 'bold' }}>
+                    ★ TERIMA KASIH ATAS PEMBELIAN ANDA ★
+                  </div>
+                  <div style={{ marginBottom: '1px' }}>
+                    Barang yang sudah dibeli tidak dapat dikembalikan
+                  </div>
+                  <div style={{ marginBottom: '1px' }}>
+                    Simpan nota ini sebagai bukti pembelian
+                  </div>
+                  <div data-testid="text-print-date" style={{ 
+                    marginTop: '4px',
+                    fontSize: paperSize === 'a4' ? '9px' : '6px'
+                  }}>
+                    Cetak: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: idLocale })}
+                  </div>
                 </div>
               </div>
             </div>

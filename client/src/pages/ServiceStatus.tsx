@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,12 +29,45 @@ export default function ServiceStatus() {
   const [serviceNumber, setServiceNumber] = useState("");
   const [searchClicked, setSearchClicked] = useState(false);
   const [showStatusTracker, setShowStatusTracker] = useState(false);
+  const [location] = useLocation();
+
+  // Auto-fill service number from URL parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const ticketParam = urlParams.get('ticket');
+    if (ticketParam) {
+      setServiceNumber(ticketParam);
+      setSearchClicked(true); // Automatically search when ticket is provided
+    }
+  }, [location]);
 
   const { data: serviceData, isLoading, error } = useQuery({
     queryKey: ['/api/public/service-status', serviceNumber],
     enabled: searchClicked && serviceNumber.length > 0,
     retry: false,
-  });
+  }) as {
+    data: {
+      ticketNumber: string;
+      customerName: string;
+      deviceType: string;
+      deviceBrand: string;
+      deviceModel: string;
+      problem: string;
+      diagnosis?: string;
+      status: string;
+      estimatedCost?: string;
+      estimatedCompletion?: string;
+      completedAt?: string;
+      createdAt: string;
+      parts?: Array<{
+        name: string;
+        quantity: number;
+        unitPrice: string;
+      }>;
+    } | undefined;
+    isLoading: boolean;
+    error: any;
+  };
 
   const handleSearch = () => {
     if (serviceNumber.trim()) {
@@ -113,7 +147,7 @@ export default function ServiceStatus() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium text-gray-500">Nomor Service</label>
-                    <p className="font-semibold" data-testid="text-service-number">{serviceData.serviceNumber}</p>
+                    <p className="font-semibold" data-testid="text-service-number">{serviceData.ticketNumber}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Status</label>
@@ -135,7 +169,7 @@ export default function ServiceStatus() {
 
                 <div>
                   <label className="text-sm font-medium text-gray-500">Perangkat</label>
-                  <p className="font-semibold" data-testid="text-device">{serviceData.device}</p>
+                  <p className="font-semibold" data-testid="text-device">{serviceData.deviceType} {serviceData.deviceBrand} {serviceData.deviceModel}</p>
                 </div>
 
                 <div>
@@ -216,9 +250,9 @@ export default function ServiceStatus() {
             <Card>
               <CardContent className="p-6">
                 <div className="flex justify-between items-center">
-                  <span className="text-lg font-semibold">Total Biaya Service</span>
+                  <span className="text-lg font-semibold">Estimasi Biaya Service</span>
                   <span className="text-2xl font-bold text-blue-600" data-testid="text-total-cost">
-                    {formatCurrency(serviceData.totalCost)}
+                    {serviceData.estimatedCost ? formatCurrency(serviceData.estimatedCost) : 'Belum ditentukan'}
                   </span>
                 </div>
               </CardContent>

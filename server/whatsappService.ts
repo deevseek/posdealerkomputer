@@ -94,8 +94,18 @@ export class WhatsAppService {
   }
 
   async sendMessage(phoneNumber: string, message: string): Promise<boolean> {
+    // Enhanced connection checking
+    console.log(`WhatsApp sendMessage attempt: socket=${!!this.socket}, connectionState=${this.connectionState}, isConnecting=${this.isConnecting}`);
+    
     if (!this.socket || this.connectionState !== 'open') {
-      console.log('WhatsApp not connected, cannot send message');
+      console.log(`WhatsApp not ready - Socket: ${!!this.socket}, State: ${this.connectionState}, Connecting: ${this.isConnecting}`);
+      
+      // Auto-reconnect if disconnected but not already connecting
+      if (!this.isConnecting && this.connectionState === 'close') {
+        console.log('Attempting WhatsApp auto-reconnect...');
+        this.initialize(); // Don't await, let it connect async
+      }
+      
       return false;
     }
 
@@ -112,11 +122,19 @@ export class WhatsAppService {
       
       const jid = formattedNumber + '@s.whatsapp.net';
       
+      console.log(`Sending WhatsApp to ${formattedNumber} (original: ${phoneNumber})`);
       await this.socket.sendMessage(jid, { text: message });
-      console.log(`WhatsApp message sent to ${phoneNumber}: ${message}`);
+      console.log(`✅ WhatsApp message sent successfully to ${phoneNumber}`);
       return true;
     } catch (error) {
-      console.error('Error sending WhatsApp message:', error);
+      console.error('❌ Error sending WhatsApp message:', error);
+      
+      // Check if connection lost during send
+      if (this.connectionState !== 'open') {
+        console.log('Connection lost during send, marking as disconnected');
+        await this.updateConnectionStatus(false);
+      }
+      
       return false;
     }
   }
@@ -176,7 +194,8 @@ export class WhatsAppService {
   }
 
   // Service notification templates
-  async sendServiceCreatedNotification(customerPhone: string, serviceTicket: any, customer: any, storeConfig: any) {
+  async sendServiceCreatedNotification(customerPhone: string, serviceTicket: any, customer: any, storeConfig: any): Promise<boolean> {
+    console.log(`📧 Attempting to send service creation notification to ${customerPhone} for ticket ${serviceTicket.ticketNumber}`);
     const statusUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] ? 'https://' + process.env.REPLIT_DOMAINS.split(',')[0] : 'http://localhost:5000'}/service-status`;
     
     // Format estimated cost
@@ -280,10 +299,18 @@ Terima kasih telah mempercayakan perangkat Anda kepada kami. Kami akan memberika
 📞 ${storeConfig?.phone || 'Telepon Toko'}
 ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
 
-    return await this.sendMessage(customerPhone, message);
+    try {
+      const result = await this.sendMessage(customerPhone, message);
+      console.log(`📧 Service creation notification ${result ? 'sent successfully' : 'failed'} to ${customerPhone}`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Service creation notification error for ${customerPhone}:`, error);
+      return false;
+    }
   }
 
-  async sendServiceStatusNotification(customerPhone: string, serviceTicket: any, customer: any, storeConfig: any) {
+  async sendServiceStatusNotification(customerPhone: string, serviceTicket: any, customer: any, storeConfig: any): Promise<boolean> {
+    console.log(`🔄 Attempting to send status update notification to ${customerPhone} for ticket ${serviceTicket.ticketNumber}, status: ${serviceTicket.status}`);
     // Format currency
     const formatCurrency = (amount: string | number) => {
       return new Intl.NumberFormat('id-ID', {
@@ -382,9 +409,16 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
       completionInfo = `\n\n✅ **WAKTU SELESAI:** ${completedDate}`;
     }
 
-    const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}\nMasukkan nomor: *${serviceTicket.ticketNumber}*\n\n${serviceTicket.status === 'completed' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
+    const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}?ticket=${serviceTicket.ticketNumber}\n\n${serviceTicket.status === 'completed' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
 
-    return await this.sendMessage(customerPhone, message);
+    try {
+      const result = await this.sendMessage(customerPhone, message);
+      console.log(`🔄 Status update notification ${result ? 'sent successfully' : 'failed'} to ${customerPhone}`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Status update notification error for ${customerPhone}:`, error);
+      return false;
+    }
   }
 }
 

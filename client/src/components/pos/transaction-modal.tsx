@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Minus, X, Search, Barcode } from "lucide-react";
+import { Plus, Minus, X, Search, Barcode, Percent, DollarSign } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,11 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   const [productSearch, setProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [showCustomerCreateModal, setShowCustomerCreateModal] = useState(false);
+  
+  // Discount states
+  const [discountType, setDiscountType] = useState<"percentage" | "rupiah">("percentage");
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [showDiscountSection, setShowDiscountSection] = useState(false);
   const { toast } = useToast();
 
   // Fetch products
@@ -118,6 +123,9 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     setProductSearch("");
     setSelectedProducts([]);
     setShowCustomerCreateModal(false);
+    setDiscountType("percentage");
+    setDiscountValue(0);
+    setShowDiscountSection(false);
   };
 
   const selectCustomer = (customer: any) => {
@@ -186,9 +194,23 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const subtotal = items.reduce((sum, item) => sum + (item.sellingPrice * item.quantity), 0);
+  
+  // Calculate discount amount
+  let discountAmount = 0;
+  if (discountValue > 0) {
+    if (discountType === "percentage") {
+      discountAmount = subtotal * (discountValue / 100);
+    } else {
+      discountAmount = discountValue;
+    }
+    // Ensure discount doesn't exceed subtotal
+    discountAmount = Math.min(discountAmount, subtotal);
+  }
+  
+  const discountedSubtotal = subtotal - discountAmount;
   const taxRate = Number(storeConfig?.taxRate || 11) / 100;
-  const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const tax = discountedSubtotal * taxRate;
+  const total = discountedSubtotal + tax;
 
   const handleProcessTransaction = () => {
     if (items.length === 0) {
@@ -216,7 +238,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
         paymentMethod: paymentMethod || 'cash',
         subtotal: Math.round(subtotal).toString(),
         taxAmount: Math.round(tax).toString(),
-        discountAmount: '0.00',
+        discountAmount: Math.round(discountAmount).toString(),
         total: Math.round(total).toString(),
         notes: `POS Sale - ${items.length} items${selectedCustomer ? ` for ${selectedCustomer.name}` : ''}`,
       },
@@ -445,6 +467,76 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
               )}
             </div>
 
+            {/* Discount Section */}
+            <Card className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Diskon</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowDiscountSection(!showDiscountSection)}
+                    data-testid="button-toggle-discount"
+                  >
+                    {showDiscountSection ? "Tutup Diskon" : "Tambah Diskon"}
+                  </Button>
+                </div>
+                
+                {showDiscountSection && (
+                  <div className="space-y-3 border-t pt-3">
+                    {/* Discount Type Toggle */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant={discountType === "percentage" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setDiscountType("percentage")}
+                        data-testid="button-discount-percentage"
+                      >
+                        <Percent className="w-3 h-3 mr-1" />
+                        Persen (%)
+                      </Button>
+                      <Button
+                        variant={discountType === "rupiah" ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setDiscountType("rupiah")}
+                        data-testid="button-discount-rupiah"
+                      >
+                        <DollarSign className="w-3 h-3 mr-1" />
+                        Rupiah (Rp)
+                      </Button>
+                    </div>
+                    
+                    {/* Discount Value Input */}
+                    <div className="space-y-1">
+                      <Label htmlFor="discountValue">
+                        Nilai Diskon {discountType === "percentage" ? "(%)" : "(Rp)"}
+                      </Label>
+                      <Input
+                        id="discountValue"
+                        type="number"
+                        min="0"
+                        max={discountType === "percentage" ? "100" : subtotal.toString()}
+                        value={discountValue || ""}
+                        onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
+                        placeholder={discountType === "percentage" ? "Masukkan persen (0-100)" : "Masukkan jumlah rupiah"}
+                        data-testid="input-discount-value"
+                      />
+                      {discountType === "percentage" && discountValue > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          = Rp {((subtotal * (discountValue / 100))).toLocaleString('id-ID')}
+                        </div>
+                      )}
+                      {discountAmount > 0 && (
+                        <div className="text-xs text-green-600">
+                          Diskon aktif: Rp {discountAmount.toLocaleString('id-ID')}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
             {/* Transaction Summary */}
             <Card className="p-4">
               <div className="space-y-2">
@@ -452,6 +544,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                   <span>Subtotal:</span>
                   <span data-testid="text-subtotal">Rp {subtotal.toLocaleString('id-ID')}</span>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Diskon ({discountType === "percentage" ? `${discountValue}%` : "Rupiah"}):</span>
+                    <span data-testid="text-discount">-Rp {discountAmount.toLocaleString('id-ID')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
                   <span>Tax ({((storeConfig as any)?.taxRate || 11)}%):</span>
                   <span data-testid="text-tax">Rp {tax.toLocaleString('id-ID')}</span>

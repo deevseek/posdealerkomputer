@@ -130,10 +130,28 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   page-break-inside: avoid;
                   overflow: hidden;
                 }
-                .header { text-align: center; margin-bottom: ${isThermal ? '8px' : '20px'}; }
-                .header h1 { margin: 0; font-size: ${isThermal ? '14px' : '24px'}; font-weight: bold; }
-                .header h2 { margin: ${isThermal ? '2px 0' : '5px 0'}; font-size: ${isThermal ? '12px' : '18px'}; }
-                .header p { margin: ${isThermal ? '1px 0' : '2px 0'}; font-size: ${isThermal ? '9px' : '12px'}; }
+                .header { 
+                  text-align: center; 
+                  margin-bottom: ${isThermal ? '8px' : '20px'}; 
+                  padding-bottom: ${isThermal ? '4px' : '8px'};
+                  border-bottom: 1px dashed #333;
+                }
+                .header h1 { 
+                  margin: 0; 
+                  font-size: ${isThermal ? '14px' : '24px'}; 
+                  font-weight: bold;
+                  margin-bottom: ${isThermal ? '2px' : '4px'};
+                }
+                .header h2 { 
+                  margin: ${isThermal ? '2px 0 4px' : '5px 0 8px'}; 
+                  font-size: ${isThermal ? '12px' : '18px'}; 
+                  font-weight: bold;
+                }
+                .header p { 
+                  margin: ${isThermal ? '1px 0' : '2px 0'}; 
+                  font-size: ${isThermal ? '9px' : '12px'}; 
+                  line-height: 1.3;
+                }
                 .info-grid { 
                   ${isThermal 
                     ? 'display: block; margin: 8px 0;' 
@@ -145,16 +163,27 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                 .value { margin-top: 2px; font-size: ${isThermal ? '9px' : '12px'}; }
                 .qr-section { text-align: center; margin: ${isThermal ? '8px 0' : '20px 0'}; }
                 .qr-section img { width: ${isThermal ? '60px' : '120px'}; height: ${isThermal ? '60px' : '120px'}; }
-                .conditions { margin-top: ${isThermal ? '8px' : '20px'}; font-size: ${isThermal ? '8px' : '12px'}; }
+                .conditions { 
+                  margin-top: ${isThermal ? '8px' : '20px'}; 
+                  font-size: ${isThermal ? '8px' : '11px'}; 
+                  padding: ${isThermal ? '4px' : '8px'} 0;
+                  border-top: 1px dashed #333;
+                }
                 .signature-area { 
                   margin-top: ${isThermal ? '15px' : '30px'}; 
                   ${isThermal ? 'display: block;' : 'display: flex; justify-content: space-between;'}
+                  border-top: 1px solid #333;
+                  padding-top: ${isThermal ? '8px' : '12px'};
                 }
                 .signature-box { 
                   text-align: center; 
                   ${isThermal ? 'margin-bottom: 15px;' : 'width: 150px;'}
                 }
-                .signature-box .label { margin-bottom: ${isThermal ? '20px' : '12px'}; }
+                .signature-box .label { 
+                  margin-bottom: ${isThermal ? '20px' : '40px'}; 
+                  font-size: ${isThermal ? '9px' : '12px'};
+                  font-weight: bold;
+                }
                 h3 { font-size: ${isThermal ? '11px' : '18px'}; margin: ${isThermal ? '8px 0 4px' : '20px 0 8px'}; }
                 .border-b { border-bottom: ${isThermal ? '1px dashed #000' : '2px solid #000'}; }
                 .border-t { border-top: 1px solid #000; }
@@ -223,14 +252,13 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
       <Card className="p-8" ref={receiptRef}>
         <div className="receipt">
           {/* Header */}
-          <div className={`header text-center ${isThermal ? 'border-b border-dashed border-gray-800 pb-2 mb-4' : 'border-b-2 border-gray-800 pb-4 mb-6'}`}>
-            <h1 className={`${isThermal ? 'text-sm' : 'text-2xl'} font-bold uppercase`}>{storeConfig.name}</h1>
-            <h2 className={`${isThermal ? 'text-xs' : 'text-lg'} font-semibold mt-2`}>TANDA TERIMA SERVIS</h2>
-            <div className={`${isThermal ? 'text-xs' : 'text-sm'} mt-2`}>
+          <div className="header">
+            <h1>{storeConfig.name.toUpperCase()}</h1>
+            <div style={{ fontSize: isThermal ? '9px' : '12px', lineHeight: '1.3' }}>
               <p>{storeConfig.address}</p>
-              <p>{isThermal ? `${storeConfig.phone}` : `Telp: ${storeConfig.phone} | Email: ${storeConfig.email}`}</p>
-              {!isThermal && <p>Email: {storeConfig.email}</p>}
+              <p>Tel: {storeConfig.phone} {storeConfig.email && `| Email: ${storeConfig.email}`}</p>
             </div>
+            <h2>═══ TANDA TERIMA SERVIS ═══</h2>
           </div>
 
           {/* Service Number and Date */}
