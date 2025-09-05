@@ -129,8 +129,10 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const selectCustomer = (customer: any) => {
+    console.log('selectCustomer called with:', customer);
     setSelectedCustomer(customer);
     setCustomerSearch("");
+    console.log('selectedCustomer after set:', customer);
   };
 
   const handleCustomerCreated = (newCustomer: any) => {
