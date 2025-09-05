@@ -339,8 +339,20 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                       </Card>
                     )}
                     
-                    <div className="text-xs text-muted-foreground">
-                      Optional: Leave empty for walk-in customer
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-muted-foreground">
+                        Optional: Leave empty for walk-in customer
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowCustomerCreateModal(true)}
+                        data-testid="button-add-customer"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Tambah Customer
+                      </Button>
                     </div>
                   </>
                 )}
