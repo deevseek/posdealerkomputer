@@ -1,82 +1,32 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { Route, Switch } from "wouter";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { useAuth } from "@/hooks/useAuth";
-import { useSetup } from "@/hooks/useSetup";
+import InstallationWizard from "@/pages/installation-wizard";
 import NotFound from "@/pages/not-found";
-import Login from "@/pages/login";
-import Dashboard from "@/pages/dashboard";
-import POS from "@/pages/pos";
-import ServiceTickets from "@/pages/service-tickets";
-import Inventory from "@/pages/inventory";
-import Purchasing from "@/pages/purchasing";
-import Customers from "@/pages/customers";
-import Suppliers from "@/pages/suppliers";
-import Financial from "@/pages/financial";
-import FinanceNew from "@/pages/finance-new";
-import Reports from "@/pages/reports";
-import StockMovements from "@/pages/stock-movements";
-import Settings from "@/pages/settings";
-import RolesPage from "@/pages/roles";
-import UsersPage from "@/pages/users";
-import ServiceStatus from "@/pages/ServiceStatus";
-import Setup from "@/pages/setup";
 
-function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { needsSetup, isSetupLoading } = useSetup();
-
-  // Show setup if not completed (regardless of auth status)
-  if (needsSetup || isSetupLoading) {
-    return (
-      <Switch>
-        <Route path="/setup" component={Setup} />
-        <Route path="*" component={Setup} /> {/* Redirect all routes to setup */}
-      </Switch>
-    );
-  }
-
-  return (
-    <Switch>
-      {isLoading || !isAuthenticated ? (
-        <>
-          <Route path="/" component={Login} />
-          <Route path="/login" component={Login} />
-        </>
-      ) : (
-        <>
-          <Route path="/" component={Dashboard} />
-          <Route path="/pos" component={POS} />
-          <Route path="/service" component={ServiceTickets} />
-          <Route path="/inventory" component={Inventory} />
-          <Route path="/purchasing" component={Purchasing} />
-          <Route path="/customers" component={Customers} />
-          <Route path="/suppliers" component={Suppliers} />
-          <Route path="/financial" component={Financial} />
-          <Route path="/finance-new" component={FinanceNew} />
-          <Route path="/users" component={UsersPage} />
-          <Route path="/roles" component={RolesPage} />
-          <Route path="/reports" component={Reports} />
-          <Route path="/stock-movements" component={StockMovements} />
-          <Route path="/settings" component={Settings} />
-        </>
-      )}
-      <Route path="/service-status" component={ServiceStatus} />
-      <Route path="/setup" component={Setup} />
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryFn: async ({ queryKey }) => {
+        const response = await fetch(queryKey[0] as string);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      },
+    },
+  },
+});
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <Switch>
+        <Route path="/" component={InstallationWizard} />
+        <Route component={NotFound} />
+      </Switch>
+      <Toaster />
     </QueryClientProvider>
   );
 }
