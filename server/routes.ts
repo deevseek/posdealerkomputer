@@ -682,14 +682,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { items, ...poData } = req.body;
       
+      console.log('Purchase Order Request Body:', JSON.stringify(req.body, null, 2));
+      console.log('Items received:', items);
+      console.log('PO Data received:', poData);
+      
       // Calculate totals from items if provided
       let subtotal = 0;
       let taxAmount = 0;
       let totalAmount = 0;
       
       if (items && items.length > 0) {
+        console.log('Processing items for calculation...');
         subtotal = items.reduce((sum: number, item: any) => {
-          const itemTotal = (parseFloat(item.unitCost) || 0) * (parseInt(item.quantity) || 0);
+          const unitCost = parseFloat(item.unitCost || item.hargaSatuan || '0');
+          const quantity = parseInt(item.quantity || item.kuantitas || '0');
+          const itemTotal = unitCost * quantity;
+          console.log(`Item: ${item.productId}, Unit Cost: ${unitCost}, Quantity: ${quantity}, Item Total: ${itemTotal}`);
           return sum + itemTotal;
         }, 0);
         
@@ -697,27 +705,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const taxRate = parseFloat(poData.taxRate || '0') / 100;
         taxAmount = subtotal * taxRate;
         totalAmount = subtotal + taxAmount;
+        
+        console.log(`Calculated - Subtotal: ${subtotal}, Tax: ${taxAmount}, Total: ${totalAmount}`);
+      } else {
+        console.log('No items provided, using default values');
       }
       
+      // Remove any null/undefined financial fields from poData to avoid override
+      const { subtotal: _, taxAmount: __, totalAmount: ___, ...cleanPoData } = poData;
+      
       const orderData = {
-        ...poData,
-        subtotal: subtotal.toString(),
-        taxAmount: taxAmount.toString(), 
-        totalAmount: totalAmount.toString(),
+        ...cleanPoData,
+        subtotal: (subtotal || 0).toString(),
+        taxAmount: (taxAmount || 0).toString(), 
+        totalAmount: (totalAmount || 0).toString(),
         requestedBy: req.session.user.id
       };
+      
+      console.log('Final Order Data:', JSON.stringify(orderData, null, 2));
       
       const order = await storage.createPurchaseOrder(orderData);
       
       // Create items if provided
       if (items && items.length > 0) {
         for (const item of items) {
+          const unitCost = parseFloat(item.unitCost || item.hargaSatuan || '0');
+          const quantity = parseInt(item.quantity || item.kuantitas || '0');
+          
           await storage.createPurchaseOrderItem({
             ...item,
             purchaseOrderId: order.id,
-            orderedQuantity: item.quantity,
-            unitCost: item.unitCost?.toString() || '0',
-            totalCost: ((parseFloat(item.unitCost) || 0) * (parseInt(item.quantity) || 0)).toString()
+            orderedQuantity: quantity,
+            unitCost: unitCost.toString(),
+            totalCost: (unitCost * quantity).toString()
           });
         }
       }
