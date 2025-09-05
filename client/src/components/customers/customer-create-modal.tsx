@@ -59,14 +59,17 @@ export default function CustomerCreateModal({
         description: "Customer berhasil ditambahkan",
       });
       
-      // Call the callback with new customer data FIRST
+      // Call the callback with new customer data FIRST before closing modal
       if (onCustomerCreated) {
         console.log('Calling onCustomerCreated with:', newCustomer);
         onCustomerCreated(newCustomer);
       }
       
-      // Invalidate customers query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      // Small delay to ensure state is updated before invalidating cache
+      setTimeout(() => {
+        // Invalidate customers query to refresh the list
+        queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      }, 100);
       
       // Reset form
       form.reset();
