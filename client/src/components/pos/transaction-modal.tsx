@@ -134,12 +134,22 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const handleCustomerCreated = (newCustomer: any) => {
-    // Immediately select the new customer
+    console.log('handleCustomerCreated called with:', newCustomer);
+    
+    // Force close the create modal first
+    setShowCustomerCreateModal(false);
+    
+    // Then immediately select the new customer
     setSelectedCustomer(newCustomer);
     setCustomerSearch("");
     
-    // Force close the create modal if still open
-    setShowCustomerCreateModal(false);
+    console.log('Customer selected:', newCustomer);
+    
+    // Show confirmation toast
+    toast({
+      title: "Success",
+      description: `Customer ${newCustomer?.name || 'baru'} terpilih untuk transaksi`,
+    });
   };
 
   const updateQuantity = (productId: string, delta: number) => {

@@ -54,38 +54,26 @@ export default function CustomerCreateModal({
       return await apiRequest('POST', '/api/customers', data);
     },
     onSuccess: (newCustomer) => {
-      // Reset form first
-      form.reset();
+      console.log('Customer created successfully:', newCustomer);
       
-      // Close modal
+      // Show creation toast first
+      toast({
+        title: "Success",
+        description: "Customer berhasil ditambahkan",
+      });
+      
+      // Reset form and close modal
+      form.reset();
       onClose();
       
-      // Call callback to select customer immediately after modal closes
+      // Call the callback immediately - no delay
       if (onCustomerCreated) {
-        // Use a slightly longer delay to ensure proper state management
-        setTimeout(() => {
-          onCustomerCreated(newCustomer);
-          
-          // Show success toast after customer is selected
-          toast({
-            title: "Success",
-            description: `Customer ${newCustomer?.name || 'baru'} berhasil ditambahkan dan terpilih`,
-          });
-          
-          // Invalidate cache to refresh list after selection
-          setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-          }, 100);
-        }, 300);
-      } else {
-        // Fallback toast if no callback
-        toast({
-          title: "Success", 
-          description: "Customer berhasil ditambahkan",
-        });
-        
-        queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+        console.log('About to call onCustomerCreated');
+        onCustomerCreated(newCustomer);
       }
+      
+      // Refresh customer cache
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
     },
     onError: (error: any) => {
       toast({
