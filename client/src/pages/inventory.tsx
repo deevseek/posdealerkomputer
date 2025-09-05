@@ -304,7 +304,13 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Min Stock</FormLabel>
                 <FormControl>
-                  <Input {...field} type="number" placeholder="5" />
+                  <Input 
+                    {...field} 
+                    type="number" 
+                    placeholder="5"
+                    value={field.value?.toString() || ""}
+                    onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -318,7 +324,13 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
               <FormItem>
                 <FormLabel>Max Stock</FormLabel>
                 <FormControl>
-                  <Input {...field} type="number" placeholder="100" />
+                  <Input 
+                    {...field} 
+                    type="number" 
+                    placeholder="100"
+                    value={field.value?.toString() || ""}
+                    onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
