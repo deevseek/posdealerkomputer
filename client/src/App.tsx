@@ -7,7 +7,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSetup } from "@/hooks/useSetup";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import Setup from "@/pages/setup";
 import Dashboard from "@/pages/dashboard";
 import POS from "@/pages/pos";
 import ServiceTickets from "@/pages/service-tickets";
@@ -23,12 +22,13 @@ import Settings from "@/pages/settings";
 import RolesPage from "@/pages/roles";
 import UsersPage from "@/pages/users";
 import ServiceStatus from "@/pages/ServiceStatus";
+import Setup from "@/pages/setup";
 
 function Router() {
-  const { needsSetup, isSetupLoading } = useSetup();
   const { isAuthenticated, isLoading } = useAuth();
+  const { needsSetup, isSetupLoading } = useSetup();
 
-  // If setup is needed, redirect to setup
+  // Show setup if not completed (regardless of auth status)
   if (needsSetup || isSetupLoading) {
     return (
       <Switch>
@@ -41,7 +41,10 @@ function Router() {
   return (
     <Switch>
       {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Login} />
+        <>
+          <Route path="/" component={Login} />
+          <Route path="/login" component={Login} />
+        </>
       ) : (
         <>
           <Route path="/" component={Dashboard} />
@@ -61,6 +64,7 @@ function Router() {
         </>
       )}
       <Route path="/service-status" component={ServiceStatus} />
+      <Route path="/setup" component={Setup} />
       <Route component={NotFound} />
     </Switch>
   );

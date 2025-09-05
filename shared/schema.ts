@@ -72,6 +72,16 @@ export const storeConfig = pgTable("store_config", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('11.00'),
   defaultDiscount: decimal("default_discount", { precision: 5, scale: 2 }).default('0.00'),
   logo: varchar("logo"),
+  // Setup wizard status
+  setupCompleted: boolean("setup_completed").default(false),
+  setupSteps: text("setup_steps"), // JSON: store, database, admin completed steps
+  // Database configuration (if needed for self-hosted)
+  databaseUrl: text("database_url"),
+  databaseHost: varchar("database_host"),
+  databasePort: integer("database_port"),
+  databaseName: varchar("database_name"),
+  databaseUser: varchar("database_user"),
+  databasePassword: varchar("database_password"),
   // WhatsApp settings
   whatsappEnabled: boolean("whatsapp_enabled").default(false),
   whatsappSessionData: text("whatsapp_session_data"), // Store session data
@@ -941,7 +951,6 @@ export type InsertJournalEntry = z.infer<typeof insertJournalEntrySchema>;
 export type JournalEntry = typeof journalEntries.$inferSelect;
 export type InsertJournalEntryLine = z.infer<typeof insertJournalEntryLineSchema>;
 export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
-export type Account = typeof accounts.$inferSelect;
 export type InsertAccount2 = z.infer<typeof insertAccountSchema2>;
 export type InsertRole = z.infer<typeof insertRoleSchema>;
 export type Role = typeof roles.$inferSelect;

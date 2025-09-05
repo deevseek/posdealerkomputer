@@ -69,6 +69,7 @@ export interface IStorage {
   
   // User management
   getUsers(): Promise<User[]>;
+  getUserCount(): Promise<number>;
   getUserByEmail(email: string): Promise<User | undefined>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User>;
   deleteUser(id: string): Promise<void>;
@@ -128,7 +129,7 @@ export interface IStorage {
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
   recalculatePurchaseOrderTotal(poId: string): Promise<void>;
-  receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void>;
+  receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void>;
   
   // Inventory Adjustments
   getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
@@ -165,7 +166,7 @@ export interface IStorage {
   getServiceTicketById(id: string): Promise<ServiceTicket | undefined>;
   getActiveServiceTickets(): Promise<ServiceTicket[]>;
   createServiceTicket(ticket: InsertServiceTicket): Promise<ServiceTicket>;
-  updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>): Promise<ServiceTicket>;
+  updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[], userId?: string): Promise<ServiceTicket>;
   deleteServiceTicket(id: string): Promise<void>;
   
   // Stock Movements
@@ -191,9 +192,11 @@ export interface IStorage {
   // Dashboard Statistics
   getDashboardStats(): Promise<{
     todaySales: string;
+    todayRevenue: string;
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    whatsappConnected: boolean;
   }>;
 }
 
@@ -257,6 +260,13 @@ export class DatabaseStorage implements IStorage {
   // User management
   async getUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUserCount(): Promise<number> {
+    const result = await db
+      .select({ count: count() })
+      .from(users);
+    return result[0]?.count || 0;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -403,7 +413,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       )
       .orderBy(asc(products.name));
@@ -624,7 +634,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number): Promise<void> {
+  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void> {
     // SIMPLIFIED: Get item details with select all - no complex field selection
     const [item] = await db
       .select()
@@ -653,7 +663,7 @@ export class DatabaseStorage implements IStorage {
       referenceId: item.purchaseOrderId,
       referenceType: 'purchase',
       notes: `Received from PO`,
-      userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
+      userId: userId,
     });
 
     // CREATE FINANCE RECORD for purchase expense
@@ -666,7 +676,7 @@ export class DatabaseStorage implements IStorage {
         category: 'Inventory Purchase',
         reference: item.purchaseOrderId,
         referenceType: 'purchase_order',
-        userId: 'a4fb9372-ec01-4825-b035-81de75a18053',
+        userId: userId,
       });
     }
 
@@ -1143,7 +1153,7 @@ export class DatabaseStorage implements IStorage {
     return ticket;
   }
 
-  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[]): Promise<ServiceTicket> {
+  async updateServiceTicket(id: string, ticketData: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[], userId?: string): Promise<ServiceTicket> {
     return await db.transaction(async (tx) => {
       const [ticket] = await tx
         .update(serviceTickets)
@@ -1182,11 +1192,12 @@ export class DatabaseStorage implements IStorage {
           
           // Only update stock and record movement for completed/delivered status
           if (ticket.status === 'completed' || ticket.status === 'delivered') {
-            const currentStock = product.totalStock || 0;
+            const currentStock = product.stock || 0;
             
-            // Check stock only for completed services
+            // Check stock for completed services - allow negative stock but warn
             if (currentStock < part.quantity) {
-              throw new Error(`Stock ${product.name} tidak cukup untuk menyelesaikan servis. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}`);
+              console.warn(`WARNING: Stock ${product.name} tidak cukup. Tersedia: ${currentStock}, Diperlukan: ${part.quantity}. Melanjutkan dengan stock negatif.`);
+              // Don't throw error, just proceed with negative stock
             }
             
             // Update product stock
@@ -1206,7 +1217,7 @@ export class DatabaseStorage implements IStorage {
               referenceId: id,
               referenceType: 'service',
               notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
-              userId: ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
             });
           } else {
             // For non-completed status, just reserve stock (optional - estimate only)
@@ -1250,7 +1261,7 @@ export class DatabaseStorage implements IStorage {
               ticket.id,
               ticket.laborCost,
               `${ticket.ticketNumber}: ${ticket.problem}`,
-              ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+              userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
             );
           }
           
@@ -1266,7 +1277,7 @@ export class DatabaseStorage implements IStorage {
                   part.quantity,
                   product.lastPurchasePrice || '0', // modal price
                   part.unitPrice, // selling price
-                  ticket.userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+                  userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
                 );
               }
             }
@@ -1613,7 +1624,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       );
 
@@ -1624,10 +1635,10 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       )
-      .orderBy(products.totalStock);
+      .orderBy(products.stock);
 
     const [totalResult] = await db
       .select({ count: count() })
@@ -1637,11 +1648,11 @@ export class DatabaseStorage implements IStorage {
     // Calculate total asset value (stock × purchase price)
     const assetValueResult = await db
       .select({
-        totalValue: sql<number>`SUM(${products.totalStock} * COALESCE(${products.lastPurchasePrice}, 0))`,
-        totalQuantity: sql<number>`SUM(${products.totalStock})`
+        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.lastPurchasePrice}, 0))`,
+        totalQuantity: sql<number>`SUM(${products.stock})`
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gte(products.totalStock, 0)));
+      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
     const totalAssetValue = Number(assetValueResult[0]?.totalValue || 0);
     const totalStockQuantity = Number(assetValueResult[0]?.totalQuantity || 0);
@@ -1664,6 +1675,7 @@ export class DatabaseStorage implements IStorage {
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    whatsappConnected: boolean;
   }> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1705,7 +1717,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(products.isActive, true),
-          sql`${products.totalStock} <= ${products.minStock}`
+          sql`${products.stock} <= ${products.minStock}`
         )
       );
     
@@ -1743,12 +1755,17 @@ export class DatabaseStorage implements IStorage {
       monthlyProfit = monthlySales - monthlyPurchases;
     }
     
+    // Get WhatsApp connection status from store config
+    const storeConfig = await this.getStoreConfig();
+    const whatsappConnected = storeConfig?.whatsappConnected || false;
+    
     return {
       todaySales: todayProductSalesResult.total || '0',
       todayRevenue: todayRevenueResult.total || '0',
       activeServices: activeServicesResult.count,
       lowStockCount: lowStockResult.count,
       monthlyProfit: monthlyProfit.toString(),
+      whatsappConnected,
     };
   }
   

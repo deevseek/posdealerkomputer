@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { whatsappService } from "./whatsappService";
+import QRCode from 'qrcode';
 // Conditional auth import based on environment
 import { isAuthenticated, authenticateUser, hashPassword } from "./auth";
 import {
@@ -545,19 +546,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get('/api/products/:id', isAuthenticated, async (req, res) => {
-    try {
-      const product = await storage.getProductById(req.params.id);
-      if (!product) {
-        return res.status(404).json({ message: "Product not found" });
-      }
-      res.json(product);
-    } catch (error) {
-      console.error("Error fetching product:", error);
-      res.status(500).json({ message: "Failed to fetch product" });
-    }
-  });
-
   app.get('/api/products/low-stock', isAuthenticated, async (req, res) => {
     try {
       const products = await storage.getLowStockProducts();
@@ -777,9 +765,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { itemId } = req.params;
       const { receivedQuantity } = req.body;
+      const userId = req.session.user?.id;
       
-      console.log("Receiving items:", { itemId, receivedQuantity });
-      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity));
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      console.log("Receiving items:", { itemId, receivedQuantity, userId });
+      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity), userId);
       res.json({ message: "Items received successfully" });
     } catch (error) {
       console.error("Error receiving items:", error);
@@ -957,8 +950,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate transaction number
       const transactionNumber = `TRX-${Date.now()}`;
       
+      // Add transaction number and user ID to transaction data
+      const completeTransactionData = {
+        ...transactionData,
+        transactionNumber,
+        userId: req.session.user?.id
+      };
+      
       const transaction = await storage.createTransaction(
-        transactionData,
+        completeTransactionData,
         items
       );
       
@@ -1040,22 +1040,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send WhatsApp notification for new service (async, don't block response)
       setImmediate(async () => {
-        try {
-          const config = await storage.getStoreConfig();
-          if (config?.whatsappEnabled && whatsappService.isConnected()) {
-            const customer = await storage.getCustomerById(ticket.customerId);
-            if (customer?.phone) {
-              await whatsappService.sendServiceCreatedNotification(
-                customer.phone,
-                ticket,
-                customer,
-                config
-              );
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        const attemptNotification = async (): Promise<void> => {
+          try {
+            const config = await storage.getStoreConfig();
+            console.log(`🔔 Service creation notification attempt ${retryCount + 1}/${maxRetries} for ticket ${ticket.ticketNumber}`);
+            
+            if (config?.whatsappEnabled) {
+              console.log(`WhatsApp enabled in config, checking connection...`);
+              
+              if (whatsappService.isConnected()) {
+                console.log(`WhatsApp connected, getting customer data...`);
+                const customer = await storage.getCustomerById(ticket.customerId);
+                
+                if (customer?.phone) {
+                  console.log(`Sending service creation notification to ${customer.phone}...`);
+                  const success = await whatsappService.sendServiceCreatedNotification(
+                    customer.phone,
+                    ticket,
+                    customer,
+                    config
+                  );
+                  
+                  if (!success && retryCount < maxRetries - 1) {
+                    retryCount++;
+                    console.log(`Retrying service creation notification in 2 seconds...`);
+                    setTimeout(() => attemptNotification(), 2000);
+                  }
+                } else {
+                  console.log('No phone number for customer, skipping WhatsApp notification');
+                }
+              } else {
+                console.log(`WhatsApp not connected, skipping notification`);
+              }
+            } else {
+              console.log('WhatsApp not enabled in config, skipping notification');
+            }
+          } catch (error) {
+            console.error(`Error sending WhatsApp notification for new service (attempt ${retryCount + 1}):`, error);
+            if (retryCount < maxRetries - 1) {
+              retryCount++;
+              console.log(`Retrying service creation notification in 2 seconds...`);
+              setTimeout(() => attemptNotification(), 2000);
             }
           }
-        } catch (error) {
-          console.error('Error sending WhatsApp notification for new service:', error);
-        }
+        };
+        
+        await attemptNotification();
       });
       
       res.json(ticket);
@@ -1092,27 +1125,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Get old ticket for status comparison
       const oldTicket = await storage.getServiceTicketById(req.params.id);
-      const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts);
+      const userId = req.session.user?.id;
+      
+      console.log("Session data:", { 
+        sessionExists: !!req.session, 
+        userExists: !!req.session.user, 
+        userId: userId,
+        sessionId: req.sessionID 
+      });
+      
+      if (!userId) {
+        console.error("No user ID in session for service ticket update");
+        return res.status(401).json({ message: "User session invalid. Please login again." });
+      }
+      
+      const ticket = await storage.updateServiceTicket(req.params.id, ticketData, parts, userId);
       
       // Send WhatsApp notification for status change (async, don't block response)
       if (status !== undefined && oldTicket && status !== oldTicket.status) {
         setImmediate(async () => {
-          try {
-            const config = await storage.getStoreConfig();
-            if (config?.whatsappEnabled && whatsappService.isConnected()) {
-              const customer = await storage.getCustomerById(ticket.customerId);
-              if (customer?.phone) {
-                await whatsappService.sendServiceStatusNotification(
-                  customer.phone,
-                  ticket,
-                  customer,
-                  config
-                );
+          let retryCount = 0;
+          const maxRetries = 3;
+          
+          const attemptStatusNotification = async (): Promise<void> => {
+            try {
+              const config = await storage.getStoreConfig();
+              console.log(`🔄 Status update notification attempt ${retryCount + 1}/${maxRetries} for ticket ${ticket.ticketNumber}: ${oldTicket.status} → ${status}`);
+              
+              if (config?.whatsappEnabled) {
+                console.log(`WhatsApp enabled in config, checking connection...`);
+                
+                if (whatsappService.isConnected()) {
+                  console.log(`WhatsApp connected, getting customer data...`);
+                  const customer = await storage.getCustomerById(ticket.customerId);
+                  
+                  if (customer?.phone) {
+                    console.log(`Sending status update notification to ${customer.phone}...`);
+                    const success = await whatsappService.sendServiceStatusNotification(
+                      customer.phone,
+                      ticket,
+                      customer,
+                      config
+                    );
+                    
+                    if (!success && retryCount < maxRetries - 1) {
+                      retryCount++;
+                      console.log(`Retrying status notification in 2 seconds...`);
+                      setTimeout(() => attemptStatusNotification(), 2000);
+                    }
+                  } else {
+                    console.log('No phone number for customer, skipping WhatsApp status notification');
+                  }
+                } else {
+                  console.log(`WhatsApp not connected for status update, current state: ${whatsappService.getConnectionState()}`);
+                  
+                  // Force reconnect attempt for status updates
+                  if (retryCount < maxRetries - 1) {
+                    console.log('Attempting WhatsApp reconnect for status notification...');
+                    whatsappService.initialize(); // Trigger reconnection
+                    retryCount++;
+                    setTimeout(() => attemptStatusNotification(), 5000); // Longer wait for reconnect
+                  }
+                }
+              } else {
+                console.log('WhatsApp not enabled in config, skipping status notification');
+              }
+            } catch (error) {
+              console.error(`Error sending WhatsApp notification for status change (attempt ${retryCount + 1}):`, error);
+              if (retryCount < maxRetries - 1) {
+                retryCount++;
+                console.log(`Retrying status notification in 2 seconds...`);
+                setTimeout(() => attemptStatusNotification(), 2000);
               }
             }
-          } catch (error) {
-            console.error('Error sending WhatsApp notification for status change:', error);
-          }
+          };
+          
+          await attemptStatusNotification();
         });
       }
       
@@ -1558,10 +1646,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get WhatsApp status
   app.get('/api/whatsapp/status', isAuthenticated, async (req, res) => {
     try {
+      const rawQrCode = whatsappService.getQRCode();
+      let qrCodeDataUrl = null;
+      
+      // Convert raw QR string to data URL for frontend display
+      if (rawQrCode) {
+        try {
+          console.log('Converting QR code to data URL, raw length:', rawQrCode.length);
+          qrCodeDataUrl = await QRCode.toDataURL(rawQrCode);
+          console.log('QR conversion successful, data URL length:', qrCodeDataUrl ? qrCodeDataUrl.length : 0);
+        } catch (qrError) {
+          console.error('Error converting QR code to data URL:', qrError);
+        }
+      } else {
+        console.log('No raw QR code available for conversion');
+      }
+      
       res.json({
         connected: whatsappService.isConnected(),
         connectionState: whatsappService.getConnectionState(),
-        qrCode: whatsappService.getQRCode(),
+        qrCode: qrCodeDataUrl,
       });
     } catch (error) {
       console.error('Error getting WhatsApp status:', error);
@@ -1787,6 +1891,237 @@ Terima kasih!
     } catch (error) {
       console.error('Error getting service status:', error);
       res.status(500).json({ message: 'Failed to get service status' });
+    }
+  });
+
+  // Import default roles config
+  const { defaultRoleConfigs } = await import('./defaultRoles.js');
+
+  // Function to create default roles
+  async function createDefaultRoles() {
+    try {
+      console.log('Creating default roles...');
+      
+      for (const roleConfig of defaultRoleConfigs) {
+        // Check if role already exists
+        const existingRoles = await storage.getRoles();
+        const roleExists = existingRoles.some(role => role.name === roleConfig.name);
+        
+        if (!roleExists) {
+          await storage.createRole({
+            name: roleConfig.name,
+            displayName: roleConfig.displayName,
+            description: roleConfig.description,
+            permissions: roleConfig.permissions,
+            isActive: true
+          });
+          console.log(`✅ Created role: ${roleConfig.displayName}`);
+        } else {
+          console.log(`ℹ️ Role already exists: ${roleConfig.displayName}`);
+        }
+      }
+      
+      console.log('✅ Default roles setup completed');
+    } catch (error) {
+      console.error('Error creating default roles:', error);
+    }
+  }
+
+  // Setup Wizard Endpoints - untuk installer
+  
+  // Database migration endpoint
+  app.post('/api/setup/migrate-database', async (req, res) => {
+    try {
+      console.log('Starting database migration...');
+      
+      // Import child_process to run drizzle migration
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+
+      // Run drizzle push command to apply schema changes
+      await execAsync('npm run db:push --force', {
+        cwd: process.cwd(),
+        timeout: 60000, // 1 minute timeout
+      });
+
+      console.log('Database migration completed successfully');
+
+      // Create default roles after migration
+      await createDefaultRoles();
+
+      // Update setup steps
+      const config = await storage.getStoreConfig();
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.database = true;
+
+      if (config) {
+        await storage.upsertStoreConfig({
+          ...config,
+          setupSteps: JSON.stringify(setupSteps)
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Database migration completed successfully' 
+      });
+    } catch (error) {
+      console.error('Database migration failed:', error);
+      res.status(500).json({ 
+        message: 'Database migration failed', 
+        error: (error as Error).message 
+      });
+    }
+  });
+
+  // Check setup status
+  app.get('/api/setup/status', async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      const userCount = await storage.getUserCount();
+      
+      const isSetupCompleted = Boolean(
+        config && 
+        config.name && 
+        config.setupCompleted !== false &&
+        userCount > 0
+      );
+      
+      res.json({
+        setupCompleted: isSetupCompleted,
+        hasStoreConfig: Boolean(config?.name),
+        hasAdminUser: userCount > 0,
+        storeName: config?.name,
+        setupSteps: config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {},
+        databaseMigrated: config?.setupSteps ? JSON.parse(config.setupSteps || '{}').database : false
+      });
+    } catch (error) {
+      console.error('Error checking setup status:', error);
+      res.json({
+        setupCompleted: false,
+        hasStoreConfig: false,
+        hasAdminUser: false,
+        setupSteps: {}
+      });
+    }
+  });
+
+  // Setup store configuration
+  app.post('/api/setup/store', async (req, res) => {
+    try {
+      const { name, address, phone, email, taxRate } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ message: 'Store name is required' });
+      }
+
+      const existingConfig = await storage.getStoreConfig();
+      const setupSteps = existingConfig?.setupSteps ? JSON.parse(existingConfig.setupSteps) : {};
+      setupSteps.store = true;
+
+      await storage.upsertStoreConfig({
+        id: existingConfig?.id || undefined,
+        name,
+        address: address || '',
+        phone: phone || '',
+        email: email || '',
+        taxRate: taxRate || '11.00',
+        setupSteps: JSON.stringify(setupSteps),
+        setupCompleted: false, // Will be completed in final step
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Store configuration saved successfully' 
+      });
+    } catch (error) {
+      console.error('Error saving store config:', error);
+      res.status(500).json({ message: 'Failed to save store configuration' });
+    }
+  });
+
+  // Setup admin user
+  app.post('/api/setup/admin', async (req, res) => {
+    try {
+      const { username, password, email, firstName, lastName } = req.body;
+      
+      if (!username || !password || !email) {
+        return res.status(400).json({ message: 'Username, password, and email are required' });
+      }
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      const emailExists = await storage.getUserByEmail(email);
+      if (emailExists) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
+      // Hash password and create user
+      const hashedPassword = await hashPassword(password);
+      
+      await storage.createUser({
+        username,
+        password: hashedPassword,
+        email,
+        firstName: firstName || 'System',
+        lastName: lastName || 'Administrator',
+        role: 'admin',
+        isActive: true,
+        profileImageUrl: null
+      });
+
+      // Update setup steps
+      const config = await storage.getStoreConfig();
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.admin = true;
+
+      if (config) {
+        await storage.upsertStoreConfig({
+          ...config,
+          setupSteps: JSON.stringify(setupSteps)
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Admin user created successfully' 
+      });
+    } catch (error) {
+      console.error('Error creating admin user:', error);
+      res.status(500).json({ message: 'Failed to create admin user' });
+    }
+  });
+
+  // Complete setup
+  app.post('/api/setup/complete', async (req, res) => {
+    try {
+      const config = await storage.getStoreConfig();
+      
+      if (!config) {
+        return res.status(400).json({ message: 'Store configuration not found' });
+      }
+
+      const setupSteps = config.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.completed = true;
+
+      await storage.upsertStoreConfig({
+        ...config,
+        setupCompleted: true,
+        setupSteps: JSON.stringify(setupSteps)
+      });
+
+      res.json({ 
+        success: true, 
+        message: 'Setup completed successfully! You can now use the application.' 
+      });
+    } catch (error) {
+      console.error('Error completing setup:', error);
+      res.status(500).json({ message: 'Failed to complete setup' });
     }
   });
 

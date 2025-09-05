@@ -99,14 +99,10 @@ export default function Setup() {
       // Simulate progress steps
       const progressSteps = [
         { progress: 10, status: 'Connecting to database...' },
-        { progress: 20, status: 'Creating tables schema...' },
-        { progress: 30, status: 'Setting up user roles...' },
-        { progress: 40, status: 'Creating product tables...' },
-        { progress: 50, status: 'Setting up inventory system...' },
-        { progress: 60, status: 'Configuring service management...' },
-        { progress: 70, status: 'Setting up expense tracking...' },
-        { progress: 80, status: 'Initializing WhatsApp integration...' },
-        { progress: 90, status: 'Configuring transaction discounts...' },
+        { progress: 25, status: 'Creating tables schema...' },
+        { progress: 45, status: 'Setting up user roles...' },
+        { progress: 65, status: 'Creating product tables...' },
+        { progress: 80, status: 'Setting up inventory system...' },
         { progress: 95, status: 'Finalizing database structure...' }
       ];
 
@@ -670,10 +666,8 @@ export default function Setup() {
                     <h4 className="font-medium">What's next?</h4>
                     <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
                       <li>Add products and categories to your inventory</li>
-                      <li>Configure transaction discount settings for sales</li>
-                      <li>Test WhatsApp integration for service notifications</li>
-                      <li>Set up daily expense tracking categories</li>
-                      <li>Customize receipt print layouts for your needs</li>
+                      <li>Configure additional user roles and permissions</li>
+                      <li>Set up WhatsApp integration for notifications</li>
                       <li>Start processing sales and service tickets</li>
                     </ul>
                   </div>
