@@ -2170,6 +2170,21 @@ Terima kasih!
         }
       }
 
+      // Create default location
+      try {
+        const existingLocations = await storage.getLocations();
+        if (existingLocations.length === 0) {
+          await storage.createLocation({
+            name: 'Main Store',
+            description: 'Lokasi utama toko',
+            address: 'Alamat toko utama'
+          });
+          console.log('✅ Created default location: Main Store');
+        }
+      } catch (error) {
+        console.error('Error creating default location:', error);
+      }
+
       // Import finance manager to set up accounts
       const { FinanceManager } = await import('./financeManager');
       const financeManager = new FinanceManager();
@@ -2179,6 +2194,23 @@ Terima kasih!
         console.log('✅ Default chart of accounts initialized');
       } catch (error) {
         console.error('Error initializing accounts:', error);
+      }
+
+      // Initialize WhatsApp service config (prevent crashes)
+      try {
+        const config = await storage.getStoreConfig();
+        if (config && (!config.whatsappEnabled || config.whatsappEnabled === null)) {
+          await storage.upsertStoreConfig({
+            ...config,
+            whatsappEnabled: false,
+            whatsappConnected: false,
+            whatsappPhone: null,
+            whatsappApiKey: null
+          });
+          console.log('✅ WhatsApp service config initialized (disabled by default)');
+        }
+      } catch (error) {
+        console.error('Error initializing WhatsApp config:', error);
       }
 
       // Update setup steps

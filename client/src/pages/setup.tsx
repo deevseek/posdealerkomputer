@@ -99,10 +99,11 @@ export default function Setup() {
       // Simulate progress steps
       const progressSteps = [
         { progress: 10, status: 'Connecting to database...' },
-        { progress: 25, status: 'Creating tables schema...' },
-        { progress: 45, status: 'Setting up user roles...' },
-        { progress: 65, status: 'Creating product tables...' },
-        { progress: 80, status: 'Setting up inventory system...' },
+        { progress: 20, status: 'Creating tables schema...' },
+        { progress: 35, status: 'Setting up user roles...' },
+        { progress: 50, status: 'Creating product & inventory tables...' },
+        { progress: 65, status: 'Setting up financial system...' },
+        { progress: 80, status: 'Initializing service management...' },
         { progress: 95, status: 'Finalizing database structure...' }
       ];
 
@@ -133,13 +134,47 @@ export default function Setup() {
         title: "Database Setup Complete",
         description: "Database schema has been pushed successfully",
       });
-      setCurrentStep(2);
+      
+      // Auto-proceed to initial data setup after a short delay
+      setTimeout(() => {
+        initialDataSetupMutation.mutate();
+      }, 1500);
     },
     onError: (error: Error) => {
       setDbMigrationProgress(0);
       setDbMigrationStatus('');
       toast({
         title: "Database Setup Error", 
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Initial data setup mutation
+  const initialDataSetupMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch('/api/setup/initial-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to setup initial data');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Initial Data Setup Complete",
+        description: "Categories, locations, and accounts created successfully",
+      });
+      setCurrentStep(2);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Setup Error",
         description: error.message,
         variant: "destructive",
       });
