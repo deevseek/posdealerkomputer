@@ -59,16 +59,17 @@ export default function CustomerCreateModal({
         description: "Customer berhasil ditambahkan",
       });
       
+      // Call the callback with new customer data FIRST
+      if (onCustomerCreated) {
+        console.log('Calling onCustomerCreated with:', newCustomer);
+        onCustomerCreated(newCustomer);
+      }
+      
       // Invalidate customers query to refresh the list
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       
       // Reset form
       form.reset();
-      
-      // Call the callback with new customer data
-      if (onCustomerCreated) {
-        onCustomerCreated(newCustomer);
-      }
       
       onClose();
     },

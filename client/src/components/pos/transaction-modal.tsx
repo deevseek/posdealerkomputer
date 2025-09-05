@@ -134,7 +134,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   };
 
   const handleCustomerCreated = (newCustomer: any) => {
+    console.log('Customer created:', newCustomer);
     selectCustomer(newCustomer);
+    toast({
+      title: "Success",
+      description: `Customer ${newCustomer.name} berhasil ditambahkan dan terpilih`,
+    });
   };
 
   const updateQuantity = (productId: string, delta: number) => {
