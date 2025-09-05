@@ -69,7 +69,7 @@ export default function CustomerCreateModal({
           // Show success toast after customer is selected
           toast({
             title: "Success",
-            description: `Customer ${newCustomer.name} berhasil ditambahkan dan terpilih`,
+            description: `Customer ${newCustomer?.name || 'baru'} berhasil ditambahkan dan terpilih`,
           });
           
           // Invalidate cache to refresh list
