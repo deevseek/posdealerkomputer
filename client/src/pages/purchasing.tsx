@@ -98,6 +98,8 @@ export default function PurchasingPage() {
     mutationFn: (data: any) => apiRequest("POST", "/api/purchase-orders", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      // Invalidate products to refresh stock in inventory page
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsAddPOOpen(false);
       setPOItems([]);
       poForm.reset();
@@ -142,7 +144,8 @@ export default function PurchasingPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] }); // Refresh products for updated HPP
+      // Invalidate all product queries (including those with search params)
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setReceivingPOOpen(false);
       setReceivingItems([]);
       toast({ title: "Items received successfully" });
