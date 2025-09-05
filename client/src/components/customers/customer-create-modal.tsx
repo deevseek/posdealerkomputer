@@ -62,7 +62,7 @@ export default function CustomerCreateModal({
       
       // Call callback to select customer immediately after modal closes
       if (onCustomerCreated) {
-        // Use setTimeout to ensure modal is fully closed before updating parent state
+        // Use a slightly longer delay to ensure proper state management
         setTimeout(() => {
           onCustomerCreated(newCustomer);
           
@@ -72,9 +72,11 @@ export default function CustomerCreateModal({
             description: `Customer ${newCustomer?.name || 'baru'} berhasil ditambahkan dan terpilih`,
           });
           
-          // Invalidate cache to refresh list
-          queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-        }, 200);
+          // Invalidate cache to refresh list after selection
+          setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+          }, 100);
+        }, 300);
       } else {
         // Fallback toast if no callback
         toast({
