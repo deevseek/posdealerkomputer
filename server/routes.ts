@@ -2097,6 +2097,71 @@ Terima kasih!
     }
   });
 
+  // Setup initial data (categories, locations, accounts)
+  app.post('/api/setup/initial-data', async (req, res) => {
+    try {
+      console.log('Setting up initial data...');
+      
+      // Create default categories
+      const defaultCategories = [
+        { name: 'Laptop', description: 'Laptop dan notebook' },
+        { name: 'Aksesoris', description: 'Aksesoris laptop dan komputer' },
+        { name: 'Sparepart', description: 'Suku cadang laptop' },
+        { name: 'Software', description: 'Software dan aplikasi' }
+      ];
+
+      for (const category of defaultCategories) {
+        try {
+          const existingCategories = await storage.getCategories();
+          const categoryExists = existingCategories.some(cat => cat.name === category.name);
+          
+          if (!categoryExists) {
+            await storage.createCategory(category);
+            console.log(`✅ Created category: ${category.name}`);
+          } else {
+            console.log(`ℹ️ Category already exists: ${category.name}`);
+          }
+        } catch (error) {
+          console.error(`Error creating category ${category.name}:`, error);
+        }
+      }
+
+      // Import finance manager to set up accounts
+      const { FinanceManager } = await import('./financeManager');
+      const financeManager = new FinanceManager();
+      
+      try {
+        await financeManager.initializeDefaultAccounts();
+        console.log('✅ Default chart of accounts initialized');
+      } catch (error) {
+        console.error('Error initializing accounts:', error);
+      }
+
+      // Update setup steps
+      const config = await storage.getStoreConfig();
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
+      setupSteps.initialData = true;
+
+      if (config) {
+        await storage.upsertStoreConfig({
+          ...config,
+          setupSteps: JSON.stringify(setupSteps)
+        });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'Initial data setup completed successfully' 
+      });
+    } catch (error) {
+      console.error('Error setting up initial data:', error);
+      res.status(500).json({ 
+        message: 'Failed to setup initial data', 
+        error: (error as Error).message 
+      });
+    }
+  });
+
   // Complete setup
   app.post('/api/setup/complete', async (req, res) => {
     try {
