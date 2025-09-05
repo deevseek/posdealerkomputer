@@ -56,7 +56,12 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
   }, [products]);
 
   const selectedProduct = useMemo(() => {
-    return availableProducts.find(p => p.id === selectedProductId);
+    const product = availableProducts.find(p => p.id === selectedProductId);
+    console.log('Selected Product ID:', selectedProductId);
+    console.log('Available Products:', availableProducts);
+    console.log('Selected Product:', product);
+    console.log('Selling Price:', product?.sellingPrice);
+    return product;
   }, [availableProducts, selectedProductId]);
 
   const totalPartsCost = useMemo(() => {
