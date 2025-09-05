@@ -681,10 +681,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/purchase-orders', isAuthenticated, async (req: any, res) => {
     try {
       const { items, ...poData } = req.body;
+      
+      // Calculate totals from items if provided
+      let subtotal = 0;
+      let taxAmount = 0;
+      let totalAmount = 0;
+      
+      if (items && items.length > 0) {
+        subtotal = items.reduce((sum: number, item: any) => {
+          const itemTotal = (parseFloat(item.unitCost) || 0) * (parseInt(item.quantity) || 0);
+          return sum + itemTotal;
+        }, 0);
+        
+        // Calculate tax if applicable (assuming tax rate from poData or default 0%)
+        const taxRate = parseFloat(poData.taxRate || '0') / 100;
+        taxAmount = subtotal * taxRate;
+        totalAmount = subtotal + taxAmount;
+      }
+      
       const orderData = {
         ...poData,
+        subtotal: subtotal.toString(),
+        taxAmount: taxAmount.toString(), 
+        totalAmount: totalAmount.toString(),
         requestedBy: req.session.user.id
       };
+      
       const order = await storage.createPurchaseOrder(orderData);
       
       // Create items if provided
@@ -693,7 +715,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createPurchaseOrderItem({
             ...item,
             purchaseOrderId: order.id,
-            orderedQuantity: item.quantity
+            orderedQuantity: item.quantity,
+            unitCost: item.unitCost?.toString() || '0',
+            totalCost: ((parseFloat(item.unitCost) || 0) * (parseInt(item.quantity) || 0)).toString()
           });
         }
       }
