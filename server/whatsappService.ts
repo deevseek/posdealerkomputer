@@ -201,7 +201,34 @@ export class WhatsAppService {
   // Service notification templates
   async sendServiceCreatedNotification(customerPhone: string, serviceTicket: any, customer: any, storeConfig: any): Promise<boolean> {
     console.log(`📧 Attempting to send service creation notification to ${customerPhone} for ticket ${serviceTicket.ticketNumber}`);
-    const statusUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] ? 'https://' + process.env.REPLIT_DOMAINS.split(',')[0] : 'http://localhost:5000'}/service-status`;
+    // Dynamic domain detection for different deployment scenarios
+    const getBaseUrl = () => {
+      // Check for custom domain environment variable (untuk ngrok, cloudflare, dll)
+      if (process.env.PUBLIC_URL) {
+        return process.env.PUBLIC_URL;
+      }
+      
+      // Check for Replit domains
+      if (process.env.REPLIT_DOMAINS?.split(',')[0]) {
+        return 'https://' + process.env.REPLIT_DOMAINS.split(',')[0];
+      }
+      
+      // Check for custom app URL (untuk ngrok dll)
+      if (process.env.APP_URL) {
+        return process.env.APP_URL;
+      }
+      
+      // Check for ngrok URL pattern in environment
+      if (process.env.NGROK_URL) {
+        return process.env.NGROK_URL;
+      }
+      
+      // Fallback to localhost with current port
+      const port = process.env.PORT || '5000';
+      return `http://localhost:${port}`;
+    };
+    
+    const statusUrl = `${getBaseUrl()}/service-status`;
     
     // Format estimated cost
     const formatCurrency = (amount: string | number) => {
@@ -386,7 +413,34 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
         nextSteps = 'Status service Anda telah diperbarui. Silakan cek detail lengkap melalui link di bawah.';
     }
 
-    const statusUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] ? 'https://' + process.env.REPLIT_DOMAINS.split(',')[0] : 'http://localhost:5000'}/service-status`;
+    // Dynamic domain detection for different deployment scenarios
+    const getBaseUrl = () => {
+      // Check for custom domain environment variable (untuk ngrok, cloudflare, dll)
+      if (process.env.PUBLIC_URL) {
+        return process.env.PUBLIC_URL;
+      }
+      
+      // Check for Replit domains
+      if (process.env.REPLIT_DOMAINS?.split(',')[0]) {
+        return 'https://' + process.env.REPLIT_DOMAINS.split(',')[0];
+      }
+      
+      // Check for custom app URL (untuk ngrok dll)
+      if (process.env.APP_URL) {
+        return process.env.APP_URL;
+      }
+      
+      // Check for ngrok URL pattern in environment
+      if (process.env.NGROK_URL) {
+        return process.env.NGROK_URL;
+      }
+      
+      // Fallback to localhost with current port
+      const port = process.env.PORT || '5000';
+      return `http://localhost:${port}`;
+    };
+    
+    const statusUrl = `${getBaseUrl()}/service-status`;
     
     // Build diagnosis and solution info
     let progressInfo = '';

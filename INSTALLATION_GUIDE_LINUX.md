@@ -188,6 +188,13 @@ PORT=3000
 # REPLIT_DOMAINS=your-domain.com
 # ISSUER_URL=https://replit.com/oidc
 
+# Public URL Configuration (untuk tunnel services)
+# Atur salah satu sesuai dengan tunnel yang digunakan:
+# PUBLIC_URL=https://your-ngrok-url.ngrok.io
+# APP_URL=https://your-ngrok-url.ngrok.io
+# NGROK_URL=https://your-ngrok-url.ngrok.io
+# Contoh: PUBLIC_URL=https://abc123.ngrok.io
+
 # Default Admin (akan dibuat otomatis saat first run)
 DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_PASSWORD=admin123
@@ -314,6 +321,11 @@ Pilih salah satu metode akses:
 # Start tunnel
 ngrok http 3000
 # Akses via URL yang diberikan: https://abc123.ngrok.io
+
+# PENTING: Update environment variable dengan URL ngrok
+# Edit file .env dan tambahkan:
+# PUBLIC_URL=https://abc123.ngrok.io
+# Kemudian restart aplikasi dengan: pm2 restart laptoppos
 ```
 
 **Cloudflare Tunnel:**
