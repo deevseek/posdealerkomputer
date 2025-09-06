@@ -78,21 +78,73 @@ sudo bash install.sh
    postgresql://laptoppos_user:password@localhost:5432/laptoppos
    ```
 
-## 4. Setup Domain dan SSL
+## 4. Setup Akses Online Tanpa Domain/IP Publik
 
-### Tambah Website
+### Opsi 1: Menggunakan Ngrok (Recommended untuk Testing)
+```bash
+# Install Ngrok
+wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+tar xvzf ngrok-v3-stable-linux-amd64.tgz
+sudo cp ngrok /usr/local/bin
+
+# Daftar di ngrok.com untuk mendapat auth token
+ngrok config add-authtoken YOUR_AUTH_TOKEN
+
+# Tunnel ke aplikasi (setelah aplikasi running di port 3000)
+ngrok http 3000
+```
+
+### Opsi 2: Menggunakan Cloudflare Tunnel (Gratis, Recommended untuk Production)
+```bash
+# Download Cloudflared
+wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Login ke Cloudflare
+cloudflared tunnel login
+
+# Buat tunnel
+cloudflared tunnel create laptoppos
+
+# Setup konfigurasi
+mkdir -p ~/.cloudflared
+nano ~/.cloudflared/config.yml
+```
+
+**Isi config.yml:**
+```yaml
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /home/username/.cloudflared/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: laptoppos-your-subdomain.your-domain.workers.dev
+    service: http://localhost:3000
+  - service: http_status:404
+```
+
+### Opsi 3: Menggunakan ServEO (Free subdomain)
+```bash
+# Tidak perlu install, langsung akses via:
+# http://laptoppos.serveo.net
+ssh -R 80:localhost:3000 serveo.net
+```
+
+### Opsi 4: Setup Local dengan Port Forwarding Router
+1. **Akses Router Admin Panel**
+2. **Port Forwarding Settings:**
+   - **External Port**: 8080
+   - **Internal IP**: IP server lokal
+   - **Internal Port**: 3000
+   - **Protocol**: TCP
+3. **Akses via**: `http://YOUR_PUBLIC_IP:8080`
+
+### Tambah Website di aaPanel (untuk semua opsi)
 1. **aaPanel → Website → Add Site**
 2. **Isi informasi:**
-   - **Domain**: `your-domain.com`
+   - **Domain**: `localhost` atau `127.0.0.1`
+   - **Port**: `3000` (atau custom port)
    - **Document Root**: `/www/wwwroot/laptoppos`
    - **PHP Version**: Tidak diperlukan (Node.js app)
-
-### Setup SSL Certificate
-1. **aaPanel → Website → [Your Domain] → SSL**
-2. **Pilih salah satu:**
-   - **Let's Encrypt** (Free, recommended)
-   - **Upload custom certificate**
-3. **Enable Force HTTPS**
 
 ## 5. Deploy LaptopPOS Application
 
@@ -130,15 +182,16 @@ SESSION_SECRET=your-super-secret-session-key-change-this
 NODE_ENV=production
 PORT=3000
 
-# Replit Auth (Optional - for Replit integration)
-REPL_ID=your-repl-id
-REPLIT_DOMAINS=your-domain.com
-ISSUER_URL=https://replit.com/oidc
+# Local deployment configuration (tanpa Replit Auth)
+# Commented out untuk local deployment tanpa domain
+# REPL_ID=your-repl-id
+# REPLIT_DOMAINS=your-domain.com
+# ISSUER_URL=https://replit.com/oidc
 
-# Default Admin (will be created on first run)
+# Default Admin (akan dibuat otomatis saat first run)
 DEFAULT_ADMIN_USERNAME=admin
 DEFAULT_ADMIN_PASSWORD=admin123
-DEFAULT_ADMIN_EMAIL=admin@your-domain.com
+DEFAULT_ADMIN_EMAIL=admin@laptoppos.local
 ```
 
 ### Build Application
@@ -186,31 +239,30 @@ pm2 startup
 pm2 save
 ```
 
-## 7. Konfigurasi Nginx Reverse Proxy
+## 7. Konfigurasi Nginx (Optional - untuk akses lokal)
 
-### Edit Nginx Configuration
-1. **aaPanel → Website → [Your Domain] → Config**
+### Opsi A: Direct Access (Tanpa Nginx)
+Aplikasi bisa diakses langsung melalui:
+- **Local**: `http://localhost:3000`
+- **LAN**: `http://YOUR_LOCAL_IP:3000`
+- **Tunnel**: URL yang diberikan oleh Ngrok/Cloudflare
+
+### Opsi B: Nginx Reverse Proxy (untuk setup yang lebih advanced)
+1. **aaPanel → Website → [localhost] → Config**
 2. **Replace configuration:**
 
 ```nginx
 server {
     listen 80;
-    listen 443 ssl http2;
-    server_name your-domain.com;
+    server_name localhost 127.0.0.1 YOUR_LOCAL_IP;
     
-    # SSL Configuration (jika menggunakan SSL)
-    ssl_certificate /www/server/panel/vhost/cert/your-domain.com/fullchain.pem;
-    ssl_certificate_key /www/server/panel/vhost/cert/your-domain.com/privkey.pem;
-    
-    # Security headers
-    add_header X-Frame-Options DENY;
+    # Basic security headers
+    add_header X-Frame-Options SAMEORIGIN;
     add_header X-Content-Type-Options nosniff;
     add_header X-XSS-Protection "1; mode=block";
     
-    # Force HTTPS
-    if ($scheme != "https") {
-        return 301 https://$host$request_uri;
-    }
+    # Allow all origins for local development
+    add_header Access-Control-Allow-Origin *;
     
     # Proxy to Node.js application
     location / {
@@ -230,8 +282,15 @@ server {
     
     # Static files caching
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
+        expires 1d;
+        add_header Cache-Control "public";
+    }
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        return 200 "healthy\n";
+        add_header Content-Type text/plain;
     }
 }
 ```
@@ -247,12 +306,41 @@ sudo systemctl restart nginx
 
 ## 8. Setup Database dan Initial Configuration
 
+### Akses Aplikasi Online
+Pilih salah satu metode akses:
+
+**Ngrok:**
+```bash
+# Start tunnel
+ngrok http 3000
+# Akses via URL yang diberikan: https://abc123.ngrok.io
+```
+
+**Cloudflare Tunnel:**
+```bash
+# Run tunnel
+cloudflared tunnel run laptoppos
+# Akses via: https://laptoppos-subdomain.your-domain.workers.dev
+```
+
+**ServEO:**
+```bash
+# SSH tunnel
+ssh -R 80:localhost:3000 serveo.net
+# Akses via: https://laptoppos.serveo.net
+```
+
+**Port Forwarding:**
+```
+# Akses via: http://YOUR_PUBLIC_IP:8080
+```
+
 ### Run Initial Setup
-1. **Akses aplikasi**: `https://your-domain.com`
+1. **Akses aplikasi** melalui URL tunnel yang dipilih
 2. **Akan muncul Setup Wizard**
 3. **Ikuti langkah-langkah:**
    - Database migration
-   - Store configuration
+   - Store configuration  
    - Admin user creation
    - Complete setup
 
@@ -302,17 +390,19 @@ pm2 monit
 ### Firewall Configuration
 ```bash
 # Ubuntu UFW
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-sudo ufw allow 8888/tcp  # aaPanel (restrict to specific IPs)
+sudo ufw allow 22/tcp     # SSH
+sudo ufw allow 3000/tcp   # Application port
+sudo ufw allow 8888/tcp   # aaPanel
+sudo ufw allow 80/tcp     # HTTP (optional)
+sudo ufw allow 443/tcp    # HTTPS (optional)
 sudo ufw enable
 
 # CentOS Firewalld
 sudo firewall-cmd --permanent --add-service=ssh
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
+sudo firewall-cmd --permanent --add-port=3000/tcp
 sudo firewall-cmd --permanent --add-port=8888/tcp
+sudo firewall-cmd --permanent --add-service=http    # optional
+sudo firewall-cmd --permanent --add-service=https   # optional
 sudo firewall-cmd --reload
 ```
 
@@ -383,7 +473,60 @@ VACUUM ANALYZE;
 REINDEX DATABASE laptoppos;
 ```
 
-## 12. Backup Strategy
+## 12. Opsi Akses Online Tambahan
+
+### Free Dynamic DNS Services
+Jika ingin domain gratis untuk akses yang lebih stabil:
+
+**NoIP.com:**
+```bash
+# Install NoIP client
+wget http://www.noip.com/client/linux/noip-duc-linux.tar.gz
+tar xzf noip-duc-linux.tar.gz
+cd noip-2.1.9-1/
+sudo make install
+
+# Configure
+sudo /usr/local/bin/noip2 -C
+# Start service
+sudo /usr/local/bin/noip2
+```
+
+**DuckDNS.org:**
+```bash
+# Create update script
+echo 'echo url="https://www.duckdns.org/update?domains=YOUR_SUBDOMAIN&token=YOUR_TOKEN&ip=" | curl -k -o ~/duckdns/duck.log -K -' > ~/duckdns/duck.sh
+chmod 700 ~/duckdns/duck.sh
+
+# Add to crontab
+*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1
+```
+
+### VPS Gratis untuk Testing
+**Oracle Cloud Always Free:**
+- 2 VM instances
+- 1/8 OCPU dan 1GB RAM each
+- 10GB storage
+- Gratis selamanya
+
+**Google Cloud Platform:**
+- $300 credit untuk 90 hari
+- Always Free tier tersedia
+- e2-micro instance gratis
+
+**AWS Free Tier:**
+- t2.micro instance
+- 750 jam per bulan
+- 12 bulan gratis
+
+### Setup dengan VPS Gratis
+1. **Daftar VPS gratis**
+2. **Install Ubuntu 20.04**
+3. **Ikuti panduan instalasi ini**
+4. **Gunakan IP publik VPS**
+5. **Setup domain gratis (opsional)**
+
+## 13. Backup Strategy
 
 ### Automated Backup Script
 ```bash
