@@ -2025,7 +2025,10 @@ Terima kasih!
         databaseMigrated: config?.setupSteps ? JSON.parse(config.setupSteps || '{}').database : false
       });
     } catch (error) {
-      console.error('Error checking setup status:', error);
+      // Silence table missing errors during fresh setup to avoid console spam
+      if (error.code !== '42P01') {  
+        console.error('Error checking setup status:', error);
+      }
       res.json({
         setupCompleted: false,
         hasStoreConfig: false,
