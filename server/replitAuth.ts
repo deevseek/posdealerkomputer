@@ -25,9 +25,11 @@ const getOidcConfig = memoize(
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
+  
+  // Auto-create sessions table during setup to prevent errors
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
+    createTableIfMissing: true, // Auto-create table during fresh setup
     ttl: sessionTtl,
     tableName: "sessions",
   });
