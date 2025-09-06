@@ -1889,22 +1889,6 @@ Terima kasih!
 
       const service = serviceTicket[0];
       
-      // Return limited info for customer
-      res.json({
-        ticketNumber: service.service_tickets.ticketNumber,
-        customerName: service.customers?.name,
-        deviceType: service.service_tickets.deviceType,
-        deviceBrand: service.service_tickets.deviceBrand,
-        deviceModel: service.service_tickets.deviceModel,
-        problem: service.service_tickets.problem,
-        diagnosis: service.service_tickets.diagnosis,
-        status: service.service_tickets.status,
-        estimatedCost: service.service_tickets.estimatedCost,
-        estimatedCompletion: service.service_tickets.estimatedCompletion,
-        completedAt: service.service_tickets.completedAt,
-        createdAt: service.service_tickets.createdAt,
-      });
-
       // Get customer info and parts from the service ticket
       const ticket = service.service_tickets;
       const customer = service.customers;
@@ -1912,7 +1896,7 @@ Terima kasih!
       // Get used parts
       const parts = await storage.getServiceTicketParts(ticket.id);
       
-      // Return limited info for customer
+      // Return complete status info with parts (single response)
       res.json({
         ticketNumber: ticket.ticketNumber,
         customerName: customer?.name,
