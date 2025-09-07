@@ -222,12 +222,19 @@ export const requireTenant = (req: Request, res: Response, next: NextFunction) =
 
 // Middleware to require super admin access
 export const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
+  console.log('RequireSuperAdmin middleware check:', { 
+    isSuperAdmin: req.isSuperAdmin, 
+    path: req.path,
+    host: req.headers.host 
+  });
   if (!req.isSuperAdmin) {
+    console.log('Access denied - not super admin');
     return res.status(403).json({ 
       error: 'Super admin required',
       message: 'This operation requires super admin privileges.'
     });
   }
+  console.log('Super admin access granted');
   next();
 };
 
