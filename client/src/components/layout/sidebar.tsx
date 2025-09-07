@@ -20,8 +20,7 @@ import {
   Layers,
   LogOut,
   User,
-  ShoppingCart,
-  Building2
+  ShoppingCart
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -30,7 +29,6 @@ import { useToast } from "@/hooks/use-toast";
 
 const navigation = [
   { name: "Dasbor", href: "/", icon: ChartLine, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
-  { name: "Management SaaS", href: "/admin-dashboard", icon: Building2, roles: ["admin", "owner"] },
   { name: "Kasir", href: "/pos", icon: ScanBarcode, roles: ["admin", "kasir", "owner"] },
   { name: "Servis", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
   { name: "Inventori", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
