@@ -2108,8 +2108,22 @@ Terima kasih!
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
       const clientId = req.tenant?.clientId || null;
       
-      const config = await storage.getStoreConfig(clientId);
-      const userCount = await storage.getUserCount(clientId);
+      let config = null;
+      let userCount = 0;
+      
+      try {
+        config = await storage.getStoreConfig(clientId);
+      } catch (configError) {
+        // Store config table doesn't exist yet - fresh installation
+        console.log('Store config table not found - fresh installation');
+      }
+      
+      try {
+        userCount = await storage.getUserCount(clientId);
+      } catch (userError) {
+        // Users table doesn't exist yet - fresh installation 
+        console.log('Users table not found - fresh installation');
+      }
       
       const isSetupCompleted = Boolean(
         config && 
