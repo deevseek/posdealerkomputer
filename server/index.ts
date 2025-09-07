@@ -43,6 +43,10 @@ app.use((req, res, next) => {
   // Register SaaS routes first (no tenant middleware needed)
   app.use('/api/saas', saasRoutes);
   app.use('/api/admin', adminRoutes);
+  
+  // Register client onboarding routes
+  const clientRoutes = await import('./routes/client');
+  app.use('/api/client', clientRoutes.default);
 
   // Apply tenant middleware to remaining routes
   app.use(tenantMiddleware);

@@ -23,6 +23,8 @@ import RolesPage from "@/pages/roles";
 import UsersPage from "@/pages/users";
 import ServiceStatus from "@/pages/ServiceStatus";
 import Setup from "@/pages/setup";
+import AdminDashboard from "@/pages/admin-dashboard";
+import ClientOnboarding from "@/pages/client-onboarding";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -61,10 +63,12 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/stock-movements" component={StockMovements} />
           <Route path="/settings" component={Settings} />
+          <Route path="/admin-dashboard" component={AdminDashboard} />
         </>
       )}
       <Route path="/service-status" component={ServiceStatus} />
       <Route path="/setup" component={Setup} />
+      <Route path="/client-onboarding" component={ClientOnboarding} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -73,7 +73,6 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     // Skip tenant detection for certain routes and original app routes
     const skipRoutes = [
       '/api/auth', 
-      '/api/setup', 
       '/api/health', 
       '/api/saas/register', 
       '/api/saas/plans', 
@@ -89,6 +88,21 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       '/api/financial',
       '/api/whatsapp'
     ];
+    
+    // Setup routes are only for super admins - require proper tenant detection
+    const superAdminOnlyRoutes = ['/api/setup', '/api/admin'];
+    
+    if (superAdminOnlyRoutes.some(route => req.path.startsWith(route))) {
+      // Setup routes require super admin access
+      if (subdomain !== 'admin' && subdomain !== 'main' && !req.path.startsWith('/api/admin')) {
+        return res.status(403).json({ 
+          error: 'Access denied',
+          message: 'Setup dan admin panel hanya dapat diakses oleh super admin.'
+        });
+      }
+      req.isSuperAdmin = true;
+      return next();
+    }
     
     if (skipRoutes.some(route => req.path.startsWith(route))) {
       return next();
