@@ -27,11 +27,13 @@ export const clients = pgTable('clients', {
 export const subscriptions = pgTable('subscriptions', {
   id: uuid('id').primaryKey().defaultRandom(),
   clientId: uuid('client_id').references(() => clients.id).notNull(),
+  planId: uuid('plan_id').references(() => plans.id),
+  planName: text('plan_name').notNull(),
   plan: subscriptionPlanEnum('plan').notNull(),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date').notNull(),
   paymentStatus: paymentStatusEnum('payment_status').notNull().default('pending'),
-  amount: integer('amount').notNull(), // Amount in cents
+  amount: text('amount').notNull(), // Amount as string to handle different currencies
   currency: text('currency').notNull().default('IDR'),
   autoRenew: boolean('auto_renew').notNull().default(true),
   trialEndDate: timestamp('trial_end_date'),
@@ -56,7 +58,29 @@ export const payments = pgTable('payments', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Plan features table - Define what each plan includes
+// Subscription plans table - Define available plans
+export const plans = pgTable('plans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  description: text('description').notNull(),
+  price: integer('price').notNull(), // Price in cents/rupiah
+  currency: text('currency').notNull().default('IDR'),
+  billingPeriod: text('billing_period').notNull().default('monthly'), // monthly, yearly
+  isActive: boolean('is_active').notNull().default(true),
+  features: text('features'), // JSON array of features
+  limits: text('limits'), // JSON object with plan limits
+  maxUsers: integer('max_users').default(5),
+  maxTransactionsPerMonth: integer('max_transactions_per_month').default(1000),
+  maxStorageGB: integer('max_storage_gb').default(1),
+  whatsappIntegration: boolean('whatsapp_integration').default(false),
+  customBranding: boolean('custom_branding').default(false),
+  apiAccess: boolean('api_access').default(false),
+  prioritySupport: boolean('priority_support').default(false),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+// Plan features table - Define what each plan includes (legacy, keeping for compatibility)
 export const planFeatures = pgTable('plan_features', {
   id: uuid('id').primaryKey().defaultRandom(),
   plan: subscriptionPlanEnum('plan').notNull(),
@@ -115,6 +139,12 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   updatedAt: true,
 });
 
+export const insertPlanSchema = createInsertSchema(plans).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type Client = typeof clients.$inferSelect;
 export type InsertClient = z.infer<typeof insertClientSchema>;
@@ -122,6 +152,8 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type Plan = typeof plans.$inferSelect;
+export type InsertPlan = z.infer<typeof insertPlanSchema>;
 export type PlanFeature = typeof planFeatures.$inferSelect;
 export type TenantSession = typeof tenantSessions.$inferSelect;
 export type SaasAuditLog = typeof saasAuditLog.$inferSelect;
