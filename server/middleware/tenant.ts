@@ -61,8 +61,26 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     } else {
       // Production: extract subdomain from domain
       const parts = host.split('.');
-      if (parts.length >= 3) {
+      
+      // Handle known base domains correctly
+      const knownBaseDomains = ['profesionalservis.my.id'];
+      const isKnownBaseDomain = knownBaseDomains.some(baseDomain => host === baseDomain || host === `www.${baseDomain}`);
+      
+      if (isKnownBaseDomain) {
+        // This is the main domain, not a subdomain
+        subdomain = 'main';
+      } else if (parts.length >= 4) {
+        // Real subdomain: subdomain.profesionalservis.my.id
         subdomain = parts[0];
+      } else if (parts.length === 3) {
+        // Could be subdomain.domain.com or domain.co.id
+        // Check if it matches our base domain pattern
+        const possibleBaseDomain = parts.slice(1).join('.');
+        if (knownBaseDomains.includes(possibleBaseDomain)) {
+          subdomain = parts[0]; // Real subdomain like client.profesionalservis.my.id
+        } else {
+          subdomain = 'main'; // Main domain like domain.co.id
+        }
       } else {
         // Main domain - might be super admin or landing page
         subdomain = 'main';
