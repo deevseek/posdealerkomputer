@@ -29,7 +29,19 @@ import ClientOnboarding from "@/pages/client-onboarding";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { needsSetup, isSetupLoading } = useSetup();
+  const { needsSetup, isSetupLoading, setupStatus, error } = useSetup();
+
+  // Debug logging for development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Router Debug:', {
+      needsSetup,
+      isSetupLoading,
+      setupStatus,
+      isAuthenticated,
+      isLoading,
+      error: error?.message
+    });
+  }
 
   // Show setup if not completed (regardless of auth status)
   if (needsSetup || isSetupLoading) {
