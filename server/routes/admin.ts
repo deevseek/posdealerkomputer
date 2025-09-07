@@ -256,7 +256,64 @@ router.get('/plans', async (req, res) => {
   }
 });
 
-// Get client details with subscription history
+// IMPORTANT: Put specific routes BEFORE parameter routes to avoid conflicts
+// Move /clients/detailed from saas-complete.ts to here and put it BEFORE /clients/:id
+
+// Get all clients with detailed subscription info (moved from saas-complete.ts)
+router.get('/clients/detailed', async (req, res) => {
+  try {
+    const clientsData = await db
+      .select({
+        id: clients.id,
+        name: clients.name,
+        subdomain: clients.subdomain,
+        email: clients.email,
+        status: clients.status,
+        phone: clients.phone,
+        address: clients.address,
+        logo: clients.logo,
+        customDomain: clients.customDomain,
+        settings: clients.settings,
+        trialEndsAt: clients.trialEndsAt,
+        createdAt: clients.createdAt,
+        updatedAt: clients.updatedAt,
+        // Subscription info
+        subscriptionId: subscriptions.id,
+        planName: subscriptions.planName,
+        planAmount: subscriptions.amount,
+        subscriptionStatus: subscriptions.paymentStatus,
+        subscriptionStart: subscriptions.startDate,
+        subscriptionEnd: subscriptions.endDate,
+        autoRenew: subscriptions.autoRenew,
+        // User count
+        userCount: sql<number>`count(${users.id})`.as('user_count')
+      })
+      .from(clients)
+      .leftJoin(subscriptions, and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.paymentStatus, 'paid')
+      ))
+      .leftJoin(users, eq(users.clientId, clients.id))
+      .groupBy(
+        clients.id, 
+        subscriptions.id,
+        subscriptions.planName,
+        subscriptions.amount,
+        subscriptions.paymentStatus,
+        subscriptions.startDate,
+        subscriptions.endDate,
+        subscriptions.autoRenew
+      )
+      .orderBy(desc(clients.createdAt));
+
+    res.json(clientsData);
+  } catch (error) {
+    console.error('Error fetching detailed clients:', error);
+    res.status(500).json({ message: 'Failed to fetch client details' });
+  }
+});
+
+// Get client details with subscription history (parameter route - must be AFTER specific routes)
 router.get('/clients/:id', async (req, res) => {
   try {
     const { id } = req.params;

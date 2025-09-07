@@ -31,59 +31,7 @@ router.use(requireSuperAdmin);
 // 1. CLIENT MANAGEMENT CRUD
 // ===========================
 
-// Get all clients with detailed info
-router.get('/clients/detailed', async (req, res) => {
-  try {
-    const clientsData = await db
-      .select({
-        id: clients.id,
-        name: clients.name,
-        subdomain: clients.subdomain,
-        email: clients.email,
-        status: clients.status,
-        phone: clients.phone,
-        address: clients.address,
-        logo: clients.logo,
-        customDomain: clients.customDomain,
-        settings: clients.settings,
-        trialEndsAt: clients.trialEndsAt,
-        createdAt: clients.createdAt,
-        updatedAt: clients.updatedAt,
-        // Subscription info
-        subscriptionId: subscriptions.id,
-        planName: subscriptions.planName,
-        planAmount: subscriptions.amount,
-        subscriptionStatus: subscriptions.paymentStatus,
-        subscriptionStart: subscriptions.startDate,
-        subscriptionEnd: subscriptions.endDate,
-        autoRenew: subscriptions.autoRenew,
-        // User count
-        userCount: sql<number>`count(${users.id})`.as('user_count')
-      })
-      .from(clients)
-      .leftJoin(subscriptions, and(
-        eq(subscriptions.clientId, clients.id),
-        eq(subscriptions.paymentStatus, 'paid')
-      ))
-      .leftJoin(users, eq(users.clientId, clients.id))
-      .groupBy(
-        clients.id, 
-        subscriptions.id,
-        subscriptions.planName,
-        subscriptions.amount,
-        subscriptions.paymentStatus,
-        subscriptions.startDate,
-        subscriptions.endDate,
-        subscriptions.autoRenew
-      )
-      .orderBy(desc(clients.createdAt));
-
-    res.json(clientsData);
-  } catch (error) {
-    console.error('Error fetching detailed clients:', error);
-    res.status(500).json({ message: 'Failed to fetch client details' });
-  }
-});
+// Route moved to admin.ts to fix routing conflicts
 
 // Create new client with trial period
 const createClientSchema = z.object({
@@ -538,7 +486,7 @@ router.get('/clients/:id/users', async (req, res) => {
         role: users.role,
         email: users.email,
         isActive: users.isActive,
-        lastLogin: users.lastLogin,
+        lastLogin: sql<Date | null>`null`.as('last_login'),
         createdAt: users.createdAt
       })
       .from(users)
