@@ -56,7 +56,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     // Skip tenant detection for certain routes
-    const skipRoutes = ['/api/auth', '/api/setup', '/api/health', '/api/register', '/api/payment-webhook'];
+    const skipRoutes = ['/api/auth', '/api/setup', '/api/health', '/api/saas/register', '/api/saas/plans', '/api/saas/payment', '/api/payment-webhook'];
     if (skipRoutes.some(route => req.path.startsWith(route))) {
       return next();
     }

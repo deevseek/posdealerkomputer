@@ -9,9 +9,6 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-// Apply tenant middleware globally for SaaS functionality
-app.use(tenantMiddleware);
-
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -43,9 +40,12 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Register SaaS routes first
+  // Register SaaS routes first (no tenant middleware needed)
   app.use('/api/saas', saasRoutes);
   app.use('/api/admin', adminRoutes);
+
+  // Apply tenant middleware to remaining routes
+  app.use(tenantMiddleware);
 
   const server = await registerRoutes(app);
 

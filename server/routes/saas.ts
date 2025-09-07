@@ -1,11 +1,8 @@
 import { Router } from 'express';
 import { SaasController } from '../controllers/saasController';
-import { tenantMiddleware, requireTenant, requireSuperAdmin, checkSubscriptionLimits } from '../middleware/tenant';
+import { requireTenant, requireSuperAdmin, checkSubscriptionLimits } from '../middleware/tenant';
 
 const router = Router();
-
-// Apply tenant middleware to all routes
-router.use(tenantMiddleware);
 
 // Public routes (no authentication required)
 router.post('/register', SaasController.registerClient);
