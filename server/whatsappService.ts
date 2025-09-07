@@ -223,6 +223,11 @@ export class WhatsAppService {
         return process.env.NGROK_URL;
       }
       
+      // Production domain - profesionalservis.my.id
+      if (process.env.NODE_ENV === 'production' && process.env.DOMAIN_NAME) {
+        return `https://${process.env.DOMAIN_NAME}`;
+      }
+      
       // Fallback to localhost with current port
       const port = process.env.PORT || '3000';
       return `http://localhost:${port}`;
@@ -433,6 +438,11 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
       // Check for ngrok URL pattern in environment
       if (process.env.NGROK_URL) {
         return process.env.NGROK_URL;
+      }
+      
+      // Production domain - profesionalservis.my.id
+      if (process.env.NODE_ENV === 'production' && process.env.DOMAIN_NAME) {
+        return `https://${process.env.DOMAIN_NAME}`;
       }
       
       // Fallback to localhost with current port
