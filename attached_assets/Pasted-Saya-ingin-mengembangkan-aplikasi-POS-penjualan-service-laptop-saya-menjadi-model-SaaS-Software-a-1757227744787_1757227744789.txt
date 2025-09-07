@@ -1,0 +1,80 @@
+Saya ingin mengembangkan aplikasi POS penjualan & service laptop saya menjadi model SaaS (Software as a Service) dengan fitur:
+
+1. **Multi-Tenant System**  
+   - Aplikasi hanya satu, tapi bisa dipakai banyak klien.  
+   - Klien diakses melalui subdomain, contoh:  
+     - client1.laptoppos.com  
+     - client2.laptoppos.com  
+   - Sistem membaca subdomain (`req.headers.host`) untuk menentukan tenant.  
+   - Data tiap tenant dipisahkan dengan `tenant_id` pada database.
+
+2. **Subscription System**  
+   - Ada tabel `clients` dan `subscriptions`.  
+   - Klien bisa mendaftar akun → pilih paket (bulanan/tahunan).  
+   - Mendukung status langganan: active, suspended, expired.  
+   - Kalau expired → otomatis redirect ke halaman perpanjangan.  
+
+3. **Payment Integration (Mock dulu)**  
+   - Buat endpoint simulasi pembayaran (misalnya `POST /pay`).  
+   - Kalau sukses → perpanjang masa aktif di tabel `subscriptions`.  
+   - Nanti bisa diganti ke Midtrans/Xendit/Stripe.  
+
+4. **Domain & Subdomain Handling**  
+   - Tambahkan middleware untuk baca subdomain.  
+   - Contoh:
+     ```js
+     app.use((req, res, next) => {
+       const host = req.headers.host; // ex: client1.laptoppos.com
+       const subdomain = host.split(".")[0];
+       req.tenant = subdomain;
+       next();
+     });
+     ```
+   - `req.tenant` dipakai filter data sesuai klien.
+
+5. **Database Schema**  
+   Buat tabel berikut (gunakan Sequelize/Prisma/Knex sesuai preferensi):
+
+   **clients**
+   - id (PK)  
+   - name  
+   - email  
+   - subdomain  
+   - status (active, suspended, expired)  
+   - created_at  
+
+   **subscriptions**
+   - id (PK)  
+   - client_id (FK → clients.id)  
+   - plan (basic, pro, premium)  
+   - start_date  
+   - end_date  
+   - payment_status  
+
+   **users (POS users milik tenant)**
+   - id (PK)  
+   - client_id (FK → clients.id)  
+   - name  
+   - role (admin, kasir, teknisi, dll)  
+   - email  
+   - password  
+
+   **products, sales, services, invoices** (seperti POS awal, tapi tambahkan `client_id`).  
+
+6. **Fitur Admin Superuser**  
+   - Super Admin bisa melihat semua klien dan status langganan.  
+   - Bisa suspend/aktifkan manual jika perlu.  
+
+7. **Deployment Note**  
+   - Untuk uji coba di Replit, cukup pakai `localhost`.  
+   - Untuk production, gunakan wildcard DNS (`*.laptoppos.com`) → diarahkan ke server.  
+   - Subdomain otomatis diarahkan ke tenant.  
+
+Tolong buatkan skeleton project dengan struktur:
+- `/models` → schema database
+- `/routes` → routes client, subscription, payment
+- `/middleware/subdomain.js` → tenant selector
+- `/controllers` → logic bisnis
+- `/server.js` → entry point
+
+Gunakan **Express + Sequelize (Postgres)**.

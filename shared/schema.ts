@@ -35,9 +35,10 @@ export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking'
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
 export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
 
-// User storage table
+// User storage table (multi-tenant aware)
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   username: varchar("username"),
   password: varchar("password"),
   email: varchar("email").unique(),
