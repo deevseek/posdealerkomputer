@@ -2067,7 +2067,7 @@ Terima kasih!
         taxRate: taxRate || '11.00',
         setupSteps: JSON.stringify(setupSteps),
         setupCompleted: false, // Will be completed in final step
-      });
+      }, clientId);
 
       res.json({ 
         success: true, 
@@ -2080,13 +2080,16 @@ Terima kasih!
   });
 
   // Setup admin user
-  app.post('/api/setup/admin', async (req, res) => {
+  app.post('/api/setup/admin', async (req: any, res) => {
     try {
       const { username, password, email, firstName, lastName } = req.body;
       
       if (!username || !password || !email) {
         return res.status(400).json({ message: 'Username, password, and email are required' });
       }
+
+      // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
+      const clientId = req.tenant?.clientId || null;
 
       // Check if user already exists
       const existingUser = await storage.getUserByUsername(username);
@@ -2099,7 +2102,7 @@ Terima kasih!
         return res.status(400).json({ message: 'Email already exists' });
       }
 
-      // Hash password and create user
+      // Hash password and create user with tenant isolation
       const hashedPassword = await hashPassword(password);
       
       await storage.createUser({
@@ -2111,10 +2114,10 @@ Terima kasih!
         role: 'admin',
         isActive: true,
         profileImageUrl: null
-      });
+      }, clientId);
 
       // Update setup steps
-      const config = await storage.getStoreConfig();
+      const config = await storage.getStoreConfig(clientId);
       const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
       setupSteps.admin = true;
 
@@ -2122,7 +2125,7 @@ Terima kasih!
         await storage.upsertStoreConfig({
           ...config,
           setupSteps: JSON.stringify(setupSteps)
-        });
+        }, clientId);
       }
 
       res.json({ 
@@ -2207,8 +2210,9 @@ Terima kasih!
         console.error('Error initializing WhatsApp config:', error);
       }
 
-      // Update setup steps
-      const config = await storage.getStoreConfig();
+      // Update setup steps  
+      const clientId = req.tenant?.clientId || null;
+      const config = await storage.getStoreConfig(clientId);
       const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
       setupSteps.initialData = true;
 
@@ -2216,7 +2220,7 @@ Terima kasih!
         await storage.upsertStoreConfig({
           ...config,
           setupSteps: JSON.stringify(setupSteps)
-        });
+        }, clientId);
       }
 
       res.json({ 
@@ -2233,9 +2237,12 @@ Terima kasih!
   });
 
   // Complete setup
-  app.post('/api/setup/complete', async (req, res) => {
+  app.post('/api/setup/complete', async (req: any, res) => {
     try {
-      const config = await storage.getStoreConfig();
+      // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
+      const clientId = req.tenant?.clientId || null;
+      
+      const config = await storage.getStoreConfig(clientId);
       
       if (!config) {
         return res.status(400).json({ message: 'Store configuration not found' });
@@ -2248,7 +2255,7 @@ Terima kasih!
         ...config,
         setupCompleted: true,
         setupSteps: JSON.stringify(setupSteps)
-      });
+      }, clientId);
 
       res.json({ 
         success: true, 
