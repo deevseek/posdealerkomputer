@@ -31,8 +31,14 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     
     // Handle different environments
     if (host.includes('localhost') || host.includes('127.0.0.1')) {
-      // Development: check for subdomain in query param or header
-      subdomain = req.query.tenant as string || req.headers['x-tenant'] as string || 'demo';
+      // Development: check for subdomain in query param or header, skip tenant detection if not specified
+      subdomain = req.query.tenant as string || req.headers['x-tenant'] as string;
+      
+      // If no tenant specified in localhost, skip tenant middleware entirely
+      if (!subdomain) {
+        console.log('Localhost development: No tenant specified, skipping tenant middleware');
+        return next();
+      }
     } else if (host.includes('.ngrok.io') || host.includes('.ngrok-free.app')) {
       // Ngrok: Use query param or header for tenant
       subdomain = req.query.tenant as string || req.headers['x-tenant'] as string || 'demo';
@@ -42,6 +48,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       
       // If no tenant specified in Replit, skip tenant middleware entirely
       if (!subdomain) {
+        console.log('Replit development: No tenant specified, skipping tenant middleware');
         return next();
       }
     } else {
