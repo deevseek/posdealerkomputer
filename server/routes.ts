@@ -32,6 +32,7 @@ import {
   payrollRecords,
   attendanceRecords
 } from "@shared/schema";
+import { plans, clients, subscriptions } from "@shared/saas-schema";
 
 // HTML template generator for PDF reports
 function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
@@ -1955,6 +1956,101 @@ Terima kasih!
     }
   }
 
+  // Initialize SaaS system with default subscription plans
+  async function initializeSaaSSystem() {
+    try {
+      console.log('🚀 Initializing SaaS system...');
+      
+      // Default subscription plans
+      const defaultPlans = [
+        {
+          name: 'Basic',
+          description: 'Paket dasar untuk usaha kecil',
+          price: 149000,
+          currency: 'IDR',
+          billingPeriod: 'monthly',
+          isActive: true,
+          features: ["POS System", "Inventory Management", "Basic Reports", "1 Store Location"],
+          limits: {
+            maxUsers: 3,
+            maxProducts: 500,
+            maxTransactions: 1000,
+            maxStorage: 1
+          },
+          maxUsers: 3,
+          maxTransactionsPerMonth: 1000,
+          maxStorageGB: 1,
+          whatsappIntegration: false,
+          customBranding: false,
+          apiAccess: false,
+          prioritySupport: false
+        },
+        {
+          name: 'Professional',
+          description: 'Paket lengkap untuk usaha menengah',
+          price: 299000,
+          currency: 'IDR',
+          billingPeriod: 'monthly',
+          isActive: true,
+          features: ["Advanced POS", "Multi-Store", "Service Management", "Advanced Reports", "WhatsApp Integration"],
+          limits: {
+            maxUsers: 10,
+            maxProducts: 2000,
+            maxTransactions: 5000,
+            maxStorage: 5
+          },
+          maxUsers: 10,
+          maxTransactionsPerMonth: 5000,
+          maxStorageGB: 5,
+          whatsappIntegration: true,
+          customBranding: false,
+          apiAccess: false,
+          prioritySupport: false
+        },
+        {
+          name: 'Enterprise',
+          description: 'Solusi enterprise untuk usaha besar',
+          price: 599000,
+          currency: 'IDR',
+          billingPeriod: 'monthly',
+          isActive: true,
+          features: ["Full Features", "Unlimited Stores", "API Access", "Custom Reports", "Priority Support"],
+          limits: {
+            maxUsers: 50,
+            maxProducts: 10000,
+            maxTransactions: 50000,
+            maxStorage: 20
+          },
+          maxUsers: 50,
+          maxTransactionsPerMonth: 50000,
+          maxStorageGB: 20,
+          whatsappIntegration: true,
+          customBranding: true,
+          apiAccess: true,
+          prioritySupport: true
+        }
+      ];
+
+      // Check and create default plans
+      const existingPlans = await db.select().from(plans);
+      
+      for (const planConfig of defaultPlans) {
+        const planExists = existingPlans.some(plan => plan.name === planConfig.name);
+        
+        if (!planExists) {
+          await db.insert(plans).values(planConfig);
+          console.log(`✅ Created subscription plan: ${planConfig.name}`);
+        } else {
+          console.log(`ℹ️ Subscription plan already exists: ${planConfig.name}`);
+        }
+      }
+
+      console.log('✅ SaaS system initialization completed');
+    } catch (error) {
+      console.error('Error initializing SaaS system:', error);
+    }
+  }
+
   // Setup Wizard Endpoints - untuk installer
   
   // Database migration endpoint
@@ -1977,6 +2073,9 @@ Terima kasih!
 
       // Create default roles after migration
       await createDefaultRoles();
+      
+      // Initialize SaaS system with default subscription plans
+      await initializeSaaSSystem();
 
       // Update setup steps
       const config = await storage.getStoreConfig();

@@ -98,13 +98,17 @@ export default function Setup() {
       
       // Simulate progress steps
       const progressSteps = [
-        { progress: 10, status: 'Connecting to database...' },
-        { progress: 20, status: 'Creating tables schema...' },
-        { progress: 35, status: 'Setting up user roles...' },
-        { progress: 50, status: 'Creating product & inventory tables...' },
-        { progress: 65, status: 'Setting up financial system...' },
-        { progress: 80, status: 'Initializing service management...' },
-        { progress: 95, status: 'Finalizing database structure...' }
+        { progress: 8, status: 'Connecting to database...' },
+        { progress: 15, status: 'Creating core tables schema...' },
+        { progress: 25, status: 'Setting up user roles & authentication...' },
+        { progress: 35, status: 'Creating product & inventory tables...' },
+        { progress: 45, status: 'Setting up financial system...' },
+        { progress: 55, status: 'Initializing service management...' },
+        { progress: 65, status: 'Setting up SaaS multi-tenant architecture...' },
+        { progress: 75, status: 'Creating client & subscription tables...' },
+        { progress: 85, status: 'Setting up subscription plans...' },
+        { progress: 92, status: 'Initializing billing system...' },
+        { progress: 98, status: 'Finalizing database structure...' }
       ];
 
       for (const step of progressSteps) {

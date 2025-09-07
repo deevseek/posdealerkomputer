@@ -223,7 +223,10 @@ EOF
     export $(cat .env | xargs)
     npm run db:push --force || npm run db:push
     
-    log "Database setup completed successfully"
+    log "Initializing SaaS multi-tenant system..."
+    # SaaS tables will be created automatically by schema
+    
+    log "Database setup completed successfully with SaaS support"
 }
 
 # Create systemd service
