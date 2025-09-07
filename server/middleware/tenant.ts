@@ -26,6 +26,13 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     const host = req.headers.host || '';
     console.log('Host header:', host);
     
+    // IMMEDIATE CHECK: In development, if accessing admin routes, grant super admin access
+    if ((host.includes('.replit.dev') || host.includes('.replit.app') || host.includes('localhost')) && req.path.startsWith('/api/admin')) {
+      console.log('Development admin route detected, granting super admin access');
+      req.isSuperAdmin = true;
+      return next();
+    }
+    
     // Extract subdomain
     let subdomain = '';
     
@@ -66,12 +73,6 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
 
     // Special handling for super admin routes
     if (subdomain === 'admin' || subdomain === 'main' || req.path.startsWith('/api/admin')) {
-      req.isSuperAdmin = true;
-      return next();
-    }
-    
-    // In development mode with no tenant specified, treat /api/admin routes as super admin
-    if (!subdomain && req.path.startsWith('/api/admin')) {
       req.isSuperAdmin = true;
       return next();
     }
