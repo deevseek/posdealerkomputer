@@ -224,7 +224,7 @@ export class WhatsAppService {
       }
       
       // Fallback to localhost with current port
-      const port = process.env.PORT || '5000';
+      const port = process.env.PORT || '3000';
       return `http://localhost:${port}`;
     };
     
@@ -436,7 +436,7 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
       }
       
       // Fallback to localhost with current port
-      const port = process.env.PORT || '5000';
+      const port = process.env.PORT || '3000';
       return `http://localhost:${port}`;
     };
     
