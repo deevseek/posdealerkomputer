@@ -1307,8 +1307,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+  // Permission checking middleware
+  const requirePermission = (permission: string) => {
+    return async (req: any, res: Response, next: NextFunction) => {
+      try {
+        // Super admin bypasses permission checks
+        if (req.isSuperAdmin) {
+          return next();
+        }
+
+        // Check if user is authenticated
+        if (!req.session?.user) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const user = req.session.user;
+
+        // Check user role permissions
+        if (user.role === 'admin') {
+          // Admin has all permissions
+          return next();
+        }
+
+        // For non-admin users, check specific permissions
+        const userPermissions = await getUserPermissions(user.role);
+        
+        if (!userPermissions.includes(permission)) {
+          return res.status(403).json({ 
+            message: "Anda tidak memiliki izin untuk mengakses resource ini",
+            requiredPermission: permission,
+            userRole: user.role
+          });
+        }
+
+        next();
+      } catch (error) {
+        console.error("Permission check error:", error);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    };
+  };
+
+  // Helper function to get user permissions based on role
+  const getUserPermissions = async (role: string): Promise<string[]> => {
+    const roleConfig = {
+      admin: [
+        'dashboard_view', 'pos_access', 'inventory_full', 'purchasing_full',
+        'financial_full', 'reports_full', 'customers_full', 'suppliers_full',
+        'service_tickets_full', 'users_full', 'roles_full', 'settings_full',
+        'whatsapp_settings', 'store_settings', 'system_admin'
+      ],
+      kasir: [
+        'dashboard_view', 'pos_access', 'inventory_view', 'customers_view',
+        'customers_create', 'customers_edit', 'transactions_create',
+        'reports_sales_view'
+      ],
+      teknisi: [
+        'dashboard_view', 'service_tickets_full', 'inventory_view',
+        'inventory_update_stock', 'customers_view', 'customers_create',
+        'customers_edit', 'reports_services_view'
+      ],
+      purchasing: [
+        'dashboard_view', 'purchasing_full', 'suppliers_full', 'inventory_full',
+        'reports_purchasing_view', 'reports_inventory_view'
+      ],
+      finance: [
+        'dashboard_view', 'financial_full', 'reports_full', 'customers_view',
+        'suppliers_view', 'transactions_view'
+      ],
+      owner: [
+        'dashboard_view', 'pos_access', 'inventory_view', 'purchasing_view',
+        'financial_full', 'reports_full', 'customers_full', 'suppliers_view',
+        'service_tickets_view', 'users_view', 'settings_view'
+      ]
+    };
+
+    return roleConfig[role as keyof typeof roleConfig] || [];
+  };
+
   // User Management routes
-  app.get('/api/users', isAuthenticated, async (req, res) => {
+  app.get('/api/users', isAuthenticated, requirePermission('users_view'), async (req, res) => {
     try {
       const users = await storage.getUsers();
       res.json(users);
@@ -1318,7 +1396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/users', isAuthenticated, async (req: any, res) => {
+  app.post('/api/users', isAuthenticated, requirePermission('users_full'), async (req: any, res) => {
     try {
       const { username, email, firstName, lastName, password, role } = req.body;
 
@@ -1365,7 +1443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/users/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req, res) => {
     try {
       const { id } = req.params;
       const userData = req.body;
@@ -1377,7 +1455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/users/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteUser(id);
