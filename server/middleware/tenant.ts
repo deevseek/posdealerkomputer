@@ -36,6 +36,14 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     } else if (host.includes('.ngrok.io') || host.includes('.ngrok-free.app')) {
       // Ngrok: Use query param or header for tenant
       subdomain = req.query.tenant as string || req.headers['x-tenant'] as string || 'demo';
+    } else if (host.includes('.replit.dev') || host.includes('.replit.app')) {
+      // Replit development environment: Use query param or header, or skip tenant detection
+      subdomain = req.query.tenant as string || req.headers['x-tenant'] as string;
+      
+      // If no tenant specified in Replit, skip tenant middleware entirely
+      if (!subdomain) {
+        return next();
+      }
     } else {
       // Production: extract subdomain from domain
       const parts = host.split('.');
@@ -55,8 +63,26 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       return next();
     }
 
-    // Skip tenant detection for certain routes
-    const skipRoutes = ['/api/auth', '/api/setup', '/api/health', '/api/saas/register', '/api/saas/plans', '/api/saas/payment', '/api/payment-webhook'];
+    // Skip tenant detection for certain routes and original app routes
+    const skipRoutes = [
+      '/api/auth', 
+      '/api/setup', 
+      '/api/health', 
+      '/api/saas/register', 
+      '/api/saas/plans', 
+      '/api/saas/payment', 
+      '/api/payment-webhook',
+      '/api/users',
+      '/api/customers',
+      '/api/products',
+      '/api/transactions',
+      '/api/service-tickets',
+      '/api/suppliers',
+      '/api/reports',
+      '/api/financial',
+      '/api/whatsapp'
+    ];
+    
     if (skipRoutes.some(route => req.path.startsWith(route))) {
       return next();
     }
