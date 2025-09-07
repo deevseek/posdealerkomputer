@@ -1,10 +1,16 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { tenantMiddleware } from "./middleware/tenant";
+import saasRoutes from "./routes/saas";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Apply tenant middleware globally for SaaS functionality
+app.use(tenantMiddleware);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -37,6 +43,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Register SaaS routes first
+  app.use('/api/saas', saasRoutes);
+  app.use('/api/admin', adminRoutes);
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

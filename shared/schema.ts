@@ -16,6 +16,9 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Import SaaS-specific tables and types
+export * from './saas-schema';
+
 // Session storage table (mandatory for Replit Auth)
 export const sessions = pgTable(
   "sessions",
