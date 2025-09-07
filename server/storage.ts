@@ -262,11 +262,21 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
-  async getUserCount(): Promise<number> {
-    const result = await db
-      .select({ count: count() })
-      .from(users);
-    return result[0]?.count || 0;
+  async getUserCount(clientId?: string): Promise<number> {
+    if (clientId) {
+      // Multi-tenant mode: count users for specific client
+      const result = await db
+        .select({ count: count() })
+        .from(users)
+        .where(eq(users.clientId, clientId));
+      return result[0]?.count || 0;
+    } else {
+      // Single-tenant mode: count all users (legacy behavior)
+      const result = await db
+        .select({ count: count() })
+        .from(users);
+      return result[0]?.count || 0;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -320,14 +330,25 @@ export class DatabaseStorage implements IStorage {
     await db.update(roles).set({ isActive: false }).where(eq(roles.id, id));
   }
 
-  // Store configuration
-  async getStoreConfig(): Promise<StoreConfig | undefined> {
-    const [config] = await db.select().from(storeConfig).limit(1);
-    return config;
+  // Store configuration (tenant-aware)
+  async getStoreConfig(clientId?: string): Promise<StoreConfig | undefined> {
+    if (clientId) {
+      // Multi-tenant mode: get config for specific client
+      const [config] = await db
+        .select()
+        .from(storeConfig)
+        .where(eq(storeConfig.clientId, clientId))
+        .limit(1);
+      return config;
+    } else {
+      // Single-tenant mode: get first config (legacy behavior)
+      const [config] = await db.select().from(storeConfig).limit(1);
+      return config;
+    }
   }
 
-  async upsertStoreConfig(configData: InsertStoreConfig): Promise<StoreConfig> {
-    const existing = await this.getStoreConfig();
+  async upsertStoreConfig(configData: InsertStoreConfig, clientId?: string): Promise<StoreConfig> {
+    const existing = await this.getStoreConfig(clientId);
     
     if (existing) {
       const [config] = await db
@@ -339,7 +360,10 @@ export class DatabaseStorage implements IStorage {
     } else {
       const [config] = await db
         .insert(storeConfig)
-        .values(configData)
+        .values({
+          ...configData,
+          clientId: clientId || null
+        })
         .returning();
       return config;
     }
