@@ -66,6 +66,7 @@ export const roles = pgTable("roles", {
 // Store configuration
 export const storeConfig = pgTable("store_config", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   name: varchar("name").notNull(),
   address: text("address"),
   phone: varchar("phone"),
@@ -95,6 +96,7 @@ export const storeConfig = pgTable("store_config", {
 // Categories
 export const categories = pgTable("categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   name: varchar("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -103,6 +105,7 @@ export const categories = pgTable("categories", {
 // Products - Enhanced inventory system
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   name: varchar("name").notNull(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => categories.id),
@@ -151,6 +154,7 @@ export const products = pgTable("products", {
 // Customers
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   name: varchar("name").notNull(),
   email: varchar("email"),
   phone: varchar("phone"),
@@ -162,6 +166,7 @@ export const customers = pgTable("customers", {
 // Suppliers - Enhanced supplier management
 export const suppliers = pgTable("suppliers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   code: varchar("code").unique().notNull(), // supplier code
   name: varchar("name").notNull(),
   companyName: varchar("company_name"),
@@ -210,6 +215,7 @@ export const suppliers = pgTable("suppliers", {
 // Transactions
 export const transactions = pgTable("transactions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   transactionNumber: varchar("transaction_number").notNull().unique(),
   type: transactionTypeEnum("type").notNull(),
   customerId: varchar("customer_id").references(() => customers.id),
@@ -227,6 +233,7 @@ export const transactions = pgTable("transactions", {
 // Transaction Items
 export const transactionItems = pgTable("transaction_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   transactionId: varchar("transaction_id").references(() => transactions.id).notNull(),
   productId: varchar("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
@@ -237,6 +244,7 @@ export const transactionItems = pgTable("transaction_items", {
 // Service Tickets
 export const serviceTickets = pgTable("service_tickets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   ticketNumber: varchar("ticket_number").notNull().unique(),
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   deviceType: varchar("device_type").notNull(),
@@ -262,6 +270,7 @@ export const serviceTickets = pgTable("service_tickets", {
 // Service Ticket Parts - Track parts used in service repairs
 export const serviceTicketParts = pgTable("service_ticket_parts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   serviceTicketId: varchar("service_ticket_id").references(() => serviceTickets.id).notNull(),
   productId: varchar("product_id").references(() => products.id).notNull(),
   quantity: integer("quantity").notNull(),
@@ -273,6 +282,7 @@ export const serviceTicketParts = pgTable("service_ticket_parts", {
 // Product Locations - Warehouse/Location management
 export const locations = pgTable("locations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   code: varchar("code").unique().notNull(),
   name: varchar("name").notNull(),
   description: text("description"),
@@ -284,6 +294,7 @@ export const locations = pgTable("locations", {
 // Product Batches/Lots - For batch tracking
 export const productBatches = pgTable("product_batches", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   productId: varchar("product_id").references(() => products.id).notNull(),
   batchNumber: varchar("batch_number").notNull(),
   serialNumbers: text("serial_numbers").array(), // for serial tracking
@@ -317,6 +328,7 @@ export const productBatches = pgTable("product_batches", {
 // Purchase Orders - Comprehensive purchasing system
 export const purchaseOrders = pgTable("purchase_orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   poNumber: varchar("po_number").unique().notNull(),
   supplierId: varchar("supplier_id").references(() => suppliers.id).notNull(),
   
@@ -357,6 +369,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
 // Purchase Order Items
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   purchaseOrderId: varchar("purchase_order_id").references(() => purchaseOrders.id).notNull(),
   productId: varchar("product_id").references(() => products.id).notNull(),
   
@@ -383,6 +396,7 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
 // Stock Movements - Enhanced tracking system
 export const stockMovements = pgTable("stock_movements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   
   // Product tracking
   productId: varchar("product_id").references(() => products.id).notNull(),
@@ -413,6 +427,7 @@ export const stockMovements = pgTable("stock_movements", {
 // Inventory Adjustments - For manual stock corrections
 export const inventoryAdjustments = pgTable("inventory_adjustments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   adjustmentNumber: varchar("adjustment_number").unique().notNull(),
   
   // Adjustment details
@@ -433,6 +448,7 @@ export const inventoryAdjustments = pgTable("inventory_adjustments", {
 // Inventory Adjustment Items
 export const inventoryAdjustmentItems = pgTable("inventory_adjustment_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   adjustmentId: varchar("adjustment_id").references(() => inventoryAdjustments.id).notNull(),
   productId: varchar("product_id").references(() => products.id).notNull(),
   batchId: varchar("batch_id").references(() => productBatches.id),
@@ -455,6 +471,7 @@ export const inventoryAdjustmentItems = pgTable("inventory_adjustment_items", {
 // Financial Records - Legacy compatibility (keep for migration)
 export const financialRecords = pgTable("financial_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   type: varchar("type", { length: 20 }).notNull(), // income, expense, transfer
   category: varchar("category", { length: 100 }).notNull(),
   subcategory: varchar("subcategory", { length: 100 }),
@@ -475,6 +492,7 @@ export const financialRecords = pgTable("financial_records", {
 // Chart of Accounts
 export const accounts: any = pgTable("accounts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   code: varchar("code", { length: 20 }).unique().notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 30 }).notNull(), // asset, liability, equity, revenue, expense
@@ -491,6 +509,7 @@ export const accounts: any = pgTable("accounts", {
 // Journal Entries for Double-Entry Bookkeeping
 export const journalEntries = pgTable("journal_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   journalNumber: varchar("journal_number", { length: 50 }).unique().notNull(),
   date: timestamp("date").notNull(),
   description: text("description").notNull(),
@@ -506,6 +525,7 @@ export const journalEntries = pgTable("journal_entries", {
 // Journal Entry Lines (Debit/Credit entries)
 export const journalEntryLines = pgTable("journal_entry_lines", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   journalEntryId: varchar("journal_entry_id").references(() => journalEntries.id).notNull(),
   accountId: varchar("account_id").references(() => accounts.id).notNull(),
   description: text("description").notNull(),
@@ -517,6 +537,7 @@ export const journalEntryLines = pgTable("journal_entry_lines", {
 // Employees for Payroll
 export const employees = pgTable("employees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   employeeNumber: varchar("employee_number", { length: 50 }).unique().notNull(),
   userId: varchar("user_id").references(() => users.id),
   name: varchar("name", { length: 100 }).notNull(),
@@ -539,6 +560,7 @@ export const employees = pgTable("employees", {
 // Payroll Records
 export const payrollRecords = pgTable("payroll_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   employeeId: varchar("employee_id").references(() => employees.id).notNull(),
   payrollNumber: varchar("payroll_number", { length: 50 }).unique().notNull(),
   periodStart: timestamp("period_start").notNull(),
@@ -564,6 +586,7 @@ export const payrollRecords = pgTable("payroll_records", {
 // Attendance Records
 export const attendanceRecords = pgTable("attendance_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   employeeId: varchar("employee_id").references(() => employees.id).notNull(),
   date: timestamp("date").notNull(),
   clockIn: timestamp("clock_in"),
