@@ -28,6 +28,15 @@ const userUpdateSchema = z.object({
   isActive: z.boolean(),
 });
 
+const userCreateSchema = z.object({
+  username: z.string().min(3, "Username minimal 3 karakter"),
+  firstName: z.string().min(1, "Nama depan harus diisi"),
+  lastName: z.string().optional(),
+  email: z.string().email("Format email tidak valid"),
+  password: z.string().min(6, "Password minimal 6 karakter"),
+  role: z.enum(["admin", "kasir", "teknisi", "purchasing", "finance", "owner"]),
+});
+
 const roleLabels = {
   admin: "Administrator",
   kasir: "Kasir",
@@ -49,6 +58,7 @@ const roleColors = {
 export default function UsersPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isCreateMode, setIsCreateMode] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -58,13 +68,38 @@ export default function UsersPage() {
   });
 
   const form = useForm({
-    resolver: zodResolver(userUpdateSchema),
+    resolver: zodResolver(isCreateMode ? userCreateSchema : userUpdateSchema),
     defaultValues: {
+      username: "",
       firstName: "",
       lastName: "",
       email: "",
+      password: "",
       role: "kasir" as const,
       isActive: true,
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest('POST', '/api/users', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      setShowDialog(false);
+      setIsCreateMode(false);
+      form.reset();
+      toast({
+        title: "Berhasil",
+        description: "User berhasil dibuat",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Gagal membuat user",
+        variant: "destructive",
+      });
     },
   });
 
@@ -82,10 +117,10 @@ export default function UsersPage() {
         description: "User berhasil diupdate",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error",
-        description: "Gagal mengupdate user",
+        description: error.message || "Gagal mengupdate user",
         variant: "destructive",
       });
     },
@@ -112,15 +147,37 @@ export default function UsersPage() {
   });
 
   const handleSubmit = (data: any) => {
-    updateMutation.mutate(data);
+    if (isCreateMode) {
+      createMutation.mutate(data);
+    } else {
+      updateMutation.mutate(data);
+    }
+  };
+
+  const handleCreate = () => {
+    setIsCreateMode(true);
+    setEditingUser(null);
+    form.reset({
+      username: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      password: "",
+      role: "kasir" as const,
+      isActive: true,
+    });
+    setShowDialog(true);
   };
 
   const handleEdit = (user: User) => {
+    setIsCreateMode(false);
     setEditingUser(user);
     form.reset({
+      username: user.username || "",
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       email: user.email || "",
+      password: "", // Don't prefill password for edit
       role: (user.role as any) || "kasir",
       isActive: user.isActive ?? true,
     });
@@ -155,16 +212,42 @@ export default function UsersPage() {
                 <h1 className="text-2xl font-bold" data-testid="page-title">Manajemen Pengguna</h1>
                 <p className="text-muted-foreground">Kelola akun pengguna dan peran mereka</p>
               </div>
+              <Button onClick={handleCreate} data-testid="button-create-user">
+                <Users className="w-4 h-4 mr-2" />
+                Tambah User
+              </Button>
             </div>
 
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle data-testid="dialog-title">Edit User</DialogTitle>
+            <DialogTitle data-testid="dialog-title">
+              {isCreateMode ? "Tambah User Baru" : "Edit User"}
+            </DialogTitle>
           </DialogHeader>
 
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              {isCreateMode && (
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Username</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Username untuk login"
+                          data-testid="input-username"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -222,6 +305,27 @@ export default function UsersPage() {
                 )}
               />
 
+              {isCreateMode && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="password"
+                          placeholder="Password minimal 6 karakter"
+                          data-testid="input-password"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="role"
@@ -248,27 +352,29 @@ export default function UsersPage() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Status Aktif</FormLabel>
-                      <div className="text-sm text-muted-foreground">
-                        User dapat login dan mengakses sistem
+              {!isCreateMode && (
+                <FormField
+                  control={form.control}
+                  name="isActive"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Status Aktif</FormLabel>
+                        <div className="text-sm text-muted-foreground">
+                          User dapat login dan mengakses sistem
+                        </div>
                       </div>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        data-testid="switch-is-active"
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-is-active"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="flex justify-end space-x-2">
                 <Button 
@@ -277,6 +383,7 @@ export default function UsersPage() {
                   onClick={() => {
                     setShowDialog(false);
                     setEditingUser(null);
+                    setIsCreateMode(false);
                     form.reset();
                   }}
                   data-testid="button-cancel"
@@ -285,10 +392,10 @@ export default function UsersPage() {
                 </Button>
                 <Button 
                   type="submit"
-                  disabled={updateMutation.isPending}
+                  disabled={isCreateMode ? createMutation.isPending : updateMutation.isPending}
                   data-testid="button-submit"
                 >
-                  Update
+                  {isCreateMode ? "Buat User" : "Update"}
                 </Button>
               </div>
             </form>
