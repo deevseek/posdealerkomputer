@@ -26,7 +26,7 @@ function PlanCard({ plan, onUpdate }: { plan: any, onUpdate: (plan: any) => void
       return apiRequest('PUT', `/api/admin/plans/${plan.id}`, planData);
     },
     onSuccess: (data) => {
-      onUpdate(data.plan);
+      onUpdate(data?.plan || plan);
       setIsEditing(false);
       toast({
         title: 'Plan Updated',
