@@ -69,6 +69,12 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       req.isSuperAdmin = true;
       return next();
     }
+    
+    // In development mode with no tenant specified, treat /api/admin routes as super admin
+    if (!subdomain && req.path.startsWith('/api/admin')) {
+      req.isSuperAdmin = true;
+      return next();
+    }
 
     // Skip tenant detection for certain routes and original app routes
     const skipRoutes = [
