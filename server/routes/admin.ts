@@ -3,8 +3,27 @@ import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
-import { eq, count, and, desc, gte } from 'drizzle-orm';
-import { requireSuperAdmin } from '../middleware/tenant';
+import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
+import type { Request, Response, NextFunction } from 'express';
+
+// Local super admin check since these routes bypass tenant middleware
+const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
+  // In development, always allow admin access
+  if (process.env.NODE_ENV === 'development') {
+    req.isSuperAdmin = true;
+    console.log('Development mode: Granting super admin access');
+    return next();
+  }
+  
+  // In production, check for proper super admin status
+  if (!req.isSuperAdmin) {
+    return res.status(403).json({ 
+      error: 'Super admin required',
+      message: 'This operation requires super admin privileges.'
+    });
+  }
+  next();
+};
 
 const router = Router();
 

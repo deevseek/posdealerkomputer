@@ -19,6 +19,7 @@ export const clients = pgTable('clients', {
   logo: text('logo'), // URL to logo
   customDomain: text('custom_domain'), // Optional custom domain
   settings: text('settings'), // JSON settings
+  trialEndsAt: timestamp('trial_ends_at'), // Trial end date
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
