@@ -238,7 +238,7 @@ export const requireSuperAdmin = (req: Request, res: Response, next: NextFunctio
   next();
 };
 
-// Middleware to check subscription limits
+// Middleware to check subscription limits and feature access
 export const checkSubscriptionLimits = (feature: string) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     if (req.isSuperAdmin) {
@@ -252,8 +252,100 @@ export const checkSubscriptionLimits = (feature: string) => {
       });
     }
 
-    // TODO: Implement feature limit checking based on subscription plan
-    // For now, just allow all features
-    next();
+    try {
+      // Get the subscription plan and check if feature is enabled
+      const subscription = req.tenant.subscription;
+      
+      // If subscription is expired
+      if (subscription.endDate && new Date(subscription.endDate) < new Date()) {
+        return res.status(402).json({
+          error: 'Subscription expired',
+          message: 'Your subscription has expired. Please renew to continue using this feature.'
+        });
+      }
+
+      // Check if feature is enabled in the plan
+      if (subscription.plan?.features) {
+        const planFeatures = JSON.parse(subscription.plan.features);
+        
+        if (!planFeatures.includes(feature)) {
+          return res.status(403).json({
+            error: 'Feature not available',
+            message: `The '${feature}' feature is not available in your current plan. Please upgrade to access this feature.`,
+            requiredFeature: feature,
+            currentPlan: subscription.planName
+          });
+        }
+      }
+
+      // Check usage limits if applicable
+      if (subscription.plan?.limits) {
+        const planLimits = JSON.parse(subscription.plan.limits);
+        
+        // Example: Check user count limit
+        if (feature === 'users' && planLimits.maxUsers) {
+          // This would require a query to count current users
+          // For now, we'll pass through but this can be extended
+        }
+        
+        // Example: Check transaction limits
+        if (feature === 'pos' && planLimits.maxTransactionsPerMonth) {
+          // This would require checking current month's transactions
+          // For now, we'll pass through but this can be extended
+        }
+      }
+
+      next();
+    } catch (error) {
+      console.error('Error checking subscription limits:', error);
+      res.status(500).json({
+        error: 'Subscription check failed',
+        message: 'Unable to verify subscription status.'
+      });
+    }
   };
+};
+
+// Middleware to check specific feature access
+export const requireFeature = (featureName: string) => {
+  return checkSubscriptionLimits(featureName);
+};
+
+// Helper function to check if a client has access to a feature
+export const hasFeatureAccess = async (clientId: string, feature: string): Promise<boolean> => {
+  try {
+    // Import here to avoid circular dependencies
+    const { db } = await import('../db');
+    const { clients, subscriptions, plans } = await import('../../shared/saas-schema');
+    const { eq, and } = await import('drizzle-orm');
+    
+    const result = await db
+      .select({
+        planFeatures: plans.features,
+        subscriptionEnd: subscriptions.endDate
+      })
+      .from(clients)
+      .leftJoin(subscriptions, and(
+        eq(subscriptions.clientId, clients.id),
+        eq(subscriptions.paymentStatus, 'paid')
+      ))
+      .leftJoin(plans, eq(plans.id, subscriptions.planId))
+      .where(eq(clients.id, clientId))
+      .limit(1);
+
+    if (!result.length || !result[0].planFeatures) {
+      return false; // No active subscription or plan
+    }
+
+    // Check if subscription is still active
+    if (result[0].subscriptionEnd && new Date(result[0].subscriptionEnd) < new Date()) {
+      return false; // Subscription expired
+    }
+
+    const planFeatures = JSON.parse(result[0].planFeatures);
+    return planFeatures.includes(feature);
+  } catch (error) {
+    console.error('Error checking feature access:', error);
+    return false;
+  }
 };

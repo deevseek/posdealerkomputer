@@ -691,4 +691,107 @@ router.post('/notifications/remind-trial/:id', async (req, res) => {
   }
 });
 
+// PLAN FEATURES CONFIGURATION API
+// ===================================
+
+// Get plan features for a specific plan
+router.get('/plan-features/:planId', async (req, res) => {
+  try {
+    const { planId } = req.params;
+    
+    const plan = await db
+      .select()
+      .from(plans)
+      .where(eq(plans.id, planId))
+      .limit(1);
+    
+    if (!plan.length) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+    
+    const planData = plan[0];
+    const features = planData.features ? JSON.parse(planData.features) : [];
+    const limits = planData.limits ? JSON.parse(planData.limits) : {};
+    
+    res.json({
+      planId: planData.id,
+      planName: planData.name,
+      features,
+      limits: {
+        maxUsers: limits.maxUsers || planData.maxUsers,
+        maxTransactionsPerMonth: limits.maxTransactionsPerMonth || planData.maxTransactionsPerMonth,
+        maxStorageGB: limits.maxStorageGB || planData.maxStorageGB,
+        ...limits
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching plan features:', error);
+    res.status(500).json({ error: 'Failed to fetch plan features' });
+  }
+});
+
+// Update plan features and limits
+router.put('/plans/:planId/features', async (req, res) => {
+  try {
+    const { planId } = req.params;
+    const { features, limits } = req.body;
+    
+    // Validate input
+    if (!Array.isArray(features)) {
+      return res.status(400).json({ error: 'Features must be an array' });
+    }
+    
+    if (typeof limits !== 'object') {
+      return res.status(400).json({ error: 'Limits must be an object' });
+    }
+    
+    // Update plan with new features and limits
+    const updatedPlan = await db
+      .update(plans)
+      .set({
+        features: JSON.stringify(features),
+        limits: JSON.stringify(limits),
+        maxUsers: limits.maxUsers || null,
+        maxTransactionsPerMonth: limits.maxTransactionsPerMonth || null,
+        maxStorageGB: limits.maxStorageGB || null,
+        whatsappIntegration: features.includes('whatsapp'),
+        customBranding: features.includes('custom_branding'),
+        apiAccess: features.includes('api_access'),
+        prioritySupport: features.includes('priority_support'),
+        updatedAt: new Date()
+      })
+      .where(eq(plans.id, planId))
+      .returning();
+    
+    if (!updatedPlan.length) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Plan features updated successfully',
+      plan: updatedPlan[0]
+    });
+  } catch (error) {
+    console.error('Error updating plan features:', error);
+    res.status(500).json({ error: 'Failed to update plan features' });
+  }
+});
+
+// Get available features list
+router.get('/available-features', async (req, res) => {
+  try {
+    const availableFeatures = [
+      'dashboard', 'pos', 'service', 'inventory', 'purchasing', 'finance',
+      'customers', 'suppliers', 'users', 'roles', 'reports', 'stock_movements',
+      'settings', 'whatsapp', 'custom_branding', 'api_access', 'priority_support'
+    ];
+    
+    res.json({ features: availableFeatures });
+  } catch (error) {
+    console.error('Error fetching available features:', error);
+    res.status(500).json({ error: 'Failed to fetch available features' });
+  }
+});
+
 export default router;
