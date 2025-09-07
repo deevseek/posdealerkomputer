@@ -66,7 +66,7 @@ router.get('/stats', async (req, res) => {
       .where(
         and(
           eq(clients.status, 'trial'),
-          clients.trialEndsAt <= nextWeek
+          lt(clients.trialEndsAt, nextWeek)
         )
       );
     const expiringTrials = expiringTrialsResult.count;
@@ -96,7 +96,6 @@ router.get('/clients', async (req, res) => {
         email: clients.email,
         status: clients.status,
         createdAt: clients.createdAt,
-        trialEndsAt: clients.trialEndsAt,
         subscription: {
           id: subscriptions.id,
           planName: subscriptions.planName,

@@ -44,6 +44,14 @@ app.use((req, res, next) => {
   app.use('/api/saas', saasRoutes);
   app.use('/api/admin', adminRoutes);
   
+  // Register comprehensive SaaS management routes
+  const saasCompleteRoutes = await import('./routes/saas-complete');
+  app.use('/api/admin', saasCompleteRoutes.default);
+  
+  // Register Stripe payment and billing routes
+  const stripeRoutes = await import('./routes/stripe-integration');
+  app.use('/api/admin', stripeRoutes.default);
+  
   // Register client onboarding routes
   const clientRoutes = await import('./routes/client');
   app.use('/api/client', clientRoutes.default);
