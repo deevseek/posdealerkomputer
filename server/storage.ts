@@ -64,12 +64,12 @@ export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createUser(user: InsertUser, clientId?: string): Promise<User>;
   upsertUser(user: Partial<InsertUser> & { id: string }): Promise<User>;
   
   // User management
   getUsers(): Promise<User[]>;
-  getUserCount(): Promise<number>;
+  getUserCount(clientId?: string): Promise<number>;
   getUserByEmail(email: string): Promise<User | undefined>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User>;
   deleteUser(id: string): Promise<void>;
@@ -83,8 +83,8 @@ export interface IStorage {
   deleteRole(id: string): Promise<void>;
   
   // Store configuration
-  getStoreConfig(): Promise<StoreConfig | undefined>;
-  upsertStoreConfig(config: InsertStoreConfig): Promise<StoreConfig>;
+  getStoreConfig(clientId?: string): Promise<StoreConfig | undefined>;
+  upsertStoreConfig(config: InsertStoreConfig, clientId?: string): Promise<StoreConfig>;
   
   // Categories
   getCategories(): Promise<Category[]>;
@@ -212,10 +212,14 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(userData: InsertUser): Promise<User> {
+  async createUser(userData: InsertUser, clientId?: string): Promise<User> {
+    const userDataWithClient = {
+      ...userData,
+      clientId: clientId || null
+    };
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values(userDataWithClient)
       .returning();
     return user;
   }

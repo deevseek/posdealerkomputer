@@ -2004,10 +2004,13 @@ Terima kasih!
   });
 
   // Check setup status
-  app.get('/api/setup/status', async (req, res) => {
+  app.get('/api/setup/status', async (req: any, res) => {
     try {
-      const config = await storage.getStoreConfig();
-      const userCount = await storage.getUserCount();
+      // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
+      const clientId = req.tenant?.clientId || null;
+      
+      const config = await storage.getStoreConfig(clientId);
+      const userCount = await storage.getUserCount(clientId);
       
       const isSetupCompleted = Boolean(
         config && 
@@ -2022,7 +2025,8 @@ Terima kasih!
         hasAdminUser: userCount > 0,
         storeName: config?.name,
         setupSteps: config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {},
-        databaseMigrated: config?.setupSteps ? JSON.parse(config.setupSteps || '{}').database : false
+        databaseMigrated: config?.setupSteps ? JSON.parse(config.setupSteps || '{}').database : false,
+        clientId: clientId // Include client context
       });
     } catch (error) {
       // Silence table missing errors during fresh setup to avoid console spam
@@ -2039,7 +2043,7 @@ Terima kasih!
   });
 
   // Setup store configuration
-  app.post('/api/setup/store', async (req, res) => {
+  app.post('/api/setup/store', async (req: any, res) => {
     try {
       const { name, address, phone, email, taxRate } = req.body;
       
@@ -2047,7 +2051,10 @@ Terima kasih!
         return res.status(400).json({ message: 'Store name is required' });
       }
 
-      const existingConfig = await storage.getStoreConfig();
+      // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
+      const clientId = req.tenant?.clientId || null;
+      
+      const existingConfig = await storage.getStoreConfig(clientId);
       const setupSteps = existingConfig?.setupSteps ? JSON.parse(existingConfig.setupSteps) : {};
       setupSteps.store = true;
 
