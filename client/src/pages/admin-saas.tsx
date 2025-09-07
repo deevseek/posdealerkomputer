@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from '@/hooks/use-toast';
 import { CreateClientForm } from '@/components/CreateClientForm';
+import { FeatureConfigurationManager } from '@/components/FeatureConfigurationManager';
 
 export default function AdminSaaS() {
   const [selectedTab, setSelectedTab] = useState('overview');
@@ -453,13 +454,30 @@ export default function AdminSaaS() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="settings" className="space-y-4">
+        <TabsContent value="settings" className="space-y-6">
+          {/* Feature Configuration Management */}
+          <Card className="border-2 border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>🎛️ Plan Feature Configuration</span>
+              </CardTitle>
+              <CardDescription>
+                Configure which application features are available for each subscription plan
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeatureConfigurationManager />
+            </CardContent>
+          </Card>
+
+          {/* Existing Settings */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
-                <CardTitle>📦 Subscription Plans</CardTitle>
+                <CardTitle>📦 Subscription Plans Overview</CardTitle>
                 <CardDescription>
-                  Manage pricing plans and features
+                  Current pricing plans and basic features
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -502,15 +520,15 @@ export default function AdminSaaS() {
 
             <Card>
               <CardHeader>
-                <CardTitle>⚙️ System Configuration</CardTitle>
+                <CardTitle>⚙️ Global SaaS Settings</CardTitle>
                 <CardDescription>
-                  Global SaaS management settings
+                  System-wide configuration for the SaaS platform
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <Label htmlFor="trial-period">Default Trial Period (days)</Label>
-                  <Input id="trial-period" type="number" defaultValue="7" className="mt-1" />
+                  <Input id="trial-period" type="number" defaultValue="14" className="mt-1" />
                 </div>
                 <div>
                   <Label htmlFor="auto-suspend">Auto-suspend after trial</Label>
@@ -529,6 +547,10 @@ export default function AdminSaaS() {
                   <Input id="notification-days" type="number" defaultValue="3" className="mt-1" />
                 </div>
                 <div>
+                  <Label htmlFor="grace-period">Payment grace period (days)</Label>
+                  <Input id="grace-period" type="number" defaultValue="3" className="mt-1" />
+                </div>
+                <div>
                   <Label htmlFor="webhook-url">Payment Webhook URL</Label>
                   <Input id="webhook-url" placeholder="https://api.example.com/webhook" className="mt-1" />
                 </div>
@@ -538,6 +560,22 @@ export default function AdminSaaS() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Feature Management Guidelines */}
+          <Card className="border-orange-200 bg-orange-50/50">
+            <CardHeader>
+              <CardTitle className="text-orange-800">📋 Feature Management Guidelines</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              <ul className="space-y-2 text-orange-700">
+                <li>• <strong>Basic Plan:</strong> Essential features for small businesses (POS, basic inventory, customers)</li>
+                <li>• <strong>Pro Plan:</strong> Advanced features for growing businesses (service tickets, reports, purchasing)</li>
+                <li>• <strong>Premium Plan:</strong> Full feature set with integrations (WhatsApp, API access, custom branding)</li>
+                <li>• <strong>Feature Toggles:</strong> Changes take effect immediately for all clients on that plan</li>
+                <li>• <strong>Limits:</strong> Configure user count, transaction volume, and storage per plan</li>
+              </ul>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="billing" className="space-y-4">
