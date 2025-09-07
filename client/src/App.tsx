@@ -24,6 +24,7 @@ import UsersPage from "@/pages/users";
 import ServiceStatus from "@/pages/ServiceStatus";
 import Setup from "@/pages/setup";
 import AdminDashboard from "@/pages/admin-dashboard";
+import AdminSaaS from "@/pages/admin-saas";
 import ClientOnboarding from "@/pages/client-onboarding";
 
 function Router() {
@@ -64,6 +65,7 @@ function Router() {
           <Route path="/stock-movements" component={StockMovements} />
           <Route path="/settings" component={Settings} />
           <Route path="/admin-dashboard" component={AdminDashboard} />
+          <Route path="/admin-saas" component={AdminSaaS} />
         </>
       )}
       <Route path="/service-status" component={ServiceStatus} />
