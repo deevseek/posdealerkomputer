@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SaasController } from '../controllers/saasController';
-import { requireTenant, requireSuperAdmin, checkSubscriptionLimits } from '../middleware/tenant';
+import { tenantMiddleware, requireTenant, requireSuperAdmin, checkSubscriptionLimits } from '../middleware/tenant';
 
 const router = Router();
 
@@ -10,8 +10,8 @@ router.get('/plans', SaasController.getPlans);
 router.post('/payment', SaasController.processPayment);
 
 // Tenant-specific routes (require valid tenant)
-router.get('/client/info', requireTenant, SaasController.getClientInfo);
-router.post('/subscription', requireTenant, SaasController.createSubscription);
+router.get('/client/info', tenantMiddleware, requireTenant, SaasController.getClientInfo);
+router.post('/subscription', tenantMiddleware, requireTenant, SaasController.createSubscription);
 
 // Super Admin routes (require super admin privileges)
 router.get('/admin/clients', requireSuperAdmin, SaasController.getAllClients);
