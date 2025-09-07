@@ -177,6 +177,7 @@ import {
   insertCategorySchema,
   insertStoreConfigSchema,
   insertRoleSchema,
+  insertUserSchema,
   generateSKU,
   generateBarcode
 } from "@shared/schema";
@@ -1314,6 +1315,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post('/api/users', isAuthenticated, async (req: any, res) => {
+    try {
+      const { username, email, firstName, lastName, password, role } = req.body;
+
+      // Validate required fields
+      if (!username || !email || !password || !role) {
+        return res.status(400).json({ 
+          message: "Username, email, password, dan role wajib diisi" 
+        });
+      }
+
+      // Check if username or email already exists
+      const existingUser = await storage.getUserByUsername(username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username sudah digunakan" });
+      }
+
+      const existingEmail = await storage.getUserByEmail(email);
+      if (existingEmail) {
+        return res.status(400).json({ message: "Email sudah digunakan" });
+      }
+
+      // Hash password
+      const hashedPassword = await hashPassword(password);
+
+      // Create user
+      const userData = {
+        username,
+        email,
+        firstName,
+        lastName,
+        password: hashedPassword,
+        role,
+        isActive: true
+      };
+
+      const user = await storage.createUser(userData);
+      
+      // Remove password from response
+      const { password: _, ...userResponse } = user;
+      res.status(201).json(userResponse);
+    } catch (error) {
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
     }
   });
 
