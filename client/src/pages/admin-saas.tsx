@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertTriangle, Building2, Users, CreditCard, TrendingUp, Plus, Settings, Bell, DollarSign, Calendar, UserPlus, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, Activity, Pencil, Save, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { toast } from '@/hooks/use-toast';
+import { toast, useToast } from '@/hooks/use-toast';
 import { CreateClientForm } from '@/components/CreateClientForm';
 import { FeatureConfigurationManager } from '@/components/FeatureConfigurationManager';
 
