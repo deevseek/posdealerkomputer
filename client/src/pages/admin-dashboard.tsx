@@ -424,7 +424,7 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2 text-sm">
-                          {plan.features?.map((feature, index) => (
+                          {JSON.parse(plan.features || '[]').map((feature: string, index: number) => (
                             <li key={index} className="flex items-center gap-2">
                               <CheckCircle className="h-4 w-4 text-green-500" />
                               {feature}
