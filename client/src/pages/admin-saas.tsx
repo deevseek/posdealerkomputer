@@ -8,12 +8,189 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Building2, Users, CreditCard, TrendingUp, Plus, Settings, Bell, DollarSign, Calendar, UserPlus, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, Activity } from 'lucide-react';
+import { AlertTriangle, Building2, Users, CreditCard, TrendingUp, Plus, Settings, Bell, DollarSign, Calendar, UserPlus, Eye, Edit, Trash2, CheckCircle, XCircle, Clock, Activity, Pencil, Save, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from '@/hooks/use-toast';
 import { CreateClientForm } from '@/components/CreateClientForm';
 import { FeatureConfigurationManager } from '@/components/FeatureConfigurationManager';
+
+// Plan Card Component with Inline Editing
+function PlanCard({ plan, onUpdate }: { plan: any, onUpdate: (plan: any) => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPlan, setEditedPlan] = useState(plan);
+  const { toast } = useToast();
+
+  const updatePlanMutation = useMutation({
+    mutationFn: async (planData: any) => {
+      return apiRequest('PUT', `/api/admin/plans/${plan.id}`, planData);
+    },
+    onSuccess: (data) => {
+      onUpdate(data.plan);
+      setIsEditing(false);
+      toast({
+        title: 'Plan Updated',
+        description: 'Subscription plan has been updated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Update Failed',
+        description: error.message || 'Failed to update plan',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSave = () => {
+    updatePlanMutation.mutate({
+      name: editedPlan.name,
+      description: editedPlan.description,
+      price: parseFloat(editedPlan.price),
+      maxUsers: parseInt(editedPlan.maxUsers),
+      maxTransactionsPerMonth: parseInt(editedPlan.maxTransactionsPerMonth),
+      maxStorageGB: parseInt(editedPlan.maxStorageGB),
+      whatsappIntegration: editedPlan.whatsappIntegration,
+      customBranding: editedPlan.customBranding,
+      apiAccess: editedPlan.apiAccess,
+      prioritySupport: editedPlan.prioritySupport,
+      isActive: editedPlan.isActive
+    });
+  };
+
+  const handleCancel = () => {
+    setEditedPlan(plan);
+    setIsEditing(false);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
+  };
+
+  return (
+    <div className="border rounded-lg p-4">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          {isEditing ? (
+            <div className="space-y-3">
+              <Input
+                value={editedPlan.name}
+                onChange={(e) => setEditedPlan({ ...editedPlan, name: e.target.value })}
+                className="font-semibold text-lg"
+                placeholder="Plan name"
+              />
+              <Input
+                value={editedPlan.description}
+                onChange={(e) => setEditedPlan({ ...editedPlan, description: e.target.value })}
+                className="text-sm"
+                placeholder="Plan description"
+              />
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">Rp</span>
+                <Input
+                  type="number"
+                  value={editedPlan.price}
+                  onChange={(e) => setEditedPlan({ ...editedPlan, price: e.target.value })}
+                  className="w-32"
+                  placeholder="Price"
+                />
+                <span className="text-sm text-muted-foreground">/month</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <h3 className="font-semibold">{plan.name}</h3>
+              <p className="text-sm text-muted-foreground">{plan.description}</p>
+              <div className="text-lg font-bold mt-2">
+                {formatCurrency(plan.price)}/month
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
+          <Badge variant={plan.isActive ? 'default' : 'secondary'}>
+            {plan.isActive ? 'Active' : 'Inactive'}
+          </Badge>
+          {isEditing ? (
+            <>
+              <Button 
+                size="sm" 
+                onClick={handleSave}
+                disabled={updatePlanMutation.isPending}
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                onClick={handleCancel}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              onClick={() => setIsEditing(true)}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      <div className="mt-3">
+        <p className="text-sm font-medium mb-2">Plan Limits:</p>
+        {isEditing ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="maxUsers" className="text-xs">Max Users</Label>
+              <Input
+                id="maxUsers"
+                type="number"
+                value={editedPlan.maxUsers}
+                onChange={(e) => setEditedPlan({ ...editedPlan, maxUsers: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="maxStorage" className="text-xs">Storage (GB)</Label>
+              <Input
+                id="maxStorage"
+                type="number"
+                value={editedPlan.maxStorageGB}
+                onChange={(e) => setEditedPlan({ ...editedPlan, maxStorageGB: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label htmlFor="maxTransactions" className="text-xs">Max Transactions/Month</Label>
+              <Input
+                id="maxTransactions"
+                type="number"
+                value={editedPlan.maxTransactionsPerMonth}
+                onChange={(e) => setEditedPlan({ ...editedPlan, maxTransactionsPerMonth: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+            <div>👥 Users: {plan.maxUsers}</div>
+            <div>💾 Storage: {plan.maxStorageGB}GB</div>
+            <div>📊 Transactions: {plan.maxTransactionsPerMonth?.toLocaleString()}</div>
+            <div>📱 WhatsApp: {plan.whatsappIntegration ? '✅' : '❌'}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminSaaS() {
   const [selectedTab, setSelectedTab] = useState('overview');
@@ -484,29 +661,17 @@ export default function AdminSaaS() {
                 {plans && plans.length > 0 ? (
                   <div className="space-y-4">
                     {plans.map((plan: any) => (
-                      <div key={plan.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-semibold">{plan.name}</h3>
-                            <p className="text-sm text-muted-foreground">{plan.description}</p>
-                            <div className="text-lg font-bold mt-2">
-                              {formatCurrency(plan.price)}/month
-                            </div>
-                          </div>
-                          <Badge variant={plan.isActive ? 'default' : 'secondary'}>
-                            {plan.isActive ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-sm font-medium mb-2">Plan Limits:</p>
-                          <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                            <div>👥 Users: {plan.maxUsers}</div>
-                            <div>💾 Storage: {plan.maxStorageGB}GB</div>
-                            <div>📊 Transactions: {plan.maxTransactionsPerMonth}</div>
-                            <div>📱 WhatsApp: {plan.whatsappIntegration ? '✅' : '❌'}</div>
-                          </div>
-                        </div>
-                      </div>
+                      <PlanCard 
+                        key={plan.id} 
+                        plan={plan}
+                        onUpdate={(updatedPlan) => {
+                          queryClient.invalidateQueries({ queryKey: ['/api/admin/plans'] });
+                          toast({
+                            title: 'Success',
+                            description: 'Plan updated successfully',
+                          });
+                        }}
+                      />
                     ))}
                   </div>
                 ) : (

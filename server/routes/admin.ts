@@ -256,6 +256,64 @@ router.get('/plans', async (req, res) => {
   }
 });
 
+// Update plan pricing and details
+const updatePlanSchema = z.object({
+  name: z.string().min(1, 'Plan name is required').optional(),
+  description: z.string().optional(),
+  price: z.number().min(0, 'Price must be non-negative').optional(),
+  currency: z.string().optional(),
+  maxUsers: z.number().min(1, 'Max users must be at least 1').optional(),
+  maxTransactionsPerMonth: z.number().min(1, 'Max transactions must be at least 1').optional(),
+  maxStorageGB: z.number().min(1, 'Max storage must be at least 1GB').optional(),
+  whatsappIntegration: z.boolean().optional(),
+  customBranding: z.boolean().optional(),
+  apiAccess: z.boolean().optional(),
+  prioritySupport: z.boolean().optional(),
+  isActive: z.boolean().optional()
+});
+
+router.put('/plans/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const validatedData = updatePlanSchema.parse(req.body);
+
+    // Check if plan exists
+    const [existingPlan] = await db
+      .select()
+      .from(plans)
+      .where(eq(plans.id, id))
+      .limit(1);
+
+    if (!existingPlan) {
+      return res.status(404).json({ message: 'Plan not found' });
+    }
+
+    // Update plan
+    const [updatedPlan] = await db
+      .update(plans)
+      .set({
+        ...validatedData,
+        updatedAt: new Date()
+      })
+      .where(eq(plans.id, id))
+      .returning();
+
+    res.json({
+      message: 'Plan updated successfully',
+      plan: updatedPlan
+    });
+  } catch (error) {
+    console.error('Error updating plan:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ 
+        message: 'Validation error', 
+        errors: error.errors 
+      });
+    }
+    res.status(500).json({ message: 'Failed to update plan' });
+  }
+});
+
 // IMPORTANT: Put specific routes BEFORE parameter routes to avoid conflicts
 // Move /clients/detailed from saas-complete.ts to here and put it BEFORE /clients/:id
 
@@ -293,7 +351,7 @@ router.get('/clients/detailed', async (req, res) => {
         eq(subscriptions.clientId, clients.id),
         eq(subscriptions.paymentStatus, 'paid')
       ))
-      .leftJoin(users, eq(users.clientId, clients.id))
+      .leftJoin(users, sql`${users.clientId}::uuid = ${clients.id}`)
       .groupBy(
         clients.id, 
         subscriptions.id,
