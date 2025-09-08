@@ -1,5 +1,6 @@
-import type { Express } from "express";
+import type { Express, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import { realtimeService } from "./realtime";
 import { storage } from "./storage";
 import { whatsappService } from "./whatsappService";
 import QRCode from 'qrcode';
@@ -571,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/products', isAuthenticated, async (req, res) => {
+  app.post('/api/products', isAuthenticated, async (req: any, res) => {
     try {
       const productData = insertProductSchema.parse(req.body);
       const productWithCodes = {
@@ -580,6 +581,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         barcode: generateBarcode(),
       };
       const product = await storage.createProduct(productWithCodes);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'products',
+        action: 'create',
+        data: product
+      });
+      
       res.json(product);
     } catch (error) {
       console.error("Error creating product:", error);
@@ -587,10 +596,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/products/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/products/:id', isAuthenticated, async (req: any, res) => {
     try {
       const productData = insertProductSchema.partial().parse(req.body);
       const product = await storage.updateProduct(req.params.id, productData);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'products',
+        action: 'update',
+        data: product,
+        id: req.params.id
+      });
+      
       res.json(product);
     } catch (error) {
       console.error("Error updating product:", error);
@@ -598,9 +616,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/products/:id', isAuthenticated, async (req, res) => {
+  app.delete('/api/products/:id', isAuthenticated, async (req: any, res) => {
     try {
       await storage.deleteProduct(req.params.id);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'products',
+        action: 'delete',
+        id: req.params.id
+      });
+      
       res.json({ message: "Product deleted successfully" });
     } catch (error) {
       console.error("Error deleting product:", error);
@@ -915,10 +941,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/customers', isAuthenticated, async (req, res) => {
+  app.post('/api/customers', isAuthenticated, async (req: any, res) => {
     try {
       const customerData = insertCustomerSchema.parse(req.body);
       const customer = await storage.createCustomer(customerData);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'customers',
+        action: 'create',
+        data: customer
+      });
+      
       res.json(customer);
     } catch (error) {
       console.error("Error creating customer:", error);
@@ -926,10 +960,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/customers/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/customers/:id', isAuthenticated, async (req: any, res) => {
     try {
       const customerData = insertCustomerSchema.partial().parse(req.body);
       const customer = await storage.updateCustomer(req.params.id, customerData);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'customers',
+        action: 'update',
+        data: customer,
+        id: req.params.id
+      });
+      
       res.json(customer);
     } catch (error) {
       console.error("Error updating customer:", error);
@@ -1436,6 +1479,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Remove password from response
       const { password: _, ...userResponse } = user;
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'users',
+        action: 'create',
+        data: userResponse
+      });
+      
       res.status(201).json(userResponse);
     } catch (error) {
       console.error("Error creating user:", error);
@@ -1443,11 +1494,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req, res) => {
+  app.put('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req: any, res) => {
     try {
       const { id } = req.params;
       const userData = req.body;
       const user = await storage.updateUser(id, userData);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'users',
+        action: 'update',
+        data: user,
+        id
+      });
+      
       res.json(user);
     } catch (error) {
       console.error("Error updating user:", error);
@@ -1455,10 +1515,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req, res) => {
+  app.delete('/api/users/:id', isAuthenticated, requirePermission('users_full'), async (req: any, res) => {
     try {
       const { id } = req.params;
       await storage.deleteUser(id);
+      
+      // Broadcast real-time update
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'users',
+        action: 'delete',
+        id
+      });
+      
       res.json({ message: "User deleted successfully" });
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -2507,5 +2575,9 @@ Terima kasih!
   });
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server for real-time updates
+  realtimeService.initialize(httpServer);
+  
   return httpServer;
 }

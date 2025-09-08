@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import { useSetup } from "@/hooks/useSetup";
+import { useWebSocket } from "@/lib/websocket";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -30,6 +32,22 @@ import ClientOnboarding from "@/pages/client-onboarding";
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
   const { needsSetup, isSetupLoading, setupStatus, error } = useSetup();
+  const { connect, disconnect } = useWebSocket();
+
+  // Connect to WebSocket when authenticated
+  useEffect(() => {
+    if (isAuthenticated && !needsSetup && !isSetupLoading) {
+      console.log('🔄 Connecting to real-time updates...');
+      connect();
+    } else {
+      disconnect();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      disconnect();
+    };
+  }, [isAuthenticated, needsSetup, isSetupLoading, connect, disconnect]);
 
   // Debug logging for development
   if (process.env.NODE_ENV === 'development') {
