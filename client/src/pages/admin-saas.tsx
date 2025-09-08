@@ -23,7 +23,7 @@ function PlanCard({ plan, onUpdate }: { plan: any, onUpdate: (plan: any) => void
 
   const updatePlanMutation = useMutation({
     mutationFn: async (planData: any) => {
-      return apiRequest('PUT', `/api/admin/plans/${plan.id}`, planData);
+      return apiRequest('PUT', `/api/admin/saas/plans/${plan.id}`, planData);
     },
     onSuccess: (data) => {
       onUpdate(data?.plan || plan);
@@ -200,19 +200,19 @@ export default function AdminSaaS() {
 
   // Fetch comprehensive analytics
   const { data: analytics } = useQuery({
-    queryKey: ['/api/admin/analytics/overview'],
+    queryKey: ['/api/admin/saas/stats'],
     retry: false,
   });
 
   // Fetch detailed clients
   const { data: clients, refetch: refetchClients } = useQuery({
-    queryKey: ['/api/admin/clients/detailed'],
+    queryKey: ['/api/admin/saas/clients'],
     retry: false,
   });
 
   // Fetch subscription plans
   const { data: plans } = useQuery({
-    queryKey: ['/api/admin/plans'],
+    queryKey: ['/api/admin/saas/plans'],
     retry: false,
   });
 
@@ -231,7 +231,7 @@ export default function AdminSaaS() {
   // Create client mutation
   const createClient = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest('POST', '/api/admin/clients', data);
+      return apiRequest('POST', '/api/admin/saas/clients', data);
     },
     onSuccess: () => {
       toast({
@@ -239,7 +239,7 @@ export default function AdminSaaS() {
         description: 'Client created successfully with trial period',
       });
       refetchClients();
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/analytics/overview'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/stats'] });
       setCreateClientOpen(false);
     },
     onError: (error: any) => {
@@ -254,7 +254,7 @@ export default function AdminSaaS() {
   // Update client status mutation
   const updateClientStatus = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      return apiRequest('PATCH', `/api/admin/clients/${id}/status`, { status, reason });
+      return apiRequest('PATCH', `/api/admin/saas/clients/${id}/status`, { status, reason });
     },
     onSuccess: () => {
       toast({
@@ -262,7 +262,7 @@ export default function AdminSaaS() {
         description: 'Client status updated successfully',
       });
       refetchClients();
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/analytics/overview'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/stats'] });
     },
     onError: (error: any) => {
       toast({

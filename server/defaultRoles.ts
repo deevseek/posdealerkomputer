@@ -7,7 +7,7 @@ export const defaultRoleConfigs = [
       'dashboard_view', 'pos_access', 'inventory_full', 'purchasing_full',
       'financial_full', 'reports_full', 'customers_full', 'suppliers_full',
       'service_tickets_full', 'users_full', 'roles_full', 'settings_full',
-      'whatsapp_settings', 'store_settings', 'system_admin'
+      'whatsapp_settings', 'store_settings', 'system_admin', 'saas_admin'
     ]
   },
   {
