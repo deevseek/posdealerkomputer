@@ -33,7 +33,7 @@ import {
   payrollRecords,
   attendanceRecords
 } from "@shared/schema";
-import { plans, clients, subscriptions } from "@shared/saas-schema";
+import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
 
 // HTML template generator for PDF reports
 function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
@@ -2571,6 +2571,484 @@ Terima kasih!
     } catch (error) {
       console.error('Error completing setup:', error);
       res.status(500).json({ message: 'Failed to complete setup' });
+    }
+  });
+
+  // =============================
+  // 🚀 SAAS MANAGEMENT ROUTES
+  // =============================
+
+  // Subscription limits middleware
+  const checkSubscriptionLimits = (feature: string) => {
+    return async (req: any, res: Response, next: NextFunction) => {
+      try {
+        // Skip if super admin
+        if (req.isSuperAdmin) {
+          return next();
+        }
+
+        // Check if tenant has valid subscription
+        if (!req.tenant) {
+          return res.status(403).json({ 
+            error: 'No tenant context',
+            message: 'Subscription validation failed'
+          });
+        }
+
+        // Get active subscription
+        const activeSubscription = await db
+          .select()
+          .from(subscriptions)
+          .where(
+            and(
+              eq(subscriptions.clientId, req.tenant.id),
+              eq(subscriptions.paymentStatus, 'paid'),
+              gte(subscriptions.endDate, new Date())
+            )
+          )
+          .orderBy(subscriptions.endDate)
+          .limit(1);
+
+        if (!activeSubscription.length) {
+          return res.status(402).json({
+            error: 'Subscription required',
+            message: 'This feature requires an active subscription'
+          });
+        }
+
+        const subscription = activeSubscription[0];
+        
+        // Get plan details
+        const plan = await db
+          .select()
+          .from(plans)
+          .where(eq(plans.id, subscription.planId))
+          .limit(1);
+
+        if (!plan.length) {
+          return res.status(500).json({ error: 'Plan not found' });
+        }
+
+        // Check feature availability based on plan
+        const planData = plan[0];
+        const featureAccess = {
+          'whatsapp': planData.whatsappIntegration,
+          'export': planData.plan !== 'basic',
+          'api': planData.apiAccess,
+          'custom_branding': planData.customBranding,
+          'priority_support': planData.prioritySupport
+        };
+
+        if (!featureAccess[feature as keyof typeof featureAccess]) {
+          return res.status(402).json({
+            error: 'Feature not available',
+            message: `This feature requires ${planData.plan === 'basic' ? 'Pro' : 'Premium'} plan or higher`,
+            currentPlan: planData.name,
+            feature
+          });
+        }
+
+        // Add subscription info to request
+        req.subscription = subscription;
+        req.plan = planData;
+        
+        next();
+      } catch (error) {
+        console.error('Subscription limits check error:', error);
+        res.status(500).json({ error: 'Subscription validation failed' });
+      }
+    };
+  };
+
+  // SaaS Admin Routes - Client Management
+  app.get('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const clientsWithSubscriptions = await db
+        .select({
+          id: clients.id,
+          name: clients.name,
+          subdomain: clients.subdomain,
+          email: clients.email,
+          status: clients.status,
+          trialEndsAt: clients.trialEndsAt,
+          createdAt: clients.createdAt,
+          subscription: {
+            id: subscriptions.id,
+            planName: subscriptions.planName,
+            plan: subscriptions.plan,
+            paymentStatus: subscriptions.paymentStatus,
+            startDate: subscriptions.startDate,
+            endDate: subscriptions.endDate,
+            amount: subscriptions.amount
+          }
+        })
+        .from(clients)
+        .leftJoin(
+          subscriptions, 
+          and(
+            eq(subscriptions.clientId, clients.id),
+            eq(subscriptions.paymentStatus, 'paid')
+          )
+        )
+        .orderBy(desc(clients.createdAt));
+
+      res.json(clientsWithSubscriptions);
+    } catch (error) {
+      console.error('Error fetching SaaS clients:', error);
+      res.status(500).json({ message: 'Failed to fetch clients' });
+    }
+  });
+
+  // Create new client
+  app.post('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const { name, subdomain, email, planId, trialDays = 7 } = req.body;
+
+      // Validate required fields
+      if (!name || !subdomain || !email || !planId) {
+        return res.status(400).json({ message: 'All fields are required' });
+      }
+
+      // Check if subdomain already exists
+      const [existingClient] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.subdomain, subdomain))
+        .limit(1);
+
+      if (existingClient) {
+        return res.status(400).json({ message: 'Subdomain already exists' });
+      }
+
+      // Get plan details
+      const [plan] = await db
+        .select()
+        .from(plans)
+        .where(eq(plans.id, planId))
+        .limit(1);
+
+      if (!plan) {
+        return res.status(400).json({ message: 'Plan not found' });
+      }
+
+      // Calculate trial end date
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
+      // Create client
+      const [newClient] = await db
+        .insert(clients)
+        .values({
+          name,
+          subdomain,
+          email,
+          status: 'trial',
+          trialEndsAt,
+          settings: JSON.stringify({
+            planId: plan.id,
+            planName: plan.name,
+            maxUsers: plan.maxUsers || 10,
+            maxStorage: plan.maxStorageGB || 1
+          })
+        })
+        .returning();
+
+      // Create trial subscription
+      await db
+        .insert(subscriptions)
+        .values({
+          clientId: newClient.id,
+          planId: plan.id,
+          planName: plan.name,
+          plan: plan.name.toLowerCase() as any,
+          amount: '0',
+          paymentStatus: 'paid',
+          startDate: new Date(),
+          endDate: trialEndsAt
+        });
+
+      // Broadcast real-time update
+      realtimeService.broadcast({
+        resource: 'saas-clients',
+        action: 'create',
+        data: newClient
+      });
+
+      res.json({
+        message: 'Client created successfully',
+        client: newClient,
+        trialUrl: `https://${subdomain}.profesionalservis.my.id`
+      });
+    } catch (error) {
+      console.error('Error creating SaaS client:', error);
+      res.status(500).json({ message: 'Failed to create client' });
+    }
+  });
+
+  // Update client status
+  app.patch('/api/admin/saas/clients/:id/status', isAuthenticated, requirePermission('saas_admin'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!['active', 'suspended', 'expired', 'trial'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+
+      const [updatedClient] = await db
+        .update(clients)
+        .set({ 
+          status,
+          updatedAt: new Date()
+        })
+        .where(eq(clients.id, id))
+        .returning();
+
+      if (!updatedClient) {
+        return res.status(404).json({ message: 'Client not found' });
+      }
+
+      // Broadcast real-time update
+      realtimeService.broadcast({
+        resource: 'saas-clients',
+        action: 'update',
+        data: updatedClient,
+        id
+      });
+
+      res.json({
+        message: 'Client status updated successfully',
+        client: updatedClient
+      });
+    } catch (error) {
+      console.error('Error updating client status:', error);
+      res.status(500).json({ message: 'Failed to update client status' });
+    }
+  });
+
+  // SaaS Dashboard Stats
+  app.get('/api/admin/saas/stats', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      // Total clients
+      const [totalClientsResult] = await db
+        .select({ count: count() })
+        .from(clients);
+      const totalClients = totalClientsResult.count;
+
+      // Active clients
+      const [activeClientsResult] = await db
+        .select({ count: count() })
+        .from(clients)
+        .where(eq(clients.status, 'active'));
+      const activeClients = activeClientsResult.count;
+
+      // Trial clients
+      const [trialClientsResult] = await db
+        .select({ count: count() })
+        .from(clients)
+        .where(eq(clients.status, 'trial'));
+      const trialClients = trialClientsResult.count;
+
+      // New clients this month
+      const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const [newClientsResult] = await db
+        .select({ count: count() })
+        .from(clients)
+        .where(gte(clients.createdAt, firstDayOfMonth));
+      const newClientsThisMonth = newClientsResult.count;
+
+      // Revenue calculation (mock for now)
+      const monthlyRevenue = activeClients * 199000; // Assuming average Rp 199k per client
+
+      // Expiring trials (trials ending in next 7 days)
+      const nextWeek = new Date();
+      nextWeek.setDate(nextWeek.getDate() + 7);
+      const [expiringTrialsResult] = await db
+        .select({ count: count() })
+        .from(clients)
+        .where(
+          and(
+            eq(clients.status, 'trial'),
+            lte(clients.trialEndsAt, nextWeek)
+          )
+        );
+      const expiringTrials = expiringTrialsResult.count;
+
+      res.json({
+        totalClients,
+        activeClients,
+        trialClients,
+        newClientsThisMonth,
+        monthlyRevenue,
+        revenueGrowth: 15, // Mock growth percentage
+        expiringTrials,
+        averageRevenuePerClient: Math.round(monthlyRevenue / Math.max(activeClients, 1))
+      });
+    } catch (error) {
+      console.error('Error fetching SaaS stats:', error);
+      res.status(500).json({ message: 'Failed to fetch SaaS dashboard stats' });
+    }
+  });
+
+  // Plan Management
+  app.get('/api/admin/saas/plans', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const allPlans = await db
+        .select()
+        .from(plans)
+        .orderBy(plans.price);
+
+      res.json(allPlans);
+    } catch (error) {
+      console.error('Error fetching plans:', error);
+      res.status(500).json({ message: 'Failed to fetch plans' });
+    }
+  });
+
+  // Update plan
+  app.put('/api/admin/saas/plans/:id', isAuthenticated, requirePermission('saas_admin'), async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const planData = req.body;
+
+      const [updatedPlan] = await db
+        .update(plans)
+        .set({ 
+          ...planData,
+          updatedAt: new Date()
+        })
+        .where(eq(plans.id, id))
+        .returning();
+
+      if (!updatedPlan) {
+        return res.status(404).json({ message: 'Plan not found' });
+      }
+
+      // Broadcast real-time update
+      realtimeService.broadcast({
+        resource: 'saas-plans',
+        action: 'update',
+        data: updatedPlan,
+        id
+      });
+
+      res.json({
+        message: 'Plan updated successfully',
+        plan: updatedPlan
+      });
+    } catch (error) {
+      console.error('Error updating plan:', error);
+      res.status(500).json({ message: 'Failed to update plan' });
+    }
+  });
+
+  // Public Routes - No authentication required
+  app.get('/api/saas/plans', async (req, res) => {
+    try {
+      const publicPlans = await db
+        .select({
+          id: plans.id,
+          name: plans.name,
+          description: plans.description,
+          price: plans.price,
+          currency: plans.currency,
+          billingPeriod: plans.billingPeriod,
+          features: plans.features,
+          maxUsers: plans.maxUsers,
+          maxTransactionsPerMonth: plans.maxTransactionsPerMonth,
+          maxStorageGB: plans.maxStorageGB,
+          whatsappIntegration: plans.whatsappIntegration,
+          customBranding: plans.customBranding,
+          apiAccess: plans.apiAccess,
+          prioritySupport: plans.prioritySupport
+        })
+        .from(plans)
+        .where(eq(plans.isActive, true))
+        .orderBy(plans.price);
+
+      res.json(publicPlans);
+    } catch (error) {
+      console.error('Error fetching public plans:', error);
+      res.status(500).json({ message: 'Failed to fetch plans' });
+    }
+  });
+
+  // Feature-gated routes examples
+  app.post('/api/whatsapp/send', isAuthenticated, checkSubscriptionLimits('whatsapp'), async (req: any, res) => {
+    try {
+      // WhatsApp send logic here
+      res.json({ 
+        message: 'WhatsApp message sent successfully',
+        plan: req.plan?.name,
+        remainingQuota: 'unlimited' 
+      });
+    } catch (error) {
+      console.error('Error sending WhatsApp:', error);
+      res.status(500).json({ message: 'Failed to send WhatsApp message' });
+    }
+  });
+
+  app.post('/api/data/export', isAuthenticated, checkSubscriptionLimits('export'), async (req: any, res) => {
+    try {
+      // Data export logic here
+      res.json({ 
+        message: 'Data export initiated successfully',
+        plan: req.plan?.name,
+        exportUrl: '/downloads/export.xlsx'
+      });
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      res.status(500).json({ message: 'Failed to export data' });
+    }
+  });
+
+  // Auto-expire subscriptions (runs periodically)
+  app.post('/api/admin/saas/check-expirations', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const now = new Date();
+      
+      // Find expired subscriptions
+      const expiredSubscriptions = await db
+        .select()
+        .from(subscriptions)
+        .where(
+          and(
+            eq(subscriptions.paymentStatus, 'paid'),
+            lt(subscriptions.endDate, now)
+          )
+        );
+
+      let updated = 0;
+      
+      for (const subscription of expiredSubscriptions) {
+        // Update client status to expired
+        await db
+          .update(clients)
+          .set({ 
+            status: 'expired',
+            updatedAt: new Date()
+          })
+          .where(eq(clients.id, subscription.clientId));
+
+        // Update subscription status
+        await db
+          .update(subscriptions)
+          .set({ 
+            paymentStatus: 'expired',
+            updatedAt: new Date()
+          })
+          .where(eq(subscriptions.id, subscription.id));
+
+        updated++;
+      }
+
+      res.json({
+        message: `Checked and updated ${updated} expired subscriptions`,
+        expiredCount: updated
+      });
+    } catch (error) {
+      console.error('Error checking subscription expirations:', error);
+      res.status(500).json({ message: 'Failed to check expirations' });
     }
   });
 
