@@ -614,7 +614,7 @@ export default function PurchasingPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {purchaseOrders?.filter((order: any) => order.status === 'confirmed').map((order: any) => (
+                    {purchaseOrders?.filter((order: any) => order.status === 'confirmed' || order.status === 'partial_received').map((order: any) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-medium">{order.poNumber}</TableCell>
                         <TableCell>{(order as any).supplierName || order.supplierId}</TableCell>
@@ -638,10 +638,10 @@ export default function PurchasingPage() {
                         </TableCell>
                       </TableRow>
                     ))}
-                    {!purchaseOrders?.some((order: any) => order.status === 'confirmed') && (
+                    {!purchaseOrders?.some((order: any) => order.status === 'confirmed' || order.status === 'partial_received') && (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          No confirmed purchase orders ready for receiving
+                          No purchase orders ready for receiving
                         </TableCell>
                       </TableRow>
                     )}
