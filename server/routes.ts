@@ -770,6 +770,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Emit real-time update for purchase order creation
+      realtimeService.broadcast('purchase_order_updated', {
+        type: 'created',
+        message: 'Purchase order baru telah dibuat',
+        data: order
+      });
+      
       res.json(order);
     } catch (error) {
       console.error("Error creating purchase order:", error);
@@ -780,6 +787,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/purchase-orders/:id/approve', isAuthenticated, async (req: any, res) => {
     try {
       const order = await storage.approvePurchaseOrder(req.params.id, req.session.user.id);
+      
+      // Emit real-time update for purchase order approval
+      realtimeService.broadcast('purchase_order_updated', {
+        type: 'approved',
+        message: 'Purchase order telah disetujui',
+        data: order
+      });
+      
       res.json(order);
     } catch (error) {
       console.error("Error approving purchase order:", error);
@@ -798,7 +813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get ALL outstanding items from ALL purchase orders (for reports)
+  // Get ALL outstanding items from ALL purchase orders (for reports) - MUST be before /:id routes
   app.get('/api/purchase-orders/outstanding-items', isAuthenticated, async (req, res) => {
     try {
       const outstandingItems = await storage.getAllOutstandingItems();
@@ -824,6 +839,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       console.log("Creating PO item with data:", itemData);
       const item = await storage.createPurchaseOrderItem(itemData);
+      
+      // Emit real-time update for item addition
+      realtimeService.broadcast('purchase_order_updated', {
+        type: 'item_added',
+        message: 'Item baru ditambahkan ke purchase order',
+        data: item
+      });
+      
       res.json(item);
     } catch (error) {
       console.error("Error creating purchase order item:", error);
@@ -856,6 +879,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log("Receiving items:", { itemId, receivedQuantity, userId });
       await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity), userId);
+      
+      // Emit real-time update for stock changes
+      realtimeService.broadcast('stock_updated', {
+        type: 'item_received',
+        message: 'Barang telah diterima dan stok diperbarui',
+        itemId
+      });
+      
       res.json({ message: "Items received successfully" });
     } catch (error) {
       console.error("Error receiving items:", error);

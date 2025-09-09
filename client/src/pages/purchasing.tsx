@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,7 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, ShoppingCart, Package, Truck, CheckCircle, Clock, AlertCircle, Eye, Edit, Trash2, MoreHorizontal } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { z } from "zod";
@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useWebSocket } from "@/lib/websocket";
 
 // Schema for forms
 const purchaseOrderSchema = z.object({
@@ -54,6 +55,9 @@ export default function PurchasingPage() {
   const [viewPOOpen, setViewPOOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  
+  // WebSocket for real-time updates
+  const { socket, isConnected } = useWebSocket();
 
   // Forms
   const poForm = useForm({
@@ -105,6 +109,55 @@ export default function PurchasingPage() {
   
   // Data untuk outstanding items dari PO terpilih saja (untuk dialog detail PO)
   const selectedPOOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
+  
+  // Auto-refresh data saat page focus kembali
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Refresh data saat user kembali ke tab ini
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+  
+  // WebSocket event listeners untuk real-time updates
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handlePurchaseUpdate = (data: any) => {
+      console.log('Purchase update received:', data);
+      // Invalidate relevant queries saat ada update dari WebSocket
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    };
+
+    socket.on('purchase_updated', handlePurchaseUpdate);
+    socket.on('purchase_order_updated', handlePurchaseUpdate);
+    socket.on('stock_updated', handlePurchaseUpdate);
+
+    return () => {
+      socket.off('purchase_updated', handlePurchaseUpdate);
+      socket.off('purchase_order_updated', handlePurchaseUpdate);
+      socket.off('stock_updated', handlePurchaseUpdate);
+    };
+  }, [socket, isConnected, queryClient]);
+  
+  // Auto-refresh setiap 30 detik untuk data terbaru
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden && selectedTab === "orders") {
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      }
+    }, 30000); // 30 detik
+    
+    return () => clearInterval(interval);
+  }, [selectedTab, queryClient]);
 
   // Mutations
   const createPOMutation = useMutation({
