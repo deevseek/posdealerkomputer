@@ -216,10 +216,25 @@ export default function ServiceTickets() {
       
       // Auto-open print receipt popup setelah tiket berhasil dibuat
       if (createdTicket) {
-        setTimeout(() => {
-          setReceiptData(createdTicket as any);
-          setShowReceipt(true);
-        }, 500); // Delay sedikit untuk UX yang lebih baik
+        // Ambil data tiket yang baru dibuat dengan lengkap
+        setTimeout(async () => {
+          try {
+            // Invalidate dan tunggu query selesai
+            await queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
+            await queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+            
+            // Delay sebentar untuk memastikan data ter-update
+            setTimeout(() => {
+              setReceiptData(createdTicket as any);
+              setShowReceipt(true);
+            }, 200);
+          } catch (error) {
+            console.error('Error refreshing data:', error);
+            // Fallback: gunakan data yang ada
+            setReceiptData(createdTicket as any);
+            setShowReceipt(true);
+          }
+        }, 300);
       }
     },
     onError: (error) => {
@@ -1007,15 +1022,21 @@ export default function ServiceTickets() {
                 createdAt: receiptData.createdAt ? new Date(receiptData.createdAt).toISOString() : new Date().toISOString()
               }}
               customer={(() => {
+                // Cari customer dari query data yang ter-update
                 const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === receiptData.customerId);
-                return foundCustomer ? {
-                  ...foundCustomer,
-                  phone: foundCustomer.phone || undefined,
-                  email: foundCustomer.email || undefined,
-                  address: foundCustomer.address || undefined
-                } : {
+                if (foundCustomer) {
+                  return {
+                    id: foundCustomer.id,
+                    name: foundCustomer.name,
+                    phone: foundCustomer.phone || undefined,
+                    email: foundCustomer.email || undefined,
+                    address: foundCustomer.address || undefined
+                  };
+                }
+                // Fallback jika customer tidak ditemukan
+                return {
                   id: receiptData.customerId,
-                  name: 'Customer',
+                  name: 'Customer Tidak Ditemukan',
                   phone: undefined,
                   email: undefined,
                   address: undefined
