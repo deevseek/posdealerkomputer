@@ -624,12 +624,24 @@ export default function FinanceNew() {
                     </div>
                     <div className="flex flex-col items-end">
                       <div className={`text-sm font-medium ${
-                        data.type === 'income' ? 'text-green-600' : 'text-red-600'
+                        // Refund should NOT be treated as income
+                        data.type === 'income' && subcategory !== 'Returns and Allowances' && !subcategory.includes('Refund') 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
                       }`}>
-                        {data.type === 'income' ? '+' : '-'}{formatCurrency(data.amount.toString())}
+                        {data.type === 'income' && subcategory !== 'Returns and Allowances' && !subcategory.includes('Refund') 
+                          ? '+' : '-'}{formatCurrency(data.amount.toString())}
                       </div>
-                      <Badge variant={data.type === 'income' ? 'default' : 'destructive'} className="text-xs">
-                        {data.type === 'income' ? 'Pemasukan' : 'Pengeluaran'}
+                      <Badge variant={
+                        data.type === 'income' && subcategory !== 'Returns and Allowances' && !subcategory.includes('Refund') 
+                          ? 'default' 
+                          : 'destructive'
+                      } className="text-xs">
+                        {data.type === 'income' && subcategory !== 'Returns and Allowances' && !subcategory.includes('Refund') 
+                          ? 'Pemasukan' 
+                          : subcategory === 'Returns and Allowances' || subcategory.includes('Refund') 
+                            ? 'Refund/Retur' 
+                            : 'Pengeluaran'}
                       </Badge>
                     </div>
                   </div>
