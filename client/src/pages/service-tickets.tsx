@@ -220,23 +220,23 @@ export default function ServiceTickets() {
       // Show success toast
       toast({ title: "Sukses", description: "Tiket servis berhasil dibuat" });
       
-      // Auto-open print receipt popup dengan data lengkap
+      // Auto-open print receipt popup dengan data lengkap dari form yang baru disubmit
       if (createdTicket && selectedCustomer) {
-        // Ambil data form yang baru saja disubmit
-        const formData = form.getValues();
-        
-        // Gabungkan data dari form dengan response API untuk kelengkapan data
+        // Gunakan data asli dari form yang baru disubmit (variables berisi data yang persis dikirim ke API)
         const completeTicketData = {
-          ...createdTicket,
-          deviceType: formData.deviceType || createdTicket.deviceType,
-          deviceBrand: formData.deviceBrand || createdTicket.deviceBrand,
-          deviceModel: formData.deviceModel || createdTicket.deviceModel,
-          serialNumber: formData.serialNumber || createdTicket.serialNumber,
-          completeness: formData.completeness || createdTicket.completeness,
-          problem: formData.problem || createdTicket.problem,
-          diagnosis: formData.diagnosis || createdTicket.diagnosis,
-          solution: formData.solution || createdTicket.solution
+          ...(createdTicket as any),
+          // Override dengan data dari variables (form input) untuk memastikan data terbaru
+          deviceType: variables.deviceType,
+          deviceBrand: variables.deviceBrand,
+          deviceModel: variables.deviceModel,
+          serialNumber: variables.serialNumber,
+          completeness: variables.completeness,
+          problem: variables.problem,
+          diagnosis: variables.diagnosis,
+          solution: variables.solution
         };
+        
+        console.log('Complete ticket data for receipt:', completeTicketData);
         
         // Set data lengkap langsung tanpa menunggu query update
         setReceiptData(completeTicketData as any);
