@@ -693,6 +693,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get ALL outstanding items from ALL purchase orders (for reports) - MUST be before /:id routes
+  app.get('/api/purchase-orders/outstanding-items', isAuthenticated, async (req, res) => {
+    try {
+      const outstandingItems = await storage.getAllOutstandingItems();
+      res.json(outstandingItems);
+    } catch (error) {
+      console.error("Error fetching outstanding items:", error);
+      res.status(500).json({ message: "Failed to fetch outstanding items" });
+    }
+  });
+
   app.get('/api/purchase-orders/:id', isAuthenticated, async (req, res) => {
     try {
       const order = await storage.getPurchaseOrderById(req.params.id);
@@ -771,10 +782,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Emit real-time update for purchase order creation
-      realtimeService.broadcast('purchase_order_updated', {
-        type: 'created',
-        message: 'Purchase order baru telah dibuat',
-        data: order
+      realtimeService.broadcast({
+        resource: 'purchase_orders',
+        action: 'create',
+        data: order,
+        id: order.id
       });
       
       res.json(order);
@@ -789,10 +801,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const order = await storage.approvePurchaseOrder(req.params.id, req.session.user.id);
       
       // Emit real-time update for purchase order approval
-      realtimeService.broadcast('purchase_order_updated', {
-        type: 'approved',
-        message: 'Purchase order telah disetujui',
-        data: order
+      realtimeService.broadcast({
+        resource: 'purchase_orders',
+        action: 'update',
+        data: order,
+        id: order.id
       });
       
       res.json(order);
@@ -813,17 +826,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get ALL outstanding items from ALL purchase orders (for reports) - MUST be before /:id routes
-  app.get('/api/purchase-orders/outstanding-items', isAuthenticated, async (req, res) => {
-    try {
-      const outstandingItems = await storage.getAllOutstandingItems();
-      res.json(outstandingItems);
-    } catch (error) {
-      console.error("Error fetching outstanding items:", error);
-      res.status(500).json({ message: "Failed to fetch outstanding items" });
-    }
-  });
-
   app.post('/api/purchase-orders/:id/items', isAuthenticated, async (req, res) => {
     try {
       const quantity = parseInt(req.body.quantity) || 1;
@@ -841,10 +843,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const item = await storage.createPurchaseOrderItem(itemData);
       
       // Emit real-time update for item addition
-      realtimeService.broadcast('purchase_order_updated', {
-        type: 'item_added',
-        message: 'Item baru ditambahkan ke purchase order',
-        data: item
+      realtimeService.broadcast({
+        resource: 'purchase_order_items',
+        action: 'create',
+        data: item,
+        id: item.id
       });
       
       res.json(item);
@@ -881,10 +884,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity), userId);
       
       // Emit real-time update for stock changes
-      realtimeService.broadcast('stock_updated', {
-        type: 'item_received',
-        message: 'Barang telah diterima dan stok diperbarui',
-        itemId
+      realtimeService.broadcast({
+        resource: 'inventory',
+        action: 'update',
+        data: { itemId, message: 'Barang telah diterima dan stok diperbarui' },
+        id: itemId
       });
       
       res.json({ message: "Items received successfully" });
