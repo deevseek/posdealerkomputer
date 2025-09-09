@@ -94,6 +94,9 @@ export default function PurchasingPage() {
     enabled: !!selectedPO?.id,
   });
 
+  // Query untuk semua outstanding items dari semua PO untuk laporan
+  const allOutstandingItems = [];
+
   // Mutations
   const createPOMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/purchase-orders", data),
@@ -668,6 +671,15 @@ export default function PurchasingPage() {
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">
+          {/* Header untuk Reports */}
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-2xl font-bold">Laporan Purchasing</h2>
+              <p className="text-muted-foreground">Overview dan analisis data pembelian</p>
+            </div>
+          </div>
+
+          {/* Main Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -693,16 +705,32 @@ export default function PurchasingPage() {
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Confirmed PO</CardTitle>
+                <CardTitle className="text-sm font-medium">Sebagian Diterima</CardTitle>
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-yellow-600" data-testid="stat-partial-received-po">
+                  {purchaseOrders?.filter((po: any) => po.status === "partial_received").length || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Masih ada barang belum diterima</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Selesai</CardTitle>
                 <CheckCircle className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-600" data-testid="stat-confirmed-po">
-                  {purchaseOrders?.filter((po: any) => po.status === "confirmed").length || 0}
+                <div className="text-2xl font-bold text-green-600" data-testid="stat-received-po">
+                  {purchaseOrders?.filter((po: any) => po.status === "received").length || 0}
                 </div>
-                <p className="text-xs text-muted-foreground">Sudah dikonfirmasi</p>
+                <p className="text-xs text-muted-foreground">Semua barang sudah diterima</p>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Financial Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Total Nilai PO</CardTitle>
@@ -712,10 +740,101 @@ export default function PurchasingPage() {
                 <div className="text-2xl font-bold" data-testid="stat-total-po-value">
                   Rp {purchaseOrders?.reduce((sum: number, po: any) => sum + Number(po.totalAmount || 0), 0).toLocaleString() || 0}
                 </div>
-                <p className="text-xs text-muted-foreground">Nilai total PO bulan ini</p>
+                <p className="text-xs text-muted-foreground">Nilai total semua PO</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Belum Dikonfirmasi</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  Rp {purchaseOrders?.filter((po: any) => po.status === "pending")
+                    .reduce((sum: number, po: any) => sum + Number(po.totalAmount || 0), 0).toLocaleString() || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Nilai PO pending</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Outstanding Items</CardTitle>
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {(allOutstandingItems || []).reduce((sum: number, item: any) => sum + (item.outstandingQuantity || 0), 0) || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">Total barang belum diterima</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Outstanding Items Detail */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Detail Barang Belum Diterima</CardTitle>
+              <CardDescription>Daftar item yang belum diterima lengkap dari supplier</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {(allOutstandingItems || []).length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>PO Number</TableHead>
+                        <TableHead>Produk</TableHead>
+                        <TableHead>Dipesan</TableHead>
+                        <TableHead>Diterima</TableHead>
+                        <TableHead>Outstanding</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Nilai</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(allOutstandingItems || []).map((item: any) => {
+                        const outstandingQty = item.outstandingQuantity || 0;
+                        const unitCost = parseFloat(item.unitCost || item.unitPrice || '0');
+                        const outstandingValue = outstandingQty * unitCost;
+                        
+                        return (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{item.poNumber}</TableCell>
+                            <TableCell>{item.productName || item.productId}</TableCell>
+                            <TableCell>{item.quantity}</TableCell>
+                            <TableCell>{item.receivedQuantity || 0}</TableCell>
+                            <TableCell className="font-medium text-orange-600">{outstandingQty}</TableCell>
+                            <TableCell>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                item.outstandingStatus === 'pending' ? 'text-yellow-600 bg-yellow-100' :
+                                item.outstandingStatus === 'cancelled' ? 'text-red-600 bg-red-100' :
+                                item.outstandingStatus === 'refunded' ? 'text-blue-600 bg-blue-100' :
+                                item.outstandingStatus === 'backordered' ? 'text-orange-600 bg-orange-100' :
+                                'text-gray-600 bg-gray-100'
+                              }`}>
+                                {item.outstandingStatus === 'pending' ? 'Menunggu' : 
+                                 item.outstandingStatus === 'cancelled' ? 'Dibatalkan' :
+                                 item.outstandingStatus === 'refunded' ? 'Dikembalikan' :
+                                 item.outstandingStatus === 'backordered' ? 'Backorder' : 
+                                 item.outstandingStatus || 'Pending'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="font-medium">Rp {outstandingValue.toLocaleString()}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2 text-green-600">Semua Barang Sudah Diterima!</h3>
+                  <p>Tidak ada outstanding items yang perlu ditindaklanjuti.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
