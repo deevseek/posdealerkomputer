@@ -2,7 +2,7 @@ import { useState } from "react";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -94,8 +94,8 @@ export default function PurchasingPage() {
     enabled: !!selectedPO?.id,
   });
 
-  // Data untuk outstanding items (gunakan selectedPOItems untuk sementara)
-  const allOutstandingItems = selectedPOItems?.filter((item: any) => (item.outstandingQuantity || 0) > 0) || [];
+  // Data untuk outstanding items - pastikan tidak undefined
+  const allOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
 
   // Mutations
   const createPOMutation = useMutation({
@@ -223,15 +223,7 @@ export default function PurchasingPage() {
         
         // Refresh the data
         queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders'] });
-        
-        // Update local state
-        setSelectedPOItems(prev => 
-          prev?.map(item => 
-            item.id === itemId 
-              ? { ...item, outstandingStatus: status, outstandingReason: reason }
-              : item
-          )
-        );
+        queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders', selectedPO?.id, 'items'] });
       }
     } catch (error) {
       toast({ 
