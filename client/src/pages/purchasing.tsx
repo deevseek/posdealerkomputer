@@ -110,8 +110,9 @@ export default function PurchasingPage() {
   const createPOMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/purchase-orders", data),
     onSuccess: () => {
+      // Comprehensive invalidation for new PO
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
-      // Invalidate products to refresh stock in inventory page
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsAddPOOpen(false);
       setPOItems([]);
@@ -126,7 +127,9 @@ export default function PurchasingPage() {
   const approvePOMutation = useMutation({
     mutationFn: (id: string) => apiRequest("POST", `/api/purchase-orders/${id}/approve`),
     onSuccess: () => {
+      // Invalidate all related queries when approving PO
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
       toast({ title: "Purchase order berhasil disetujui" });
     },
     onError: (error) => {
@@ -137,7 +140,11 @@ export default function PurchasingPage() {
   const addItemMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", `/api/purchase-orders/${selectedPO?.id}/items`, data),
     onSuccess: () => {
+      // Invalidate all related queries for better sync
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders", selectedPO?.id, "items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       setIsAddItemOpen(false);
       itemForm.reset();
       toast({ title: "Item berhasil ditambahkan" });
@@ -156,9 +163,11 @@ export default function PurchasingPage() {
       );
     },
     onSuccess: () => {
+      // Comprehensive invalidation for receiving items
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
-      // Invalidate all product queries (including those with search params)
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reports/stock-movements"] });
       setReceivingPOOpen(false);
       setReceivingItems([]);
       toast({ title: "Items received successfully" });
