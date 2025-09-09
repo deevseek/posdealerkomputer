@@ -829,12 +829,13 @@ export class DatabaseStorage implements IStorage {
         }
 
         // Also create the simple financial record for backward compatibility
-        const recordType = item.outstandingStatus === 'refunded' ? 'income' : 'expense';
+        // IMPORTANT: Refunds should NOT be counted as income for accounting accuracy
+        const recordType = item.outstandingStatus === 'refunded' ? 'refund_recovery' : 'expense';
         const recordDescription = item.outstandingStatus === 'refunded' 
           ? `Refund Recovery: ${receivedQuantity} units received`
           : `Purchase: ${receivedQuantity} units received`;
         const recordCategory = item.outstandingStatus === 'refunded' 
-          ? 'Refund Recovery'
+          ? 'Returns and Allowances'
           : 'Inventory Purchase';
           
         await db.insert(financialRecords).values({
@@ -843,7 +844,7 @@ export class DatabaseStorage implements IStorage {
           description: recordDescription,
           category: recordCategory,
           reference: item.purchaseOrderId,
-          referenceType: item.outstandingStatus === 'refunded' ? 'purchase_refund' : 'purchase_order',
+          referenceType: item.outstandingStatus === 'refunded' ? 'refund_recovery' : 'purchase_order',
           userId: userId,
         });
       } catch (error) {

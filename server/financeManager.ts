@@ -511,11 +511,16 @@ export class FinanceManager {
     
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     
-    // Total income
+    // Total income - EXCLUDE refunds from revenue calculation for accounting accuracy
     const [incomeResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
-      .where(and(eq(financialRecords.type, 'income'), whereClause));
+      .where(and(
+        eq(financialRecords.type, 'income'),
+        sql`${financialRecords.category} != 'Returns and Allowances'`,
+        sql`${financialRecords.type} != 'refund_recovery'`,
+        whereClause
+      ));
     
     // Total expense - calculate properly excluding asset purchases
     const allExpenses = await db
