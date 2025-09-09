@@ -754,18 +754,56 @@ export class DatabaseStorage implements IStorage {
       userId: userId,
     });
 
-    // CREATE FINANCE RECORD for purchase expense
+    // CREATE PROPER JOURNAL ENTRY for purchase (inventory in, cash/accounts payable out)
     const totalCost = parseFloat(item.unitCost || item.unitPrice || '0') * receivedQuantity;
     if (totalCost > 0) {
-      await db.insert(financialRecords).values({
-        type: 'expense',
-        amount: totalCost.toString(),
-        description: `Purchase: ${receivedQuantity} units received`,
-        category: 'Inventory Purchase',
-        reference: item.purchaseOrderId,
-        referenceType: 'purchase_order',
-        userId: userId,
-      });
+      try {
+        const { FinanceManager } = await import('./financeManager');
+        const financeManager = new FinanceManager();
+        
+        // Create journal entry for inventory purchase
+        await financeManager.createJournalEntry({
+          description: `Inventory purchase - ${receivedQuantity} units received`,
+          reference: item.purchaseOrderId,
+          referenceType: 'purchase_order',
+          lines: [
+            {
+              accountCode: '1300', // Inventory asset account
+              description: `Inventory increase - Purchase`,
+              debitAmount: totalCost.toString()
+            },
+            {
+              accountCode: '2000', // Accounts Payable (or could be cash if paid immediately)
+              description: `Purchase liability - PO payment due`,
+              creditAmount: totalCost.toString()
+            }
+          ],
+          userId: userId
+        });
+
+        // Also create the simple financial record for backward compatibility
+        await db.insert(financialRecords).values({
+          type: 'expense',
+          amount: totalCost.toString(),
+          description: `Purchase: ${receivedQuantity} units received`,
+          category: 'Inventory Purchase',
+          reference: item.purchaseOrderId,
+          referenceType: 'purchase_order',
+          userId: userId,
+        });
+      } catch (error) {
+        console.error("Error creating journal entry for purchase:", error);
+        // Fallback to simple financial record
+        await db.insert(financialRecords).values({
+          type: 'expense',
+          amount: totalCost.toString(),
+          description: `Purchase: ${receivedQuantity} units received`,
+          category: 'Inventory Purchase',
+          reference: item.purchaseOrderId,
+          referenceType: 'purchase_order',
+          userId: userId,
+        });
+      }
     }
 
     // DIRECT UPDATE: Use SQL arithmetic to ensure stock update works
