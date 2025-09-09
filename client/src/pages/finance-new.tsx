@@ -345,6 +345,18 @@ export default function FinanceNew() {
 
   // Helper function untuk menampilkan transaksi dengan benar (aset = positif, expense = negatif)
   const getTransactionDisplay = (transaction: FinancialTransaction) => {
+    // Handle refunds separately - they should NOT be shown as income
+    if (transaction.category === 'Returns and Allowances' || 
+        transaction.category?.includes('Refund') ||
+        transaction.description?.toLowerCase().includes('refund')) {
+      return {
+        sign: '-',
+        color: 'text-orange-600',
+        badge: 'secondary',
+        label: 'Refund/Retur'
+      };
+    }
+    
     if (transaction.type === 'income') {
       return {
         sign: '+',
