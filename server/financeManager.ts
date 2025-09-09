@@ -517,8 +517,10 @@ export class FinanceManager {
       .from(financialRecords)
       .where(and(
         eq(financialRecords.type, 'income'),
+        // Exclude ALL types of refunds from income calculation
+        sql`${financialRecords.category} NOT LIKE '%Refund%'`,
         sql`${financialRecords.category} != 'Returns and Allowances'`,
-        sql`${financialRecords.type} != 'refund_recovery'`,
+        sql`${financialRecords.description} NOT LIKE '%Refund%'`,
         whereClause
       ));
     
