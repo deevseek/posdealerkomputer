@@ -521,27 +521,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Orders
-  async getPurchaseOrders(): Promise<(PurchaseOrder & { supplierName: string; itemCount: number; outstandingCount: number })[]> {
-    return await db
+  async getPurchaseOrders(): Promise<(PurchaseOrder & { supplierName: string; itemCount?: number; outstandingCount?: number })[]> {
+    // Get base purchase orders first
+    const purchaseOrdersWithSupplier = await db
       .select({
         ...purchaseOrders,
         supplierName: suppliers.name,
-        // Add item count and outstanding count for inventory display
-        itemCount: sql<number>`COALESCE((
-          SELECT COUNT(*) 
-          FROM ${purchaseOrderItems} 
-          WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id}
-        ), 0)`,
-        outstandingCount: sql<number>`COALESCE((
-          SELECT COUNT(*) 
-          FROM ${purchaseOrderItems} 
-          WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id}
-          AND (${purchaseOrderItems.outstandingQuantity} > 0 OR ${purchaseOrderItems.outstandingStatus} != 'completed')
-        ), 0)`,
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .orderBy(desc(purchaseOrders.orderDate));
+
+    // Add item counts separately to avoid complex SQL
+    const result = await Promise.all(
+      purchaseOrdersWithSupplier.map(async (po) => {
+        const itemCountResult = await db
+          .select({ count: count() })
+          .from(purchaseOrderItems)
+          .where(eq(purchaseOrderItems.purchaseOrderId, po.id));
+
+        const outstandingResult = await db
+          .select({ count: count() })
+          .from(purchaseOrderItems)
+          .where(
+            and(
+              eq(purchaseOrderItems.purchaseOrderId, po.id),
+              or(
+                isNotNull(purchaseOrderItems.outstandingQuantity),
+                eq(purchaseOrderItems.outstandingStatus, 'pending')
+              )
+            )
+          );
+
+        return {
+          ...po,
+          itemCount: itemCountResult[0]?.count || 0,
+          outstandingCount: outstandingResult[0]?.count || 0,
+        };
+      })
+    );
+
+    return result;
   }
 
   async getPurchaseOrderById(id: string): Promise<PurchaseOrder | undefined> {
