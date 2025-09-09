@@ -928,6 +928,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Special endpoint for handling refunded goods that arrived
+  app.post('/api/purchase-orders/:poId/receive-refunded-item', isAuthenticated, async (req: any, res) => {
+    try {
+      const { poId } = req.params;
+      const { itemId, quantityReceived, unitCost, reason } = req.body;
+      const userId = req.session.user.id;
+
+      // Get the item details and current PO
+      const poItems = await storage.getPurchaseOrderItems(poId);
+      const poItem = poItems.find(item => item.id === itemId);
+      if (!poItem) {
+        return res.status(404).json({ message: "PO item not found" });
+      }
+
+      // Create inventory adjustment for the refunded goods
+      const adjustmentNumber = `ADJ-REF-${Date.now()}`;
+      const adjustment = await storage.createInventoryAdjustment({
+        adjustmentNumber,
+        type: 'increase',
+        reason: `Refunded goods received - ${reason || 'Previously refunded item arrived'}`,
+        status: 'approved', // Auto-approve since it's from receiving
+        createdBy: userId,
+        approvedBy: userId,
+        approvedDate: new Date(),
+        notes: `Adjustment for refunded item from PO: ${poId}, Item: ${poItem.productName}`,
+      });
+
+      // Create adjustment item
+      await storage.createInventoryAdjustmentItem({
+        adjustmentId: adjustment.id,
+        productId: poItem.productId,
+        systemQuantity: 0, // Since it was refunded, system shows 0
+        actualQuantity: quantityReceived,
+        adjustmentQuantity: quantityReceived,
+        unitCost: unitCost || poItem.unitPrice,
+        totalCostImpact: (quantityReceived * parseFloat(unitCost || poItem.unitPrice)).toString(),
+        notes: `Refunded goods received: ${quantityReceived} units`,
+      });
+
+      // Update product stock - we'll create a stock movement instead
+      // The stock will be updated through the stock movement
+
+      // Create stock movement
+      await storage.createStockMovement({
+        productId: poItem.productId,
+        movementType: 'in',
+        quantity: quantityReceived,
+        unitCost: unitCost || poItem.unitPrice,
+        referenceId: adjustment.id,
+        referenceType: 'adjustment',
+        reason: 'refunded-goods-received',
+        notes: `Refunded goods received from PO: ${poId}`,
+        userId
+      });
+
+      // Create journal entry for the inventory adjustment
+      const totalValue = quantityReceived * (unitCost || poItem.unitPrice);
+      await storage.createJournalEntry({
+        journalNumber: `JE-REF-${Date.now()}`,
+        date: new Date(),
+        description: `Inventory adjustment - Refunded goods received`,
+        reference: adjustment.id,
+        referenceType: 'inventory-adjustment',
+        totalAmount: totalValue,
+        userId,
+        lines: [
+          {
+            accountCode: '1300', // Inventory account
+            description: `Inventory increase - ${poItem.productName}`,
+            debitAmount: totalValue,
+            creditAmount: 0
+          },
+          {
+            accountCode: '5200', // Cost adjustment account
+            description: `Cost adjustment - Refunded goods`,
+            debitAmount: 0,
+            creditAmount: totalValue
+          }
+        ]
+      });
+
+      // Note: PO item status will be updated when the adjustment is processed
+      // We don't need to update it here since this is a special case
+
+      res.json({ 
+        message: "Refunded goods successfully processed",
+        adjustment,
+        totalValue,
+        quantityReceived
+      });
+    } catch (error) {
+      console.error("Error processing refunded goods:", error);
+      res.status(500).json({ message: "Failed to process refunded goods" });
+    }
+  });
+
   // Customer routes
   app.get('/api/customers', isAuthenticated, async (req, res) => {
     try {
