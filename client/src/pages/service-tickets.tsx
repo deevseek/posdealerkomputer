@@ -217,7 +217,7 @@ export default function ServiceTickets() {
       // Auto-open print receipt popup setelah tiket berhasil dibuat
       if (createdTicket) {
         setTimeout(() => {
-          setReceiptData(createdTicket);
+          setReceiptData(createdTicket as any);
           setShowReceipt(true);
         }, 500); // Delay sedikit untuk UX yang lebih baik
       }
@@ -993,21 +993,38 @@ export default function ServiceTickets() {
           </DialogHeader>
           {receiptData && (
             <ServiceReceiptNew
-              serviceTicket={receiptData}
-              customer={customers.find((c: Customer) => c.id === receiptData.customerId) || {
-                id: receiptData.customerId,
-                name: 'Customer',
-                phone: '',
-                email: '',
-                address: ''
+              serviceTicket={{
+                ...receiptData,
+                deviceBrand: receiptData.deviceBrand || undefined,
+                deviceModel: receiptData.deviceModel || undefined,
+                serialNumber: receiptData.serialNumber || undefined,
+                completeness: receiptData.completeness || undefined,
+                diagnosis: receiptData.diagnosis || undefined,
+                solution: receiptData.solution || undefined,
+                estimatedCost: receiptData.estimatedCost || undefined
               }}
+              customer={(() => {
+                const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === receiptData.customerId);
+                return foundCustomer ? {
+                  ...foundCustomer,
+                  phone: foundCustomer.phone || undefined,
+                  email: foundCustomer.email || undefined,
+                  address: foundCustomer.address || undefined
+                } : {
+                  id: receiptData.customerId,
+                  name: 'Customer',
+                  phone: undefined,
+                  email: undefined,
+                  address: undefined
+                };
+              })()}
               storeConfig={storeConfig || {
                 name: 'LaptopPOS Service',
                 address: 'Alamat Toko',
                 phone: '0123456789',
                 email: 'info@laptoppos.com'
               }}
-              technician={receiptData.technicianId ? users.find((u: any) => u.id === receiptData.technicianId) : null}
+              technician={receiptData.technicianId ? (users as any[])?.find((u: any) => u.id === receiptData.technicianId) : null}
             />
           )}
         </DialogContent>
@@ -1018,21 +1035,38 @@ export default function ServiceTickets() {
         <ServicePaymentReceipt
           open={showPaymentReceipt}
           onClose={() => setShowPaymentReceipt(false)}
-          serviceTicket={paymentReceiptData}
-          customer={customers.find((c: Customer) => c.id === paymentReceiptData.customerId) || {
-            id: paymentReceiptData.customerId,
-            name: 'Customer',
-            phone: '',
-            email: '',
-            address: ''
+          serviceTicket={{
+            ...paymentReceiptData,
+            deviceBrand: paymentReceiptData.deviceBrand || undefined,
+            deviceModel: paymentReceiptData.deviceModel || undefined,
+            serialNumber: paymentReceiptData.serialNumber || undefined,
+            diagnosis: paymentReceiptData.diagnosis || undefined,
+            solution: paymentReceiptData.solution || undefined,
+            actualCost: paymentReceiptData.actualCost || undefined,
+            partsCost: paymentReceiptData.partsCost || undefined
           }}
+          customer={(() => {
+            const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === paymentReceiptData.customerId);
+            return foundCustomer ? {
+              ...foundCustomer,
+              phone: foundCustomer.phone || undefined,
+              email: foundCustomer.email || undefined,
+              address: foundCustomer.address || undefined
+            } : {
+              id: paymentReceiptData.customerId,
+              name: 'Customer',
+              phone: undefined,
+              email: undefined,
+              address: undefined
+            };
+          })()}
           storeConfig={storeConfig || {
             name: 'LaptopPOS Service',
             address: 'Alamat Toko',
             phone: '0123456789',
             email: 'info@laptoppos.com'
           }}
-          technician={paymentReceiptData.technicianId ? users.find((u: any) => u.id === paymentReceiptData.technicianId) : null}
+          technician={paymentReceiptData.technicianId ? (users as any[])?.find((u: any) => u.id === paymentReceiptData.technicianId) : null}
         />
       )}
 
@@ -1042,7 +1076,7 @@ export default function ServiceTickets() {
           isOpen={showStatusTracker}
           onClose={() => setShowStatusTracker(false)}
           serviceNumber={statusTrackerData.ticketNumber}
-          currentStatus={statusTrackerData.status}
+          currentStatus={statusTrackerData.status || 'pending'}
         />
       )}
 

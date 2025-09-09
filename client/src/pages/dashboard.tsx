@@ -20,7 +20,7 @@ export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
   const queryClient = useQueryClient();
-  const { socket, isConnected } = useWebSocket();
+  const { isConnected } = useWebSocket();
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -77,40 +77,13 @@ export default function Dashboard() {
     return () => window.removeEventListener('click', handleActivity);
   }, [queryClient]);
 
-  // WebSocket listeners untuk real-time updates - lebih comprehensive
+  // WebSocket connection for real-time updates
   useEffect(() => {
-    if (!socket || !isConnected) return;
-
-    const handleDataUpdate = (data: any) => {
-      console.log('Dashboard real-time update:', data);
-      // Comprehensive refresh untuk dashboard real-time
-      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/recent-transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/low-stock-products'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders/outstanding-items'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/service-tickets'] });
-    };
-
-    // Listen untuk lebih banyak event
-    socket.on('data_update', handleDataUpdate);
-    socket.on('transaction_updated', handleDataUpdate);
-    socket.on('stock_updated', handleDataUpdate);
-    socket.on('purchase_updated', handleDataUpdate);
-    socket.on('purchase_order_updated', handleDataUpdate);
-    socket.on('service_updated', handleDataUpdate);
-    socket.on('inventory', handleDataUpdate);
-
-    return () => {
-      socket.off('data_update', handleDataUpdate);
-      socket.off('transaction_updated', handleDataUpdate);
-      socket.off('stock_updated', handleDataUpdate);
-      socket.off('purchase_updated', handleDataUpdate);
-      socket.off('purchase_order_updated', handleDataUpdate);
-      socket.off('service_updated', handleDataUpdate);
-      socket.off('inventory', handleDataUpdate);
-    };
-  }, [socket, isConnected, queryClient]);
+    if (isConnected) {
+      // WebSocket is connected, real-time updates will be handled by the WebSocket manager
+      console.log('Dashboard: WebSocket connected for real-time updates');
+    }
+  }, [isConnected]);
 
   // Auto-refresh saat visibility change - lebih comprehensive
   useEffect(() => {
@@ -153,7 +126,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
               title="Penjualan Hari Ini"
-              value={statsLoading ? "Memuat..." : `Rp ${Number(stats?.todaySales || 0).toLocaleString('id-ID')}`}
+              value={statsLoading ? "Memuat..." : `Rp ${Number((stats as any)?.todaySales || 0).toLocaleString('id-ID')}`}
               change="+12% dari kemarin"
               icon="money-bill-wave"
               color="primary"
@@ -161,7 +134,7 @@ export default function Dashboard() {
             />
             <StatCard
               title="Service Aktif"
-              value={statsLoading ? "Memuat..." : stats?.activeServices?.toString() || "0"}
+              value={statsLoading ? "Memuat..." : (stats as any)?.activeServices?.toString() || "0"}
               change="5 mendesak"
               icon="tools"
               color="accent"
@@ -169,7 +142,7 @@ export default function Dashboard() {
             />
             <StatCard
               title="Stok Menipis"
-              value={statsLoading ? "Memuat..." : stats?.lowStockCount?.toString() || "0"}
+              value={statsLoading ? "Memuat..." : (stats as any)?.lowStockCount?.toString() || "0"}
               change="Perlu perhatian"
               icon="exclamation-triangle"
               color="destructive"
@@ -177,7 +150,7 @@ export default function Dashboard() {
             />
             <StatCard
               title="Profit Bulanan"
-              value={statsLoading ? "Memuat..." : `Rp ${Number(stats?.monthlyProfit || 0).toLocaleString('id-ID')}`}
+              value={statsLoading ? "Memuat..." : `Rp ${Number((stats as any)?.monthlyProfit || 0).toLocaleString('id-ID')}`}
               change="+8% bulan ini"
               icon="chart-line"
               color="accent"
@@ -189,10 +162,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatCard
               title="Status WhatsApp"
-              value={statsLoading ? "Memuat..." : (stats?.whatsappConnected ? "🟢 Terhubung" : "🔴 Terputus")}
-              change={stats?.whatsappConnected ? "Siap mengirim" : "Perlu koneksi"}
+              value={statsLoading ? "Memuat..." : ((stats as any)?.whatsappConnected ? "🟢 Terhubung" : "🔴 Terputus")}
+              change={(stats as any)?.whatsappConnected ? "Siap mengirim" : "Perlu koneksi"}
               icon="message-circle"
-              color={stats?.whatsappConnected ? "primary" : "destructive"}
+              color={(stats as any)?.whatsappConnected ? "primary" : "destructive"}
               data-testid="stat-whatsapp-status"
             />
           </div>
