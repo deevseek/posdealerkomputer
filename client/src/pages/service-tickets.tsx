@@ -1003,7 +1003,8 @@ export default function ServiceTickets() {
                 solution: receiptData.solution || undefined,
                 estimatedCost: receiptData.estimatedCost || undefined,
                 status: receiptData.status || 'pending',
-                technicianId: receiptData.technicianId || undefined
+                technicianId: receiptData.technicianId || undefined,
+                createdAt: receiptData.createdAt ? new Date(receiptData.createdAt).toISOString() : new Date().toISOString()
               }}
               customer={(() => {
                 const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === receiptData.customerId);
@@ -1047,7 +1048,9 @@ export default function ServiceTickets() {
             actualCost: paymentReceiptData.actualCost || undefined,
             partsCost: paymentReceiptData.partsCost || undefined,
             laborCost: paymentReceiptData.laborCost || undefined,
-            status: paymentReceiptData.status || 'pending'
+            status: paymentReceiptData.status || 'pending',
+            createdAt: paymentReceiptData.createdAt ? new Date(paymentReceiptData.createdAt).toISOString() : new Date().toISOString(),
+            completedAt: paymentReceiptData.completedAt ? new Date(paymentReceiptData.completedAt).toISOString() : undefined
           }}
           customer={(() => {
             const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === paymentReceiptData.customerId);
