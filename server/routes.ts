@@ -852,6 +852,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Outstanding item management
+  app.post('/api/purchase-orders/items/:itemId/outstanding-status', isAuthenticated, async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      const { status, reason } = req.body;
+      const userId = req.session.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      await storage.updateOutstandingItemStatus(itemId, status, reason, userId);
+      res.json({ message: "Outstanding status updated successfully" });
+    } catch (error) {
+      console.error("Error updating outstanding status:", error);
+      res.status(500).json({ message: "Failed to update outstanding status", error: (error as Error).message });
+    }
+  });
+
   // Product Batch routes
   app.get('/api/product-batches', isAuthenticated, async (req, res) => {
     try {

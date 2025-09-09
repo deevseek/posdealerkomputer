@@ -662,6 +662,30 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  // Update outstanding status for purchase order item
+  async updateOutstandingItemStatus(itemId: string, status: string, reason?: string, userId?: string): Promise<void> {
+    const [item] = await db
+      .select({ outstandingQuantity: purchaseOrderItems.outstandingQuantity })
+      .from(purchaseOrderItems)
+      .where(eq(purchaseOrderItems.id, itemId));
+
+    if (!item) throw new Error("Purchase order item not found");
+    if (!item.outstandingQuantity || item.outstandingQuantity <= 0) {
+      throw new Error("No outstanding quantity to update");
+    }
+
+    await db
+      .update(purchaseOrderItems)
+      .set({
+        outstandingStatus: status,
+        outstandingReason: reason,
+        outstandingUpdatedBy: userId,
+        outstandingUpdatedAt: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(purchaseOrderItems.id, itemId));
+  }
+
   async receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void> {
     // SIMPLIFIED: Get item details with select all - no complex field selection
     const [item] = await db
@@ -672,12 +696,16 @@ export class DatabaseStorage implements IStorage {
     if (!item) throw new Error("Purchase order item not found");
 
     const newReceivedQuantity = (item.receivedQuantity || 0) + receivedQuantity;
+    const newOutstandingQuantity = item.quantity - newReceivedQuantity;
     
-    // Update received quantity
+    // Update received quantity and outstanding tracking
     await db
       .update(purchaseOrderItems)
       .set({ 
         receivedQuantity: newReceivedQuantity,
+        outstandingQuantity: newOutstandingQuantity,
+        // Keep outstanding status as pending if there's still remaining quantity
+        outstandingStatus: newOutstandingQuantity > 0 ? 'pending' : 'completed',
         updatedAt: new Date()
       })
       .where(eq(purchaseOrderItems.id, itemId));
