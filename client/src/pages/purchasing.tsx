@@ -110,54 +110,126 @@ export default function PurchasingPage() {
   // Data untuk outstanding items dari PO terpilih saja (untuk dialog detail PO)
   const selectedPOOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
   
-  // Auto-refresh data saat page focus kembali
+  // Auto-refresh data saat page focus kembali - lebih agresif
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // Refresh data saat user kembali ke tab ini
+        // Comprehensive refresh saat user kembali ke tab
         queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
         queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
         queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
+        
+        // Refresh selected PO items jika ada
+        if (selectedPO?.id) {
+          queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders", selectedPO.id, "items"] });
+        }
       }
     };
     
+    const handleFocus = () => {
+      // Refresh saat window mendapat focus
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+    };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [queryClient, selectedPO?.id]);
   
-  // WebSocket event listeners untuk real-time updates
+  // WebSocket event listeners untuk real-time updates - lebih responsif
   useEffect(() => {
     if (!socket || !isConnected) return;
 
     const handlePurchaseUpdate = (data: any) => {
-      console.log('Purchase update received:', data);
-      // Invalidate relevant queries saat ada update dari WebSocket
+      console.log('Real-time update received:', data);
+      // Invalidate semua queries terkait untuk update instan
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
       queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/suppliers"] });
+      
+      // Refresh selected PO items jika ada
+      if (selectedPO?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders", selectedPO.id, "items"] });
+      }
     };
 
+    const handleInventoryUpdate = (data: any) => {
+      console.log('Inventory update received:', data);
+      // Update inventory dan stock data
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+    };
+
+    // Listen untuk berbagai event real-time
+    socket.on('data_update', handlePurchaseUpdate);
     socket.on('purchase_updated', handlePurchaseUpdate);
     socket.on('purchase_order_updated', handlePurchaseUpdate);
-    socket.on('stock_updated', handlePurchaseUpdate);
+    socket.on('purchase_orders', handlePurchaseUpdate);
+    socket.on('purchase_order_items', handlePurchaseUpdate);
+    socket.on('stock_updated', handleInventoryUpdate);
+    socket.on('inventory', handleInventoryUpdate);
 
     return () => {
+      socket.off('data_update', handlePurchaseUpdate);
       socket.off('purchase_updated', handlePurchaseUpdate);
       socket.off('purchase_order_updated', handlePurchaseUpdate);
-      socket.off('stock_updated', handlePurchaseUpdate);
+      socket.off('purchase_orders', handlePurchaseUpdate);
+      socket.off('purchase_order_items', handlePurchaseUpdate);
+      socket.off('stock_updated', handleInventoryUpdate);
+      socket.off('inventory', handleInventoryUpdate);
     };
-  }, [socket, isConnected, queryClient]);
+  }, [socket, isConnected, queryClient, selectedPO?.id]);
   
-  // Auto-refresh setiap 30 detik untuk data terbaru
+  // Auto-refresh setiap 5 detik untuk data terbaru yang instan
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!document.hidden && selectedTab === "orders") {
-        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+      if (!document.hidden) {
+        // Refresh data berdasarkan tab aktif
+        if (selectedTab === "orders") {
+          queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+        }
+        // Selalu refresh products untuk update stock
+        queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       }
-    }, 30000); // 30 detik
+    }, 5000); // 5 detik untuk responsivitas yang lebih baik
     
     return () => clearInterval(interval);
   }, [selectedTab, queryClient]);
+  
+  // Auto-refresh saat user berinteraksi (mouse move, click, keyboard)
+  useEffect(() => {
+    let lastActivity = Date.now();
+    const refreshOnActivity = () => {
+      const now = Date.now();
+      // Refresh jika tidak ada aktivitas dalam 2 detik terakhir (debouncing)
+      if (now - lastActivity > 2000) {
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/purchase-orders/outstanding-items"] });
+        lastActivity = now;
+      }
+    };
+    
+    const handleActivity = () => {
+      lastActivity = Date.now();
+      setTimeout(refreshOnActivity, 2000);
+    };
+    
+    window.addEventListener('click', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    
+    return () => {
+      window.removeEventListener('click', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+    };
+  }, [queryClient]);
 
   // Mutations
   const createPOMutation = useMutation({
