@@ -8,16 +8,19 @@ import RecentTransactions from "@/components/dashboard/recent-transactions";
 import QuickActions from "@/components/dashboard/quick-actions";
 import ServiceStatus from "@/components/dashboard/service-status";
 import InventoryAlerts from "@/components/dashboard/inventory-alerts";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Building2, Users, DollarSign, BarChart3 } from "lucide-react";
+import { useWebSocket } from "@/lib/websocket";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading } = useAuth();
+  const queryClient = useQueryClient();
+  const { socket, isConnected } = useWebSocket();
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -38,6 +41,103 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/stats"],
     retry: false,
   });
+
+  // Auto-refresh data setiap 5 detik untuk dashboard real-time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/recent-transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/low-stock-products'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders/outstanding-items'] });
+      }
+    }, 5000); // 5 detik untuk update yang lebih instan
+    
+    return () => clearInterval(interval);
+  }, [queryClient]);
+  
+  // Refresh saat user berinteraksi
+  useEffect(() => {
+    let lastActivity = Date.now();
+    const refreshOnActivity = () => {
+      const now = Date.now();
+      if (now - lastActivity > 3000) {
+        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+        lastActivity = now;
+      }
+    };
+    
+    const handleActivity = () => {
+      lastActivity = Date.now();
+      setTimeout(refreshOnActivity, 3000);
+    };
+    
+    window.addEventListener('click', handleActivity);
+    return () => window.removeEventListener('click', handleActivity);
+  }, [queryClient]);
+
+  // WebSocket listeners untuk real-time updates - lebih comprehensive
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleDataUpdate = (data: any) => {
+      console.log('Dashboard real-time update:', data);
+      // Comprehensive refresh untuk dashboard real-time
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/recent-transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/low-stock-products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders/outstanding-items'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/service-tickets'] });
+    };
+
+    // Listen untuk lebih banyak event
+    socket.on('data_update', handleDataUpdate);
+    socket.on('transaction_updated', handleDataUpdate);
+    socket.on('stock_updated', handleDataUpdate);
+    socket.on('purchase_updated', handleDataUpdate);
+    socket.on('purchase_order_updated', handleDataUpdate);
+    socket.on('service_updated', handleDataUpdate);
+    socket.on('inventory', handleDataUpdate);
+
+    return () => {
+      socket.off('data_update', handleDataUpdate);
+      socket.off('transaction_updated', handleDataUpdate);
+      socket.off('stock_updated', handleDataUpdate);
+      socket.off('purchase_updated', handleDataUpdate);
+      socket.off('purchase_order_updated', handleDataUpdate);
+      socket.off('service_updated', handleDataUpdate);
+      socket.off('inventory', handleDataUpdate);
+    };
+  }, [socket, isConnected, queryClient]);
+
+  // Auto-refresh saat visibility change - lebih comprehensive
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Full dashboard refresh saat kembali ke tab
+        queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/recent-transactions'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/low-stock-products'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/products'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/service-tickets'] });
+      }
+    };
+    
+    const handleFocus = () => {
+      // Refresh stats saat window focus
+      queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [queryClient]);
 
   if (isLoading || !isAuthenticated) {
     return <div>Memuat...</div>;
