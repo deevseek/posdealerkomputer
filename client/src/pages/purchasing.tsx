@@ -94,8 +94,8 @@ export default function PurchasingPage() {
     enabled: !!selectedPO?.id,
   });
 
-  // Query untuk semua outstanding items dari semua PO untuk laporan
-  const allOutstandingItems = [];
+  // Data untuk outstanding items (gunakan selectedPOItems untuk sementara)
+  const allOutstandingItems = selectedPOItems?.filter((item: any) => (item.outstandingQuantity || 0) > 0) || [];
 
   // Mutations
   const createPOMutation = useMutation({
