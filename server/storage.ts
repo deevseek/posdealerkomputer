@@ -521,11 +521,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Purchase Orders
-  async getPurchaseOrders(): Promise<(PurchaseOrder & { supplierName: string })[]> {
+  async getPurchaseOrders(): Promise<(PurchaseOrder & { supplierName: string; itemCount: number; outstandingCount: number })[]> {
     return await db
       .select({
         ...purchaseOrders,
         supplierName: suppliers.name,
+        // Add item count and outstanding count for inventory display
+        itemCount: sql<number>`COALESCE((
+          SELECT COUNT(*) 
+          FROM ${purchaseOrderItems} 
+          WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id}
+        ), 0)`,
+        outstandingCount: sql<number>`COALESCE((
+          SELECT COUNT(*) 
+          FROM ${purchaseOrderItems} 
+          WHERE ${purchaseOrderItems.purchaseOrderId} = ${purchaseOrders.id}
+          AND (${purchaseOrderItems.outstandingQuantity} > 0 OR ${purchaseOrderItems.outstandingStatus} != 'completed')
+        ), 0)`,
       })
       .from(purchaseOrders)
       .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))

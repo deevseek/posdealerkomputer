@@ -977,7 +977,14 @@ export default function Inventory() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              {po.itemCount || 0} items
+                              <div className="space-y-1">
+                                <div className="font-medium">{po.itemCount || 0} items</div>
+                                {po.outstandingCount > 0 && (
+                                  <div className="text-xs text-orange-600">
+                                    {po.outstandingCount} outstanding
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="text-right">
                               Rp {Number(po.totalAmount || 0).toLocaleString('id-ID')}
