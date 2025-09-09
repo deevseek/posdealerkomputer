@@ -798,6 +798,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get ALL outstanding items from ALL purchase orders (for reports)
+  app.get('/api/purchase-orders/outstanding-items', isAuthenticated, async (req, res) => {
+    try {
+      const outstandingItems = await storage.getAllOutstandingItems();
+      res.json(outstandingItems);
+    } catch (error) {
+      console.error("Error fetching outstanding items:", error);
+      res.status(500).json({ message: "Failed to fetch outstanding items" });
+    }
+  });
+
   app.post('/api/purchase-orders/:id/items', isAuthenticated, async (req, res) => {
     try {
       const quantity = parseInt(req.body.quantity) || 1;

@@ -94,8 +94,17 @@ export default function PurchasingPage() {
     enabled: !!selectedPO?.id,
   });
 
-  // Data untuk outstanding items - pastikan tidak undefined
-  const allOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
+  // Get ALL outstanding items from ALL purchase orders for reports
+  const { data: allOutstandingItemsData } = useQuery({
+    queryKey: ["/api/purchase-orders/outstanding-items"],
+    retry: false,
+  });
+  
+  // Data untuk outstanding items dari SEMUA PO (untuk laporan)
+  const allOutstandingItems = allOutstandingItemsData || [];
+  
+  // Data untuk outstanding items dari PO terpilih saja (untuk dialog detail PO)
+  const selectedPOOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
 
   // Mutations
   const createPOMutation = useMutation({

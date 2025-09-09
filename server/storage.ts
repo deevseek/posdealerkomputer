@@ -58,7 +58,7 @@ import {
   type InsertFinancialRecord,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, gt } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -125,6 +125,7 @@ export interface IStorage {
   
   // Purchase Order Items
   getPurchaseOrderItems(poId: string): Promise<(PurchaseOrderItem & { productName: string; productSku: string })[]>;
+  getAllOutstandingItems(): Promise<(PurchaseOrderItem & { productName: string; productSku: string; poNumber: string })[]>;
   createPurchaseOrderItem(item: InsertPurchaseOrderItem): Promise<PurchaseOrderItem>;
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
@@ -619,6 +620,25 @@ export class DatabaseStorage implements IStorage {
       .from(purchaseOrderItems)
       .leftJoin(products, eq(purchaseOrderItems.productId, products.id))
       .where(eq(purchaseOrderItems.purchaseOrderId, poId));
+  }
+
+  // Get ALL outstanding items from ALL purchase orders (for reports)
+  async getAllOutstandingItems(): Promise<(PurchaseOrderItem & { productName: string; productSku: string; poNumber: string })[]> {
+    return await db
+      .select({
+        ...purchaseOrderItems,
+        productName: products.name,
+        productSku: products.sku,
+        poNumber: purchaseOrders.poNumber,
+      })
+      .from(purchaseOrderItems)
+      .leftJoin(products, eq(purchaseOrderItems.productId, products.id))
+      .leftJoin(purchaseOrders, eq(purchaseOrderItems.purchaseOrderId, purchaseOrders.id))
+      .where(and(
+        isNotNull(purchaseOrderItems.outstandingQuantity),
+        gt(purchaseOrderItems.outstandingQuantity, 0)
+      ))
+      .orderBy(desc(purchaseOrders.orderDate));
   }
 
   async createPurchaseOrderItem(itemData: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
