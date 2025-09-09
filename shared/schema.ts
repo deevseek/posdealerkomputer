@@ -381,6 +381,13 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   orderedQuantity: integer("ordered_quantity"),
   receivedQuantity: integer("received_quantity").default(0),
   
+  // Outstanding quantity tracking - NEW FIELDS
+  outstandingQuantity: integer("outstanding_quantity").default(0), // quantity - receivedQuantity
+  outstandingStatus: varchar("outstanding_status").default('pending'), // 'pending', 'cancelled', 'refunded', 'backordered', 'partial_delivered'
+  outstandingReason: text("outstanding_reason"), // reason for status change
+  outstandingUpdatedBy: varchar("outstanding_updated_by").references(() => users.id),
+  outstandingUpdatedAt: timestamp("outstanding_updated_at"),
+  
   // Pricing - both naming conventions exist
   unitCost: varchar("unit_cost").notNull(),
   totalCost: varchar("total_cost"),
