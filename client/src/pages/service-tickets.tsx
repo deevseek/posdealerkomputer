@@ -222,8 +222,24 @@ export default function ServiceTickets() {
       
       // Auto-open print receipt popup dengan data lengkap
       if (createdTicket && selectedCustomer) {
-        // Set data langsung tanpa menunggu query update
-        setReceiptData(createdTicket as any);
+        // Ambil data form yang baru saja disubmit
+        const formData = form.getValues();
+        
+        // Gabungkan data dari form dengan response API untuk kelengkapan data
+        const completeTicketData = {
+          ...createdTicket,
+          deviceType: formData.deviceType || createdTicket.deviceType,
+          deviceBrand: formData.deviceBrand || createdTicket.deviceBrand,
+          deviceModel: formData.deviceModel || createdTicket.deviceModel,
+          serialNumber: formData.serialNumber || createdTicket.serialNumber,
+          completeness: formData.completeness || createdTicket.completeness,
+          problem: formData.problem || createdTicket.problem,
+          diagnosis: formData.diagnosis || createdTicket.diagnosis,
+          solution: formData.solution || createdTicket.solution
+        };
+        
+        // Set data lengkap langsung tanpa menunggu query update
+        setReceiptData(completeTicketData as any);
         setReceiptCustomerData(selectedCustomer);
         setShowReceipt(true);
       }
