@@ -1120,6 +1120,26 @@ export default function PurchasingPage() {
               <Button variant="outline" onClick={() => setReceivingPOOpen(false)}>
                 Cancel
               </Button>
+              
+              {/* Special button for refunded items */}
+              {selectedPOItems?.some((item: any) => item.outstandingStatus === 'refunded' && (item.outstandingQuantity || 0) > 0) && (
+                <Button 
+                  variant="secondary"
+                  onClick={() => {
+                    // Show adjustment modal for refunded items
+                    toast({
+                      title: "Adjustment Required",
+                      description: "Process refunded goods through Finance > Inventory Adjustment first",
+                      variant: "default"
+                    });
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Process Refunded Items
+                </Button>
+              )}
+              
               <Button 
                 onClick={() => {
                   const itemsToReceive = receivingItems.filter(item => item.quantity > 0);
