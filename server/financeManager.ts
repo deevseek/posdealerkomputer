@@ -607,8 +607,18 @@ export class FinanceManager {
     const totalInventoryValue = inventoryBreakdown.reduce((total, item) => total + Number(item.totalValue), 0);
     const totalInventoryCount = inventoryBreakdown.reduce((total, item) => total + (item.stock || 0), 0);
     
+    // Get total refunds separately for proper accounting
+    const [refundResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        sql`${financialRecords.type} = 'refund_recovery' OR ${financialRecords.category} = 'Returns and Allowances'`,
+        whereClause
+      ));
+    
     const totalIncome = Number(incomeResult.total || 0);
     const totalExpense = totalExpenseAmount;
+    const totalRefunds = Number(refundResult.total || 0);
 
     // Process category breakdown
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
@@ -670,7 +680,8 @@ export class FinanceManager {
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
-      netProfit: (totalIncome - totalExpense).toString(),
+      totalRefunds: totalRefunds.toString(), // Track refunds separately
+      netProfit: (totalIncome - totalExpense).toString(), // Profit excludes refunds
       transactionCount: countResult.count,
       inventoryValue: totalInventoryValue.toString(),
       inventoryCount: totalInventoryCount,

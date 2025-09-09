@@ -37,6 +37,7 @@ interface FinancialTransaction {
 interface FinancialSummary {
   totalIncome: string;
   totalExpense: string;
+  totalRefunds: string; // Track refunds separately from income
   netProfit: string;
   transactionCount: number;
   inventoryValue: string;
