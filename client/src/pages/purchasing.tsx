@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, ShoppingCart, Package, Truck, CheckCircle, Clock, AlertCircle, Eye, Edit, Trash2 } from "lucide-react";
+import { Plus, ShoppingCart, Package, Truck, CheckCircle, Clock, AlertCircle, Eye, Edit, Trash2, MoreHorizontal } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -26,6 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 // Schema for forms
 const purchaseOrderSchema = z.object({
@@ -201,6 +202,41 @@ export default function PurchasingPage() {
   const removeItemFromExistingPO = (itemId: string) => {
     if (!selectedPO) return;
     deleteItemMutation.mutate({ poId: selectedPO.id, itemId });
+  };
+
+  // Update outstanding status for purchase order item
+  const updateOutstandingStatus = async (itemId: string, status: string, reason: string) => {
+    try {
+      const response = await apiRequest("POST", `/api/purchase-orders/items/${itemId}/outstanding-status`, {
+        status,
+        reason
+      });
+      
+      if (response.ok) {
+        toast({ 
+          title: "Status berhasil diupdate",
+          description: `Status item berubah menjadi ${status}`,
+        });
+        
+        // Refresh the data
+        queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders'] });
+        
+        // Update local state
+        setSelectedPOItems(prev => 
+          prev?.map(item => 
+            item.id === itemId 
+              ? { ...item, outstandingStatus: status, outstandingReason: reason }
+              : item
+          )
+        );
+      }
+    } catch (error) {
+      toast({ 
+        title: "Gagal update status", 
+        description: "Silakan coba lagi",
+        variant: "destructive" 
+      });
+    }
   };
 
   const onSubmitItem = (data: any) => {
@@ -874,13 +910,29 @@ export default function PurchasingPage() {
                     <TableHead>Ordered Qty</TableHead>
                     <TableHead>Already Received</TableHead>
                     <TableHead>Receive Now</TableHead>
-                    <TableHead>Remaining</TableHead>
+                    <TableHead>Outstanding</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {selectedPOItems?.map((item: any) => {
                     const receivingQty = receivingItems.find(r => r.itemId === item.id)?.quantity || 0;
                     const remaining = item.quantity - (item.receivedQuantity || 0) - receivingQty;
+                    const outstandingQty = item.outstandingQuantity || (item.quantity - (item.receivedQuantity || 0));
+                    const outstandingStatus = item.outstandingStatus || 'pending';
+                    
+                    const getStatusColor = (status: string) => {
+                      switch (status) {
+                        case 'pending': return 'text-yellow-600 bg-yellow-100';
+                        case 'cancelled': return 'text-red-600 bg-red-100';
+                        case 'refunded': return 'text-blue-600 bg-blue-100';
+                        case 'backordered': return 'text-orange-600 bg-orange-100';
+                        case 'completed': return 'text-green-600 bg-green-100';
+                        default: return 'text-gray-600 bg-gray-100';
+                      }
+                    };
+                    
                     return (
                       <TableRow key={item.id}>
                         <TableCell>{(item as any).productName || item.productId}</TableCell>
@@ -908,7 +960,44 @@ export default function PurchasingPage() {
                             className="w-20"
                           />
                         </TableCell>
-                        <TableCell>{remaining}</TableCell>
+                        <TableCell className="font-medium">
+                          {outstandingQty > 0 ? outstandingQty : '-'}
+                        </TableCell>
+                        <TableCell>
+                          {outstandingQty > 0 ? (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(outstandingStatus)}`}>
+                              {outstandingStatus === 'pending' ? 'Menunggu' : 
+                               outstandingStatus === 'cancelled' ? 'Dibatalkan' :
+                               outstandingStatus === 'refunded' ? 'Dikembalikan' :
+                               outstandingStatus === 'backordered' ? 'Backorder' :
+                               outstandingStatus === 'completed' ? 'Selesai' : outstandingStatus}
+                            </span>
+                          ) : (
+                            <span className="text-green-600 text-xs">Lengkap</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {outstandingQty > 0 && outstandingStatus === 'pending' ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => updateOutstandingStatus(item.id, 'cancelled', 'Cancelled by user')}>
+                                  Batalkan
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => updateOutstandingStatus(item.id, 'refunded', 'Refunded by supplier')}>
+                                  Refund
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => updateOutstandingStatus(item.id, 'backordered', 'Backordered - delayed delivery')}>
+                                  Backorder
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : '-'}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
