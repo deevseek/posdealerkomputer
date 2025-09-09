@@ -739,7 +739,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void> {
-    // SIMPLIFIED: Get item details with select all - no complex field selection
+    // Get item details with select all - no complex field selection
     const [item] = await db
       .select()
       .from(purchaseOrderItems)
@@ -756,21 +756,25 @@ export class DatabaseStorage implements IStorage {
       .set({ 
         receivedQuantity: newReceivedQuantity,
         outstandingQuantity: newOutstandingQuantity,
-        // Keep outstanding status as pending if there's still remaining quantity
-        outstandingStatus: newOutstandingQuantity > 0 ? 'pending' : 'completed',
+        // Clear outstanding status when fully received or keep as completed for refunded items
+        outstandingStatus: newOutstandingQuantity > 0 ? (item.outstandingStatus || 'pending') : 'completed',
         updatedAt: new Date()
       })
       .where(eq(purchaseOrderItems.id, itemId));
 
-    // Record stock movement with actual purchase price
+    // Record stock movement with actual purchase price - different for refunded items
+    const movementNotes = item.outstandingStatus === 'refunded' 
+      ? `Refunded goods received from PO` 
+      : `Received from PO`;
+      
     await db.insert(stockMovements).values({
       productId: item.productId,
       movementType: 'in',
       quantity: receivedQuantity,
       unitCost: item.unitCost || item.unitPrice, // Try both field names for HPP calculation
       referenceId: item.purchaseOrderId,
-      referenceType: 'purchase',
-      notes: `Received from PO`,
+      referenceType: item.outstandingStatus === 'refunded' ? 'purchase_refund' : 'purchase',
+      notes: movementNotes,
       userId: userId,
     });
 
@@ -781,34 +785,65 @@ export class DatabaseStorage implements IStorage {
         const { FinanceManager } = await import('./financeManager');
         const financeManager = new FinanceManager();
         
-        // Create journal entry for inventory purchase
-        await financeManager.createJournalEntry({
-          description: `Inventory purchase - ${receivedQuantity} units received`,
-          reference: item.purchaseOrderId,
-          referenceType: 'purchase_order',
-          lines: [
-            {
-              accountCode: '1300', // Inventory asset account
-              description: `Inventory increase - Purchase`,
-              debitAmount: totalCost.toString()
-            },
-            {
-              accountCode: '2000', // Accounts Payable (or could be cash if paid immediately)
-              description: `Purchase liability - PO payment due`,
-              creditAmount: totalCost.toString()
-            }
-          ],
-          userId: userId
-        });
+        // Create different journal entries for refunded vs normal items
+        if (item.outstandingStatus === 'refunded') {
+          // For refunded items: Debit Inventory, Credit Refund Recovery
+          await financeManager.createJournalEntry({
+            description: `Refund recovery - ${receivedQuantity} units received`,
+            reference: item.purchaseOrderId,
+            referenceType: 'purchase_refund',
+            lines: [
+              {
+                accountCode: '1300', // Inventory asset account
+                description: `Inventory increase - Refund Recovery`,
+                debitAmount: totalCost.toString()
+              },
+              {
+                accountCode: '1200', // Accounts Receivable or Refund Recovery
+                description: `Refund recovery - Supplier returned goods`,
+                creditAmount: totalCost.toString()
+              }
+            ],
+            userId: userId
+          });
+        } else {
+          // Normal purchase: Debit Inventory, Credit Accounts Payable
+          await financeManager.createJournalEntry({
+            description: `Inventory purchase - ${receivedQuantity} units received`,
+            reference: item.purchaseOrderId,
+            referenceType: 'purchase_order',
+            lines: [
+              {
+                accountCode: '1300', // Inventory asset account
+                description: `Inventory increase - Purchase`,
+                debitAmount: totalCost.toString()
+              },
+              {
+                accountCode: '2000', // Accounts Payable (or could be cash if paid immediately)
+                description: `Purchase liability - PO payment due`,
+                creditAmount: totalCost.toString()
+              }
+            ],
+            userId: userId
+          });
+        }
 
         // Also create the simple financial record for backward compatibility
+        const recordType = item.outstandingStatus === 'refunded' ? 'income' : 'expense';
+        const recordDescription = item.outstandingStatus === 'refunded' 
+          ? `Refund Recovery: ${receivedQuantity} units received`
+          : `Purchase: ${receivedQuantity} units received`;
+        const recordCategory = item.outstandingStatus === 'refunded' 
+          ? 'Refund Recovery'
+          : 'Inventory Purchase';
+          
         await db.insert(financialRecords).values({
-          type: 'expense',
+          type: recordType,
           amount: totalCost.toString(),
-          description: `Purchase: ${receivedQuantity} units received`,
-          category: 'Inventory Purchase',
+          description: recordDescription,
+          category: recordCategory,
           reference: item.purchaseOrderId,
-          referenceType: 'purchase_order',
+          referenceType: item.outstandingStatus === 'refunded' ? 'purchase_refund' : 'purchase_order',
           userId: userId,
         });
       } catch (error) {

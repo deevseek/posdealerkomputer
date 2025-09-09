@@ -1197,14 +1197,30 @@ export default function PurchasingPage() {
                 <Button 
                   variant="secondary"
                   onClick={() => {
-                    // Show adjustment modal for refunded items
-                    toast({
-                      title: "Adjustment Required",
-                      description: "Process refunded goods through Finance > Inventory Adjustment first",
-                      variant: "default"
-                    });
+                    // Process refunded items directly
+                    const refundedItems = selectedPOItems?.filter((item: any) => 
+                      item.outstandingStatus === 'refunded' && (item.outstandingQuantity || 0) > 0
+                    ) || [];
+                    
+                    if (refundedItems.length > 0) {
+                      // Set refunded items to receivingItems with their outstanding quantity
+                      const refundedReceivingItems = refundedItems.map((item: any) => ({
+                        itemId: item.id,
+                        productName: item.productName,
+                        quantity: item.outstandingQuantity || 0,
+                        outstandingQuantity: item.outstandingQuantity || 0
+                      }));
+                      
+                      setReceivingItems(refundedReceivingItems);
+                      
+                      toast({
+                        title: "Refunded Items Ready",
+                        description: `${refundedItems.length} refunded items siap diproses. Klik 'Receive Items' untuk menyelesaikan.`,
+                        variant: "default"
+                      });
+                    }
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
                 >
                   <Package className="h-4 w-4 mr-2" />
                   Process Refunded Items
