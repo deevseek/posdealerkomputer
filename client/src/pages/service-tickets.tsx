@@ -129,6 +129,7 @@ export default function ServiceTickets() {
   const [selectedParts, setSelectedParts] = useState<ServicePart[]>([]);
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState<ServiceTicket | null>(null);
+  const [receiptCustomerData, setReceiptCustomerData] = useState<Customer | null>(null);
   const [showPaymentReceipt, setShowPaymentReceipt] = useState(false);
   const [paymentReceiptData, setPaymentReceiptData] = useState<ServiceTicket | null>(null);
   const [showStatusTracker, setShowStatusTracker] = useState(false);
@@ -191,11 +192,16 @@ export default function ServiceTickets() {
       };
       return apiRequest('POST', '/api/service-tickets', ticketData);
     },
-    onSuccess: (createdTicket) => {
+    onSuccess: (createdTicket, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       setShowDialog(false);
       setEditingTicket(null);
       setSelectedParts([]);
+      
+      // Ambil data customer dari form saat ini
+      const selectedCustomerId = variables.customerId;
+      const selectedCustomer = (customers as Customer[])?.find(c => c.id === selectedCustomerId);
+      
       form.reset({
         customerId: "",
         deviceType: "",
@@ -214,27 +220,12 @@ export default function ServiceTickets() {
       // Show success toast
       toast({ title: "Sukses", description: "Tiket servis berhasil dibuat" });
       
-      // Auto-open print receipt popup setelah tiket berhasil dibuat
-      if (createdTicket) {
-        // Ambil data tiket yang baru dibuat dengan lengkap
-        setTimeout(async () => {
-          try {
-            // Invalidate dan tunggu query selesai
-            await queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
-            await queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-            
-            // Delay sebentar untuk memastikan data ter-update
-            setTimeout(() => {
-              setReceiptData(createdTicket as any);
-              setShowReceipt(true);
-            }, 200);
-          } catch (error) {
-            console.error('Error refreshing data:', error);
-            // Fallback: gunakan data yang ada
-            setReceiptData(createdTicket as any);
-            setShowReceipt(true);
-          }
-        }, 300);
+      // Auto-open print receipt popup dengan data lengkap
+      if (createdTicket && selectedCustomer) {
+        // Set data langsung tanpa menunggu query update
+        setReceiptData(createdTicket as any);
+        setReceiptCustomerData(selectedCustomer);
+        setShowReceipt(true);
       }
     },
     onError: (error) => {
@@ -447,7 +438,11 @@ export default function ServiceTickets() {
   };
 
   const handlePrintReceipt = (ticket: ServiceTicket) => {
+    // Cari data customer untuk tiket ini
+    const customerForTicket = (customers as Customer[])?.find(c => c.id === ticket.customerId);
+    
     setReceiptData(ticket);
+    setReceiptCustomerData(customerForTicket || null);
     setShowReceipt(true);
   };
 
@@ -999,7 +994,13 @@ export default function ServiceTickets() {
       </Dialog>
 
       {/* Service Receipt Dialog */}
-      <Dialog open={showReceipt} onOpenChange={setShowReceipt}>
+      <Dialog open={showReceipt} onOpenChange={(open) => {
+        setShowReceipt(open);
+        if (!open) {
+          // Reset customer data ketika dialog ditutup
+          setReceiptCustomerData(null);
+        }
+      }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -1022,7 +1023,18 @@ export default function ServiceTickets() {
                 createdAt: receiptData.createdAt ? new Date(receiptData.createdAt).toISOString() : new Date().toISOString()
               }}
               customer={(() => {
-                // Cari customer dari query data yang ter-update
+                // Gunakan data customer yang sudah disimpan saat membuat tiket
+                if (receiptCustomerData) {
+                  return {
+                    id: receiptCustomerData.id,
+                    name: receiptCustomerData.name,
+                    phone: receiptCustomerData.phone || undefined,
+                    email: receiptCustomerData.email || undefined,
+                    address: receiptCustomerData.address || undefined
+                  };
+                }
+                
+                // Fallback: cari dari query cache
                 const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === receiptData.customerId);
                 if (foundCustomer) {
                   return {
@@ -1033,7 +1045,8 @@ export default function ServiceTickets() {
                     address: foundCustomer.address || undefined
                   };
                 }
-                // Fallback jika customer tidak ditemukan
+                
+                // Last fallback
                 return {
                   id: receiptData.customerId,
                   name: 'Customer Tidak Ditemukan',
