@@ -191,7 +191,7 @@ export default function ServiceTickets() {
       };
       return apiRequest('POST', '/api/service-tickets', ticketData);
     },
-    onSuccess: () => {
+    onSuccess: (createdTicket) => {
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       setShowDialog(false);
       setEditingTicket(null);
@@ -210,7 +210,17 @@ export default function ServiceTickets() {
         estimatedCost: "",
         laborCost: "",
       });
+      
+      // Show success toast
       toast({ title: "Sukses", description: "Tiket servis berhasil dibuat" });
+      
+      // Auto-open print receipt popup setelah tiket berhasil dibuat
+      if (createdTicket) {
+        setTimeout(() => {
+          setReceiptData(createdTicket);
+          setShowReceipt(true);
+        }, 500); // Delay sedikit untuk UX yang lebih baik
+      }
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
