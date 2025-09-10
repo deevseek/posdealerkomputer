@@ -635,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Specialized pricing management endpoint
-  app.patch('/api/products/:id/pricing', isAuthenticated, async (req, res) => {
+  app.patch('/api/products/:id/pricing', isAuthenticated, async (req: any, res) => {
     try {
       const { sellingPrice, marginPercent } = req.body;
       
@@ -649,6 +649,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Return updated product with current HPP info
       const currentHPP = await storage.getAveragePurchasePrice(req.params.id);
       const updatedProduct = await storage.getProductById(req.params.id);
+      
+      // Broadcast real-time update for product pricing changes
+      realtimeService.broadcastToTenant(req.tenant?.id, {
+        resource: 'products',
+        action: 'update',
+        data: updatedProduct,
+        id: req.params.id
+      });
       
       res.json({
         ...updatedProduct,
