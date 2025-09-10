@@ -1316,7 +1316,20 @@ export class DatabaseStorage implements IStorage {
 
   // Service Tickets
   async getServiceTickets(): Promise<ServiceTicket[]> {
-    return await db.select().from(serviceTickets).orderBy(desc(serviceTickets.createdAt));
+    const tickets = await db
+      .select({
+        ...serviceTickets,
+        customerName: customers.name
+      })
+      .from(serviceTickets)
+      .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
+      .orderBy(desc(serviceTickets.createdAt));
+    
+    return tickets.map(ticket => ({
+      ...ticket,
+      customerName: ticket.customerName || null, // Keep string field for backward compatibility
+      customer: ticket.customerName ? { name: ticket.customerName } : null // Object field for new usage
+    })) as ServiceTicket[];
   }
 
   async getServiceTicketById(id: string): Promise<ServiceTicket | undefined> {
@@ -1325,11 +1338,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveServiceTickets(): Promise<ServiceTicket[]> {
-    return await db
-      .select()
+    const tickets = await db
+      .select({
+        ...serviceTickets,
+        customerName: customers.name
+      })
       .from(serviceTickets)
+      .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
       .where(sql`${serviceTickets.status} != 'completed' AND ${serviceTickets.status} != 'cancelled'`)
       .orderBy(desc(serviceTickets.createdAt));
+    
+    return tickets.map(ticket => ({
+      ...ticket,
+      customerName: ticket.customerName || null, // Keep string field for backward compatibility
+      customer: ticket.customerName ? { name: ticket.customerName } : null // Object field for new usage
+    })) as ServiceTicket[];
   }
 
   async createServiceTicket(ticketData: InsertServiceTicket): Promise<ServiceTicket> {

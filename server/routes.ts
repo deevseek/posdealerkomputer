@@ -321,8 +321,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Stock movements report - Clean implementation
-  app.get('/api/reports/stock-movements', isAuthenticated, async (req, res) => {
+  app.get('/api/reports/stock-movements', isAuthenticated, async (req: any, res) => {
     try {
+      // Get client ID from authenticated session for multi-tenant security
+      const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
+      
+      // Parse optional date filters
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      
+      // Build where conditions for multi-tenant filtering
+      const whereConditions = [
+        // Multi-tenant filtering - filter by clientId if in multi-tenant mode
+        clientId ? eq(stockMovements.clientId, clientId) : undefined,
+        // Date filters
+        startDate ? gte(stockMovements.createdAt, startDate) : undefined,
+        endDate ? lte(stockMovements.createdAt, endDate) : undefined
+      ].filter(Boolean);
+      
       // Get stock movements with product names and readable references
       const movementData = await db
         .select({
@@ -335,8 +351,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           referenceType: stockMovements.referenceType,
           reference: sql<string>`
             CASE 
-              WHEN ${stockMovements.referenceType} = 'purchase' THEN COALESCE(${purchaseOrders.poNumber}, ${stockMovements.referenceId})
-              ELSE ${stockMovements.referenceId}
+              WHEN ${stockMovements.referenceType} = 'purchase' THEN 'PO#' || COALESCE(${purchaseOrders.poNumber}, substr(${stockMovements.referenceId}, 1, 8))
+              WHEN ${stockMovements.referenceType} = 'sale' THEN 'Penjualan #' || COALESCE(${transactions.transactionNumber}, substr(${stockMovements.referenceId}, 1, 8))
+              WHEN ${stockMovements.referenceType} = 'service' THEN 'Servis #' || COALESCE(${serviceTickets.ticketNumber}, substr(${stockMovements.referenceId}, 1, 8))
+              WHEN ${stockMovements.referenceType} = 'adjustment' THEN 'Penyesuaian #' || substr(${stockMovements.referenceId}, 1, 8)
+              WHEN ${stockMovements.referenceType} = 'return' THEN 'Retur #' || substr(${stockMovements.referenceId}, 1, 8)
+              ELSE 'Ref #' || substr(${stockMovements.referenceId}, 1, 8)
             END
           `,
           notes: stockMovements.notes,
@@ -344,8 +364,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userName: sql<string>`'Admin'`, // Add userName field
         })
         .from(stockMovements)
-        .leftJoin(products, eq(stockMovements.productId, products.id))
-        .leftJoin(purchaseOrders, eq(stockMovements.referenceId, purchaseOrders.id))
+        .leftJoin(products, and(
+          eq(stockMovements.productId, products.id),
+          // Add clientId filtering to joined tables for complete tenant isolation
+          clientId ? eq(products.clientId, clientId) : undefined
+        ))
+        .leftJoin(purchaseOrders, and(
+          eq(stockMovements.referenceId, purchaseOrders.id),
+          clientId ? eq(purchaseOrders.clientId, clientId) : undefined
+        ))
+        .leftJoin(transactions, and(
+          eq(stockMovements.referenceId, transactions.id),
+          clientId ? eq(transactions.clientId, clientId) : undefined
+        ))
+        .leftJoin(serviceTickets, and(
+          eq(stockMovements.referenceId, serviceTickets.id),
+          clientId ? eq(serviceTickets.clientId, clientId) : undefined
+        ))
+        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
         .orderBy(desc(stockMovements.createdAt));
       
       // Frontend expects { movements: [...] } structure
