@@ -1308,7 +1308,9 @@ export class DatabaseStorage implements IStorage {
         }
       }
       
-      return transaction;
+      // Fetch complete transaction with items for receipt
+      const completeTransaction = await this.getTransactionById(transaction.id);
+      return completeTransaction || transaction;
     });
   }
 
