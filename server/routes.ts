@@ -1363,10 +1363,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (estimatedCost !== undefined) ticketData.estimatedCost = estimatedCost ? String(estimatedCost) : null;
       if (laborCost !== undefined) ticketData.laborCost = laborCost ? String(laborCost) : null;
       
-      // Handle warranty fields
+      // Handle warranty fields with proper Date conversion
       if (warrantyDuration !== undefined) ticketData.warrantyDuration = warrantyDuration;
-      if (warrantyStartDate !== undefined) ticketData.warrantyStartDate = warrantyStartDate;
-      if (warrantyEndDate !== undefined) ticketData.warrantyEndDate = warrantyEndDate;
+      if (warrantyStartDate !== undefined) {
+        ticketData.warrantyStartDate = warrantyStartDate ? new Date(warrantyStartDate) : null;
+      }
+      if (warrantyEndDate !== undefined) {
+        ticketData.warrantyEndDate = warrantyEndDate ? new Date(warrantyEndDate) : null;
+      }
       
       console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
       
