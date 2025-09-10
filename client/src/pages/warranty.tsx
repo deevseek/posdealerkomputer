@@ -156,8 +156,7 @@ export default function WarrantyPage() {
         
         // Get product names from transaction items
         const productNames = transaction.items?.map((item: any) => {
-          const product = products.find((p: any) => p.id === item.productId);
-          return product?.name || 'Unknown Product';
+          return item.product?.name || 'Unknown Product';
         }).join(', ') || 'Unknown Product';
         
         return {
