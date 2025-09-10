@@ -101,16 +101,23 @@ class WebSocketManager {
         break;
         
       case 'data_update':
+        console.log('🔄 Processing data_update for resource:', message.resource);
         this.handleDataUpdate(message);
         break;
         
       default:
-        console.log('Unknown WebSocket message type:', message.type);
+        console.log('❓ Unknown WebSocket message type:', message.type, message);
     }
   }
 
   private handleDataUpdate(message: WebSocketMessage) {
-    if (!this.queryClient || !message.resource) return;
+    if (!this.queryClient || !message.resource) {
+      console.log('⚠️ handleDataUpdate: missing queryClient or resource:', {
+        hasQueryClient: !!this.queryClient,
+        resource: message.resource
+      });
+      return;
+    }
 
     console.log(`🔄 Updating ${message.resource} data (${message.action})`);
 
@@ -134,7 +141,10 @@ class WebSocketManager {
     // Invalidate relevant queries to trigger refetch
     const queryKeys = queryKeyMap[message.resource] || [];
     
+    console.log(`📋 Found ${queryKeys.length} query keys for resource '${message.resource}':`, queryKeys);
+    
     queryKeys.forEach(queryKey => {
+      console.log(`🔄 Invalidating query: ${queryKey}`);
       this.queryClient.invalidateQueries({ queryKey: [queryKey] });
     });
 
