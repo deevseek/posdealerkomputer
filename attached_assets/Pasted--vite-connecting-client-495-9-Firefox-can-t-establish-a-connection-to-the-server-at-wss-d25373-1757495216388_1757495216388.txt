@@ -1,0 +1,110 @@
+[vite] connecting... client:495:9
+Firefox can’t establish a connection to the server at wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/?token=TGOHbndOXhP1. client:536:19
+Uncaught (in promise) DOMException: An invalid or illegal string was specified
+    setupWebSocket client:536
+    fallback client:509
+    setupWebSocket client:555
+client:536
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools chunk-RPCDYKBN.js:21551:25
+Setup Status Debug: 
+Object { setupStatus: undefined, isSetupLoading: true, isSetupCompleted: false, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: true, setupStatus: undefined, isAuthenticated: false, isLoading: true, error: undefined }
+App.tsx:65:13
+Setup Status Debug: 
+Object { setupStatus: undefined, isSetupLoading: true, isSetupCompleted: false, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: true, setupStatus: undefined, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:65:13
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:65:13
+ReceiptModal received transaction: null receipt-modal.tsx:45:11
+🔄 Connecting to real-time updates... App.tsx:55:15
+🔄 Connecting to WebSocket... wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/ws websocket.ts:23:15
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757495131355_4v8mk9il2", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757495131355_4v8mk9il2" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17
+ReceiptModal received transaction: null 4 receipt-modal.tsx:45:11
+Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @radix-ui_react-dialog.js:340:36
+Transaction created successfully: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+transaction-modal.tsx:89:15
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:65:13
+ReceiptModal received transaction: null receipt-modal.tsx:45:11
+🔄 Connecting to real-time updates... App.tsx:55:15
+🔄 Connecting to WebSocket... wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/ws websocket.ts:23:15
+handleTransactionComplete called with: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+pos.tsx:58:13
+ReceiptModal received transaction: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+receipt-modal.tsx:45:11
+Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @radix-ui_react-dialog.js:340:36
+🔌 WebSocket disconnected 1005 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 1/5 websocket.ts:45:19
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757495156250_lz83iv0lu", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+ReceiptModal received transaction: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+receipt-modal.tsx:45:11
+🔄 Connecting to WebSocket... wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/ws websocket.ts:23:15
+ReceiptModal received transaction: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+receipt-modal.tsx:45:11
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757495159404_l1aqzya18", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757495159404_l1aqzya18" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:65:13
+ReceiptModal received transaction: 
+Response { type: "basic", url: "https://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/api/transactions", redirected: false, status: 200, ok: true, statusText: "OK", headers: Headers(7), body: ReadableStream, bodyUsed: false }
+receipt-modal.tsx:45:11
+🔄 Connecting to real-time updates... App.tsx:55:15
+🔄 Connecting to WebSocket... wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/ws websocket.ts:23:15
+🔌 WebSocket disconnected 1005 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 1/5 websocket.ts:45:19
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757495161299_2jhjr20ax", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+🔄 Connecting to WebSocket... wss://d253739b-3028-4d8e-8c40-491fe2d91c72-00-z0kzfcj9h1hx.sisko.replit.dev/ws websocket.ts:23:15
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757495164423_4qxldyju2", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757495164423_4qxldyju2" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17

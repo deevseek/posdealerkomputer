@@ -104,11 +104,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
         title: "Success",
         description: "Transaction completed successfully",
       });
-      // Delay to ensure data is properly set before showing receipt
-      setTimeout(() => {
-        onComplete(data);
-        resetForm();
-      }, 100);
+      onComplete(data);
+      resetForm();
     },
     onError: (error: any) => {
       toast({

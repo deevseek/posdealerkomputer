@@ -34,9 +34,6 @@ type PaperSize = keyof typeof paperSizes;
 export default function ReceiptModal({ open, onClose, transaction }: ReceiptModalProps) {
   const [paperSize, setPaperSize] = useState<PaperSize>('a4');
   const [isGenerating, setIsGenerating] = useState(false);
-  
-  // Debug: Log transaction data when component receives it
-  console.log('ReceiptModal received transaction:', transaction);
 
   // Get store config for receipt header - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
