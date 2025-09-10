@@ -150,6 +150,14 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
       sellingPrice: "0",
       minStock: 5,
       maxStock: 100,
+      // Add required stock fields
+      stock: 0,
+      totalStock: 0,
+      availableStock: 0,
+      reservedStock: 0,
+      // Add other potentially required fields
+      reorderPoint: 5,
+      reorderQuantity: 10,
     },
     mode: "onChange", // Enable real-time validation
   });
@@ -191,19 +199,7 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
         console.log("🔥 Product Form errors before submit:", form.formState.errors);
         console.log("🔥 Current form data:", form.getValues());
         
-        // Force validation check
-        form.trigger().then((isValid) => {
-          console.log("🔥 Force trigger validation result:", isValid);
-          console.log("🔥 Errors after trigger:", form.formState.errors);
-          
-          if (isValid) {
-            onSubmit(form.getValues() as ProductFormData);
-          } else {
-            console.log("🔥 Form validation failed, not submitting");
-          }
-        });
-        
-        e.preventDefault();
+        form.handleSubmit(onSubmit)(e);
       }} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormField
