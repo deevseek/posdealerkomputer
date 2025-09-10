@@ -141,6 +141,12 @@ export default function Suppliers() {
   });
 
   const handleSubmit = (data: any) => {
+    console.log("🔥 handleSubmit called with data:", data);
+    console.log("🔥 Form errors:", form.formState.errors);
+    console.log("🔥 Form is valid:", form.formState.isValid);
+    console.log("🔥 Create mutation pending:", createMutation.isPending);
+    console.log("🔥 Update mutation pending:", updateMutation.isPending);
+    
     if (editingSupplier) {
       updateMutation.mutate({ id: editingSupplier.id, data });
     } else {
@@ -452,6 +458,11 @@ export default function Suppliers() {
                   type="submit" 
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-save-supplier"
+                  onClick={(e) => {
+                    console.log("🔥 Button clicked!");
+                    console.log("🔥 Form state:", form.formState);
+                    console.log("🔥 Form values:", form.getValues());
+                  }}
                 >
                   {editingSupplier ? "Update Supplier" : "Create Supplier"}
                 </Button>
