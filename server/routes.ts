@@ -31,7 +31,10 @@ import {
   users,
   employees,
   payrollRecords,
-  attendanceRecords
+  attendanceRecords,
+  insertTransactionSchema,
+  insertTransactionItemSchema,
+  insertServiceTicketSchema
 } from "@shared/schema";
 import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
 
@@ -1266,28 +1269,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("Raw request body:", JSON.stringify(req.body, null, 2));
       
-      // Manual validation and transformation
-      const { customerId, deviceType, deviceBrand, deviceModel, serialNumber, completeness, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost } = req.body;
-      
-      const ticketData = {
-        customerId: customerId || "",
-        deviceType: deviceType || "",
-        deviceBrand: deviceBrand || null,
-        deviceModel: deviceModel || null,
-        serialNumber: serialNumber || null,
-        completeness: completeness || null,
-        problem: problem || "",
-        diagnosis: diagnosis || null,
-        solution: solution || null,
-        status: status || 'pending',
-        technicianId: technicianId || null,
-        estimatedCost: estimatedCost ? String(estimatedCost) : undefined,
-        laborCost: laborCost ? String(laborCost) : null,
-        actualCost: undefined,
-        partsCost: undefined,
-        estimatedCompletion: undefined,
-        completedAt: undefined,
-      };
+      // Use proper schema validation to include warranty fields
+      const ticketData = insertServiceTicketSchema.parse(req.body);
       
       console.log("Processed ticket data:", JSON.stringify(ticketData, null, 2));
       
@@ -1364,7 +1347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Raw update body:", JSON.stringify(req.body, null, 2));
       
       // Manual validation and transformation for update
-      const { customerId, deviceType, deviceBrand, deviceModel, serialNumber, completeness, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost, parts } = req.body;
+      const { customerId, deviceType, deviceBrand, deviceModel, serialNumber, completeness, problem, diagnosis, solution, status, technicianId, estimatedCost, laborCost, parts, warrantyDuration, warrantyStartDate, warrantyEndDate } = req.body;
       
       const ticketData: any = {};
       
@@ -1381,6 +1364,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (technicianId !== undefined) ticketData.technicianId = technicianId || null;
       if (estimatedCost !== undefined) ticketData.estimatedCost = estimatedCost ? String(estimatedCost) : null;
       if (laborCost !== undefined) ticketData.laborCost = laborCost ? String(laborCost) : null;
+      
+      // Handle warranty fields
+      if (warrantyDuration !== undefined) ticketData.warrantyDuration = warrantyDuration;
+      if (warrantyStartDate !== undefined) ticketData.warrantyStartDate = warrantyStartDate;
+      if (warrantyEndDate !== undefined) ticketData.warrantyEndDate = warrantyEndDate;
       
       console.log("Processed update data:", JSON.stringify(ticketData, null, 2));
       

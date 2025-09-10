@@ -25,6 +25,10 @@ interface ServiceReceiptProps {
     status: string;
     technicianId?: string;
     createdAt: string;
+    // Warranty fields
+    warrantyDuration?: number;
+    warrantyStartDate?: string;
+    warrantyEndDate?: string;
   };
   customer: {
     id: string;
@@ -373,6 +377,40 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
               <div className="field">
                 <span className="label text-xs">Estimasi Biaya:</span>
                 <div className="value text-sm font-bold">{formatCurrency(serviceTicket.estimatedCost)}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Warranty Information */}
+          {serviceTicket.warrantyDuration && serviceTicket.warrantyDuration > 0 && (
+            <div className={`warranty-section ${isThermal ? 'mb-4 p-2 border border-gray-400' : 'mb-6 p-4 border-2 border-blue-300 bg-blue-50'}`}>
+              <h4 className={`font-bold ${isThermal ? 'text-xs mb-2' : 'text-sm mb-3'} text-blue-800`}>INFORMASI GARANSI</h4>
+              <div className="space-y-1">
+                <div className="field">
+                  <span className={`label ${isThermal ? 'text-xs' : 'text-sm'} text-blue-700`}>Durasi:</span>
+                  <span className={`value ml-2 ${isThermal ? 'text-xs' : 'text-sm'} font-bold text-blue-900`}>
+                    {serviceTicket.warrantyDuration >= 9999 ? 'Seumur Hidup' : `${serviceTicket.warrantyDuration} Hari`}
+                  </span>
+                </div>
+                {serviceTicket.warrantyStartDate && (
+                  <div className="field">
+                    <span className={`label ${isThermal ? 'text-xs' : 'text-sm'} text-blue-700`}>Mulai:</span>
+                    <span className={`value ml-2 ${isThermal ? 'text-xs' : 'text-sm'} font-medium text-blue-900`}>
+                      {format(new Date(serviceTicket.warrantyStartDate), 'dd/MM/yyyy', { locale: id })}
+                    </span>
+                  </div>
+                )}
+                {serviceTicket.warrantyEndDate && serviceTicket.warrantyDuration < 9999 && (
+                  <div className="field">
+                    <span className={`label ${isThermal ? 'text-xs' : 'text-sm'} text-blue-700`}>Berakhir:</span>
+                    <span className={`value ml-2 ${isThermal ? 'text-xs' : 'text-sm'} font-medium text-blue-900`}>
+                      {format(new Date(serviceTicket.warrantyEndDate), 'dd/MM/yyyy', { locale: id })}
+                    </span>
+                  </div>
+                )}
+                <div className={`text-center mt-2 p-1 ${isThermal ? 'text-xs bg-gray-200' : 'text-sm bg-blue-100'} rounded`}>
+                  <p className="font-medium text-blue-800">⚠️ SIMPAN NOTA SEBAGAI BUKTI GARANSI</p>
+                </div>
               </div>
             </div>
           )}

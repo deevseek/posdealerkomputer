@@ -22,6 +22,10 @@ interface ServiceReceiptProps {
     estimatedCompletion?: string;
     completedAt?: string;
     createdAt: string;
+    // Warranty fields
+    warrantyDuration?: number;
+    warrantyStartDate?: string;
+    warrantyEndDate?: string;
     customer?: {
       name: string;
       phone?: string;

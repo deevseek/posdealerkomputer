@@ -31,6 +31,10 @@ interface ServicePaymentReceiptProps {
     status: string;
     createdAt: string;
     completedAt?: string;
+    // Warranty fields
+    warrantyDuration?: number;
+    warrantyStartDate?: string;
+    warrantyEndDate?: string;
     parts?: Array<{
       productId: string;
       productName: string;
@@ -488,6 +492,42 @@ export default function ServicePaymentReceipt({
                   </div>
                 </div>
               </div>
+
+              {/* Warranty Information */}
+              {serviceTicket.warrantyDuration && serviceTicket.warrantyDuration > 0 && (
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded mb-4">
+                  <h3 className="font-semibold text-sm mb-3 text-blue-800 border-b border-blue-200 pb-1">INFORMASI GARANSI</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between py-1">
+                      <span className="text-blue-700">Durasi Garansi:</span>
+                      <span className="font-medium text-blue-900">
+                        {serviceTicket.warrantyDuration >= 9999 ? 'Garansi Seumur Hidup' : `${serviceTicket.warrantyDuration} Hari`}
+                      </span>
+                    </div>
+                    {serviceTicket.warrantyStartDate && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-blue-700">Tanggal Mulai:</span>
+                        <span className="font-medium text-blue-900">
+                          {format(new Date(serviceTicket.warrantyStartDate), 'dd/MM/yyyy', { locale: id })}
+                        </span>
+                      </div>
+                    )}
+                    {serviceTicket.warrantyEndDate && serviceTicket.warrantyDuration < 9999 && (
+                      <div className="flex justify-between py-1">
+                        <span className="text-blue-700">Berlaku Sampai:</span>
+                        <span className="font-medium text-blue-900">
+                          {format(new Date(serviceTicket.warrantyEndDate), 'dd/MM/yyyy', { locale: id })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="bg-blue-100 p-2 rounded mt-3">
+                      <p className="text-xs text-blue-800 font-medium text-center">
+                        ⚠️ SIMPAN NOTA INI SEBAGAI BUKTI GARANSI
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Status & Dates */}
               <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
