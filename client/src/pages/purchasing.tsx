@@ -67,6 +67,7 @@ export default function PurchasingPage() {
       expectedDeliveryDate: "",
       notes: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const itemForm = useForm({
@@ -77,6 +78,7 @@ export default function PurchasingPage() {
       unitCost: "",
       notes: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   // Queries

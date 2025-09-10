@@ -228,6 +228,7 @@ export default function RolesPage() {
       permissions: [] as string[],
       isActive: true,
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const createMutation = useMutation({

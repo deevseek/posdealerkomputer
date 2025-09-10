@@ -78,6 +78,7 @@ export default function UsersPage() {
       role: "kasir" as const,
       isActive: true,
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const createMutation = useMutation({
