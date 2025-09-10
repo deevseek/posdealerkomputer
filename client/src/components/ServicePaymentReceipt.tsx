@@ -209,14 +209,14 @@ export default function ServicePaymentReceipt({
               width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
               max-width: ${paperSize === 'a4' ? '140mm' : `${pageWidth}mm`};
               font-family: ${paperSize === 'a4' ? '"Arial", sans-serif' : '"Courier New", monospace'};
-              font-size: ${paperSize === 'a4' ? '11px' : fontSize};
-              line-height: ${paperSize === 'a4' ? '1.4' : '1.2'};
+              font-size: ${paperSize === 'a4' ? '10px' : fontSize};
+              line-height: ${paperSize === 'a4' ? '1.3' : '1.1'};
               color: #000;
               background: #fff;
               page-break-inside: avoid;
               height: auto;
               max-height: ${paperSize === 'a4' ? '270mm' : '300mm'};
-              padding: ${paperSize === 'a4' ? '8mm' : '3mm'};
+              padding: ${paperSize === 'a4' ? '6mm' : '2mm'};
             }
             .no-print { 
               display: none !important; 
@@ -244,8 +244,8 @@ export default function ServicePaymentReceipt({
             .my-2 { margin: 2px 0 !important; }
             .mb-2 { margin-bottom: 2px !important; }
             .mt-4 { margin-top: 3px !important; }
-            h3 { font-size: ${fontSize}; margin: 2px 0 !important; }
-            img { max-width: 40mm; height: auto; }
+            h3 { font-size: ${paperSize === 'a4' ? '12px' : fontSize}; margin: ${paperSize === 'a4' ? '4px' : '2px'} 0 !important; font-weight: bold; }
+            img { max-width: ${paperSize === 'a4' ? '50mm' : '30mm'}; height: auto; }
           }
           @media screen {
             #service-payment-print-style { display: none; }
@@ -356,34 +356,66 @@ export default function ServicePaymentReceipt({
               }}
             >
               {/* Header */}
-              <div className="text-center mb-6">
-                <h1 className="font-bold text-2xl mb-2 tracking-wide">{storeConfig.name}</h1>
-                <div className="text-sm text-gray-700 space-y-1">
+              <div className={`text-center ${paperSize === 'a4' ? 'mb-6' : 'mb-4'}`}>
+                <h1 className={`font-bold tracking-wide ${
+                  paperSize === 'a4' ? 'text-2xl mb-3' : 
+                  paperSize === '58' ? 'text-sm mb-2' : 
+                  'text-lg mb-2'
+                }`}>{storeConfig.name}</h1>
+                <div className={`text-gray-700 space-y-1 ${
+                  paperSize === 'a4' ? 'text-sm' : 
+                  paperSize === '58' ? 'text-xs' : 
+                  'text-xs'
+                }`}>
                   <p>{storeConfig.address}</p>
                   <p>Telp: {storeConfig.phone} | Email: {storeConfig.email}</p>
                 </div>
               </div>
 
-              <div className="bg-gray-100 py-3 px-4 mb-4 rounded">
-                <h2 className="text-center font-bold text-lg">NOTA PEMBAYARAN SERVICE</h2>
-                <p className="text-center text-sm mt-1">No: {serviceTicket.ticketNumber}</p>
+              <div className={`bg-gray-100 py-2 px-3 mb-4 rounded ${paperSize !== 'a4' ? 'text-center' : ''}`}>
+                <h2 className={`text-center font-bold ${
+                  paperSize === 'a4' ? 'text-lg' : 
+                  paperSize === '58' ? 'text-xs' : 
+                  'text-sm'
+                }`}>NOTA PEMBAYARAN SERVICE</h2>
+                <p className={`text-center mt-1 ${
+                  paperSize === 'a4' ? 'text-sm' : 
+                  paperSize === '58' ? 'text-xs' : 
+                  'text-xs'
+                }`}>No: {serviceTicket.ticketNumber}</p>
               </div>
 
               {/* Customer Info */}
-              <div className="grid grid-cols-2 gap-6 mb-6">
+              <div className={`${paperSize === 'a4' ? 'grid grid-cols-2 gap-6 mb-6' : 'space-y-4 mb-4'}`}>
                 <div>
-                  <h3 className="font-semibold text-sm mb-2 border-b pb-1">INFORMASI NOTA</h3>
-                  <div className="space-y-1 text-sm">
+                  <h3 className={`font-semibold border-b pb-1 mb-2 ${
+                    paperSize === 'a4' ? 'text-sm' : 
+                    paperSize === '58' ? 'text-xs' : 
+                    'text-xs'
+                  }`}>INFORMASI NOTA</h3>
+                  <div className={`space-y-1 ${
+                    paperSize === 'a4' ? 'text-sm' : 
+                    paperSize === '58' ? 'text-xs' : 
+                    'text-xs'
+                  }`}>
                     <div><span className="text-gray-600">Tanggal:</span> {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: id })}</div>
                     <div><span className="text-gray-600">Status:</span> <span className="text-green-600 font-medium">LUNAS</span></div>
                   </div>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm mb-2 border-b pb-1">DATA PELANGGAN</h3>
-                  <div className="space-y-1 text-sm">
+                  <h3 className={`font-semibold border-b pb-1 mb-2 ${
+                    paperSize === 'a4' ? 'text-sm' : 
+                    paperSize === '58' ? 'text-xs' : 
+                    'text-xs'
+                  }`}>DATA PELANGGAN</h3>
+                  <div className={`space-y-1 ${
+                    paperSize === 'a4' ? 'text-sm' : 
+                    paperSize === '58' ? 'text-xs' : 
+                    'text-xs'
+                  }`}>
                     <div><span className="text-gray-600">Nama:</span> {customer.name}</div>
                     {customer.phone && <div><span className="text-gray-600">Telp:</span> {customer.phone}</div>}
-                    {customer.email && <div><span className="text-gray-600">Email:</span> {customer.email}</div>}
+                    {customer.email && paperSize === 'a4' && <div><span className="text-gray-600">Email:</span> {customer.email}</div>}
                   </div>
                 </div>
               </div>

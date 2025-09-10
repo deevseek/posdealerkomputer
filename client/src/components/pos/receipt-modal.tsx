@@ -316,36 +316,48 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                 {/* Store Header */}
                 <div className={`text-center header-spacing`}>
                   <h3 className="font-bold" data-testid="text-store-name" style={{ 
-                    fontSize: paperSize === 'a4' ? '18px' : '12px',
-                    marginBottom: paperSize === 'a4' ? '4px' : '2px'
+                    fontSize: paperSize === 'a4' ? '16px' : 
+                              paperSize === '58' ? '10px' : '12px',
+                    marginBottom: paperSize === 'a4' ? '3px' : '2px',
+                    letterSpacing: paperSize !== 'a4' ? '0.5px' : '1px',
+                    textTransform: 'uppercase'
                   }}>
-                    {(storeConfig as any)?.name || 'LaptopPOS SERVICE CENTER'}
+                    {(storeConfig as any)?.name || 'LAPTOPPOS SERVICE CENTER'}
                   </h3>
                   <div className={paperSize === 'a4' ? 'text-sm' : 'text-xs'} style={{ 
-                    fontSize: paperSize === 'a4' ? '11px' : '8px',
-                    lineHeight: '1.3'
+                    fontSize: paperSize === 'a4' ? '10px' : 
+                              paperSize === '58' ? '7px' : '8px',
+                    lineHeight: '1.2'
                   }}>
                     {(storeConfig as any)?.address && (
                       <div data-testid="text-store-address" style={{ marginBottom: '1px' }}>
-                        {(storeConfig as any).address}
+                        {paperSize === '58' && (storeConfig as any).address.length > 35 
+                          ? (storeConfig as any).address.substring(0, 35) + '...'
+                          : (storeConfig as any).address}
                       </div>
                     )}
-                    <div style={{ marginBottom: '1px' }}>
+                    <div style={{ marginBottom: '2px' }}>
                       {(storeConfig as any)?.phone && (
                         <span data-testid="text-store-phone">Tel: {(storeConfig as any).phone}</span>
                       )}
-                      {(storeConfig as any)?.email && (storeConfig as any)?.phone && <span> | </span>}
-                      {(storeConfig as any)?.email && (
+                      {paperSize === 'a4' && (storeConfig as any)?.email && (storeConfig as any)?.phone && <span> | </span>}
+                      {paperSize === 'a4' && (storeConfig as any)?.email && (
                         <span data-testid="text-store-email">Email: {(storeConfig as any).email}</span>
                       )}
                     </div>
                   </div>
                   <div style={{ 
-                    marginTop: paperSize === 'a4' ? '6px' : '3px',
-                    fontSize: paperSize === 'a4' ? '12px' : '9px',
-                    fontWeight: 'bold'
+                    marginTop: paperSize === 'a4' ? '6px' : '4px',
+                    fontSize: paperSize === 'a4' ? '11px' : 
+                              paperSize === '58' ? '8px' : '9px',
+                    fontWeight: 'bold',
+                    borderTop: '1px dashed #333',
+                    borderBottom: '1px dashed #333',
+                    paddingTop: '2px',
+                    paddingBottom: '2px',
+                    marginBottom: '2px'
                   }}>
-                    === NOTA PENJUALAN ===
+                    ═══ NOTA PENJUALAN ═══
                   </div>
                 </div>
 
@@ -500,23 +512,32 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                 <div className="border-t border-dashed border-gray-400 my-2"></div>
 
                 {/* Footer */}
-                <div className="text-center section-spacing" style={{
-                  fontSize: paperSize === 'a4' ? '10px' : '7px',
+                <div className="text-center section-spacing border-t border-dashed border-gray-400 pt-2" style={{
+                  fontSize: paperSize === 'a4' ? '9px' : 
+                           paperSize === '58' ? '6px' : '7px',
                   color: '#666',
-                  marginTop: paperSize === 'a4' ? '12px' : '6px'
+                  marginTop: paperSize === 'a4' ? '8px' : '4px'
                 }}>
                   <div style={{ marginBottom: '2px', fontWeight: 'bold' }}>
-                    ★ TERIMA KASIH ATAS PEMBELIAN ANDA ★
+                    {paperSize === '58' ? '★ TERIMA KASIH ★' : '★ TERIMA KASIH ATAS PEMBELIAN ANDA ★'}
                   </div>
                   <div style={{ marginBottom: '1px' }}>
-                    Barang yang sudah dibeli tidak dapat dikembalikan
+                    {paperSize === '58' ? 'Barang dibeli tidak dapat dikembalikan' : 'Barang yang sudah dibeli tidak dapat dikembalikan'}
                   </div>
                   <div style={{ marginBottom: '1px' }}>
                     Simpan nota ini sebagai bukti pembelian
                   </div>
+                  {paperSize === 'a4' && (
+                    <div style={{ marginBottom: '1px' }}>
+                      Komplain maksimal 7 hari setelah pembelian
+                    </div>
+                  )}
                   <div data-testid="text-print-date" style={{ 
-                    marginTop: '4px',
-                    fontSize: paperSize === 'a4' ? '9px' : '6px'
+                    marginTop: '3px',
+                    fontSize: paperSize === 'a4' ? '8px' : 
+                              paperSize === '58' ? '5px' : '6px',
+                    borderTop: '1px dashed #ccc',
+                    paddingTop: '2px'
                   }}>
                     Cetak: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: idLocale })}
                   </div>

@@ -80,23 +80,29 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
       case 'thermal-58':
         return {
           width: '58mm',
-          fontSize: '10px',
+          fontSize: '8px',
           padding: '2mm',
-          lineHeight: '1.2'
+          lineHeight: '1.1',
+          headerFontSize: '10px',
+          titleFontSize: '9px'
         };
       case 'thermal-80':
         return {
           width: '80mm', 
-          fontSize: '11px',
+          fontSize: '9px',
           padding: '3mm',
-          lineHeight: '1.3'
+          lineHeight: '1.2',
+          headerFontSize: '12px',
+          titleFontSize: '10px'
         };
       default: // a4
         return {
           width: '210mm',
           fontSize: '12px', 
           padding: '15mm',
-          lineHeight: '1.4'
+          lineHeight: '1.4',
+          headerFontSize: '22px',
+          titleFontSize: '16px'
         };
     }
   };
@@ -144,20 +150,22 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                 }
                 .header h1 { 
                   margin: 0; 
-                  font-size: ${isThermal ? '13px' : '22px'}; 
+                  font-size: ${formatStyles.headerFontSize}; 
                   font-weight: bold;
-                  margin-bottom: ${isThermal ? '3px' : '6px'};
+                  margin-bottom: ${isThermal ? '2px' : '6px'};
                   text-transform: uppercase;
+                  letter-spacing: ${isThermal ? '0.5px' : '1px'};
                 }
                 .header h2 { 
-                  margin: ${isThermal ? '3px 0 5px' : '6px 0 10px'}; 
-                  font-size: ${isThermal ? '11px' : '16px'}; 
+                  margin: ${isThermal ? '4px 0 6px' : '8px 0 12px'}; 
+                  font-size: ${formatStyles.titleFontSize}; 
                   font-weight: bold;
+                  text-align: center;
                 }
                 .header p { 
-                  margin: ${isThermal ? '2px 0' : '3px 0'}; 
-                  font-size: ${isThermal ? '9px' : '11px'}; 
-                  line-height: 1.4;
+                  margin: ${isThermal ? '1px 0' : '2px 0'}; 
+                  font-size: ${isThermal ? (paperFormat === 'thermal-58' ? '7px' : '8px') : '10px'}; 
+                  line-height: 1.3;
                 }
                 .info-grid { 
                   ${isThermal 
@@ -165,30 +173,31 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                     : 'display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;'
                   }
                 }
-                .field { margin-bottom: ${isThermal ? '4px' : '10px'}; }
-                .label { font-weight: bold; font-size: ${isThermal ? '9px' : '12px'}; }
-                .value { margin-top: 2px; font-size: ${isThermal ? '9px' : '12px'}; }
+                .field { margin-bottom: ${isThermal ? '3px' : '8px'}; }
+                .label { font-weight: bold; font-size: ${isThermal ? (paperFormat === 'thermal-58' ? '7px' : '8px') : '11px'}; color: #444; }
+                .value { margin-top: 1px; font-size: ${isThermal ? (paperFormat === 'thermal-58' ? '7px' : '8px') : '11px'}; }
                 .qr-section { text-align: center; margin: ${isThermal ? '8px 0' : '20px 0'}; }
                 .qr-section img { width: ${isThermal ? '60px' : '120px'}; height: ${isThermal ? '60px' : '120px'}; }
                 .conditions { 
-                  margin-top: ${isThermal ? '8px' : '20px'}; 
-                  font-size: ${isThermal ? '8px' : '11px'}; 
-                  padding: ${isThermal ? '4px' : '8px'} 0;
+                  margin-top: ${isThermal ? '6px' : '15px'}; 
+                  font-size: ${isThermal ? (paperFormat === 'thermal-58' ? '6px' : '7px') : '10px'}; 
+                  padding: ${isThermal ? '3px' : '6px'} 0;
                   border-top: 1px dashed #333;
+                  line-height: 1.2;
                 }
                 .signature-area { 
-                  margin-top: ${isThermal ? '15px' : '30px'}; 
+                  margin-top: ${isThermal ? '10px' : '25px'}; 
                   ${isThermal ? 'display: block;' : 'display: flex; justify-content: space-between;'}
                   border-top: 1px solid #333;
-                  padding-top: ${isThermal ? '8px' : '12px'};
+                  padding-top: ${isThermal ? '6px' : '10px'};
                 }
                 .signature-box { 
                   text-align: center; 
-                  ${isThermal ? 'margin-bottom: 15px;' : 'width: 150px;'}
+                  ${isThermal ? 'margin-bottom: 12px;' : 'width: 150px;'}
                 }
                 .signature-box .label { 
-                  margin-bottom: ${isThermal ? '20px' : '40px'}; 
-                  font-size: ${isThermal ? '9px' : '12px'};
+                  margin-bottom: ${isThermal ? '15px' : '35px'}; 
+                  font-size: ${isThermal ? (paperFormat === 'thermal-58' ? '7px' : '8px') : '11px'};
                   font-weight: bold;
                 }
                 h3 { font-size: ${isThermal ? '11px' : '18px'}; margin: ${isThermal ? '8px 0 4px' : '20px 0 8px'}; }
@@ -288,28 +297,34 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
           <div className={`info-grid ${isThermal ? 'mb-4' : 'grid grid-cols-2 gap-8 mb-6'}`}>
             {/* Customer Info */}
             <div className={isThermal ? 'mb-4' : ''}>
-              <h3 className={`font-bold ${isThermal ? 'text-xs mb-2' : 'text-lg mb-3'}`}>Data Pelanggan</h3>
+              <h3 className={`font-bold ${isThermal ? 'text-xs mb-2 border-b border-gray-300 pb-1' : 'text-lg mb-3'}`}>Data Pelanggan</h3>
               <div className="field">
                 <div className="label">Nama:</div>
-                <div className={`value ${isThermal ? 'border-b border-dotted border-gray-400 pb-1' : 'border-b border-dotted border-gray-400 pb-1'}`}>{customer.name}</div>
+                <div className="value border-b border-dotted border-gray-400 pb-1">{customer.name}</div>
               </div>
               {!isThermal && (
-                <>
-                  <div className="field">
-                    <div className="label">Alamat:</div>
-                    <div className="value border-b border-dotted border-gray-400 pb-1">{customer.address || '-'}</div>
-                  </div>
-                </>
+                <div className="field">
+                  <div className="label">Alamat:</div>
+                  <div className="value border-b border-dotted border-gray-400 pb-1">{customer.address || '-'}</div>
+                </div>
               )}
               <div className="field">
                 <div className="label">No. Telepon:</div>
                 <div className="value border-b border-dotted border-gray-400 pb-1">{customer.phone || '-'}</div>
               </div>
+              {isThermal && customer.address && (
+                <div className="field">
+                  <div className="label">Alamat:</div>
+                  <div className="value border-b border-dotted border-gray-400 pb-1" style={{ fontSize: paperFormat === 'thermal-58' ? '6px' : '7px', lineHeight: '1.1' }}>
+                    {customer.address.length > 40 ? customer.address.substring(0, 40) + '...' : customer.address}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Device Info */}
             <div>
-              <h3 className={`font-bold ${isThermal ? 'text-xs mb-2' : 'text-lg mb-3'}`}>Data Perangkat</h3>
+              <h3 className={`font-bold ${isThermal ? 'text-xs mb-2 border-b border-gray-300 pb-1' : 'text-lg mb-3'}`}>Data Perangkat</h3>
               <div className="field">
                 <div className="label">Jenis:</div>
                 <div className="value border-b border-dotted border-gray-400 pb-1">{serviceTicket.deviceType}</div>
@@ -322,10 +337,10 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                 <div className="label">Model:</div>
                 <div className="value border-b border-dotted border-gray-400 pb-1">{serviceTicket.deviceModel || '-'}</div>
               </div>
-              {!isThermal && (
+              {!isThermal && serviceTicket.serialNumber && (
                 <div className="field">
                   <div className="label">No. Seri:</div>
-                  <div className="value border-b border-dotted border-gray-400 pb-1">{serviceTicket.serialNumber || '-'}</div>
+                  <div className="value border-b border-dotted border-gray-400 pb-1">{serviceTicket.serialNumber}</div>
                 </div>
               )}
             </div>
@@ -416,14 +431,15 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
           )}
 
           {/* Terms and Conditions */}
-          <div className={`conditions ${isThermal ? 'text-xs leading-tight border-t pt-2 mb-4' : 'text-xs leading-relaxed border-t pt-4 mb-6'}`}>
-            <h4 className="font-bold mb-2">SYARAT DAN KETENTUAN:</h4>
-            <ul className={isThermal ? 'space-y-0.5' : 'space-y-1'}>
-              <li>• Barang diperbaiki tidak diambil 30 hari akan dikenakan biaya</li>
-              {!isThermal && <li>• Kerusakan akibat force majeure (bencana alam, dll) bukan tanggung jawab kami</li>}
+          <div className={`conditions border-t pt-2 mb-4`}>
+            <h4 className={`font-bold mb-2 ${isThermal ? 'text-xs' : 'text-sm'}`}>SYARAT DAN KETENTUAN:</h4>
+            <ul className={`${isThermal ? 'space-y-0.5' : 'space-y-1'} list-none`}>
+              <li>• Barang tidak diambil 30 hari akan dikenakan biaya penyimpanan</li>
               <li>• Harap bawa tanda terima saat mengambil barang</li>
               <li>• Garansi service 30 hari untuk kerusakan yang sama</li>
-              <li>• Pembayaran saat pengambilan barang</li>
+              <li>• Pembayaran dilakukan saat pengambilan barang</li>
+              {!isThermal && <li>• Kerusakan akibat force majeure bukan tanggung jawab service center</li>}
+              {!isThermal && <li>• Komplain maksimal 7 hari setelah pengambilan</li>}
             </ul>
           </div>
 
