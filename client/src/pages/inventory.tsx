@@ -372,14 +372,6 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
             type="submit" 
             disabled={addProductMutation.isPending}
             data-testid="button-add-product-submit"
-            onClick={(e) => {
-              console.log("🔥 Product Button clicked!");
-              console.log("🔥 Product Form state:", form.formState);
-              console.log("🔥 Product Form values:", form.getValues());
-              console.log("🔥 Product Form isValid:", form.formState.isValid);
-              console.log("🔥 Product Form isDirty:", form.formState.isDirty);
-              console.log("🔥 Product Form dirtyFields:", form.formState.dirtyFields);
-            }}
           >
             {addProductMutation.isPending ? "Adding..." : "Tambah Produk"}
           </Button>
@@ -477,8 +469,6 @@ export default function Inventory() {
   
   // Connect to WebSocket for real-time updates
   const { isConnected } = useWebSocket();
-  
-  console.log('📡 Inventory page WebSocket status:', isConnected);
 
   // Products with stock info
   const { data: products = [], isLoading: productsLoading } = useQuery({
