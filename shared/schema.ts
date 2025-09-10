@@ -230,6 +230,10 @@ export const transactions = pgTable("transactions", {
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
   paymentMethod: paymentMethodEnum("payment_method"),
   notes: text("notes"),
+  // Warranty fields
+  warrantyDuration: integer("warranty_duration"), // Duration in days
+  warrantyStartDate: timestamp("warranty_start_date"),
+  warrantyEndDate: timestamp("warranty_end_date"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -266,6 +270,10 @@ export const serviceTickets = pgTable("service_tickets", {
   technicianId: varchar("technician_id").references(() => users.id),
   estimatedCompletion: timestamp("estimated_completion"),
   completedAt: timestamp("completed_at"),
+  // Warranty fields
+  warrantyDuration: integer("warranty_duration"), // Duration in days
+  warrantyStartDate: timestamp("warranty_start_date"),
+  warrantyEndDate: timestamp("warranty_end_date"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
