@@ -859,8 +859,8 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
   total: transformNumericField("0.00"),
   // Warranty fields
   warrantyDuration: transformIntegerField().optional(),
-  warrantyStartDate: z.union([z.string(), z.date()]).optional(),
-  warrantyEndDate: z.union([z.string(), z.date()]).optional(),
+  warrantyStartDate: z.coerce.date().nullable().optional(),
+  warrantyEndDate: z.coerce.date().nullable().optional(),
 });
 
 export const insertTransactionItemSchema = createInsertSchema(transactionItems).omit({
@@ -883,8 +883,8 @@ export const insertServiceTicketSchema = createInsertSchema(serviceTickets).omit
   partsCost: transformNumericField("0.00").optional(),
   // Warranty fields
   warrantyDuration: transformIntegerField().optional(),
-  warrantyStartDate: z.union([z.string(), z.date()]).optional(),
-  warrantyEndDate: z.union([z.string(), z.date()]).optional(),
+  warrantyStartDate: z.coerce.date().nullable().optional(),
+  warrantyEndDate: z.coerce.date().nullable().optional(),
 });
 
 export const insertStockMovementSchema = createInsertSchema(stockMovements).omit({

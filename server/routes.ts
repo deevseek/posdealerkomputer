@@ -1219,27 +1219,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate transaction number
       const transactionNumber = `TRX-${Date.now()}`;
       
-      // Convert ISO string dates back to Date objects for database
-      const processedTransactionData = { ...transactionData };
-      console.log("Before date conversion:", {
-        warrantyStartDate: processedTransactionData.warrantyStartDate,
-        warrantyEndDate: processedTransactionData.warrantyEndDate,
-        startDateType: typeof processedTransactionData.warrantyStartDate,
-        endDateType: typeof processedTransactionData.warrantyEndDate
-      });
+      // Normalize warranty dates to Date objects for database compatibility
+      const normalize = (v: any) => (v ? new Date(v) : null);
+      const normalizedData = {
+        ...transactionData,
+        warrantyStartDate: normalize(transactionData.warrantyStartDate),
+        warrantyEndDate: normalize(transactionData.warrantyEndDate)
+      };
       
-      if (processedTransactionData.warrantyStartDate) {
-        processedTransactionData.warrantyStartDate = new Date(processedTransactionData.warrantyStartDate);
-        console.log("Converted start date:", processedTransactionData.warrantyStartDate, "Type:", typeof processedTransactionData.warrantyStartDate);
-      }
-      if (processedTransactionData.warrantyEndDate) {
-        processedTransactionData.warrantyEndDate = new Date(processedTransactionData.warrantyEndDate);
-        console.log("Converted end date:", processedTransactionData.warrantyEndDate, "Type:", typeof processedTransactionData.warrantyEndDate);
-      }
-      
-      // Add transaction number and user ID to transaction data
+      // Add transaction number and user ID to transaction data  
       const completeTransactionData = {
-        ...processedTransactionData,
+        ...normalizedData,
         transactionNumber,
         userId: req.session.user?.id
       };
