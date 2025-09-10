@@ -49,6 +49,11 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   const [discountType, setDiscountType] = useState<"percentage" | "rupiah">("percentage");
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [showDiscountSection, setShowDiscountSection] = useState(false);
+  
+  // Warranty states
+  const [warrantyDuration, setWarrantyDuration] = useState<number>(0);
+  const [showWarrantySection, setShowWarrantySection] = useState(false);
+  
   const { toast } = useToast();
 
   // Fetch products - with real-time refresh capability
@@ -130,6 +135,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     setDiscountType("percentage");
     setDiscountValue(0);
     setShowDiscountSection(false);
+    setWarrantyDuration(0);
+    setShowWarrantySection(false);
   };
 
   const selectCustomer = (customer: any) => {
@@ -250,6 +257,21 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       return;
     }
 
+    // Calculate warranty data if warranty is provided
+    let warrantyData = {};
+    if (warrantyDuration > 0) {
+      const startDate = new Date();
+      const endDate = warrantyDuration >= 9999 
+        ? null // Unlimited warranty
+        : new Date(startDate.getTime() + warrantyDuration * 24 * 60 * 60 * 1000);
+      
+      warrantyData = {
+        warrantyDuration: warrantyDuration,
+        warrantyStartDate: startDate.toISOString(),
+        warrantyEndDate: endDate ? endDate.toISOString() : null
+      };
+    }
+
     const transactionData = {
       transaction: {
         type: 'sale' as const,
@@ -259,7 +281,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
         taxAmount: Math.round(tax).toString(),
         discountAmount: Math.round(discountAmount).toString(),
         total: Math.round(total).toString(),
-        notes: `POS Sale - ${items.length} items${selectedCustomer ? ` for ${selectedCustomer.name}` : ''}`,
+        notes: `POS Sale - ${items.length} items${selectedCustomer ? ` for ${selectedCustomer.name}` : ''}${warrantyDuration > 0 ? ` dengan garansi ${warrantyDuration} hari` : ''}`,
+        ...warrantyData,
       },
       items: items.map(item => ({
         productId: item.productId,
@@ -562,6 +585,66 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                           Diskon aktif: Rp {discountAmount.toLocaleString('id-ID')}
                         </div>
                       )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Warranty Section */}
+            <Card className="p-4">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Garansi Produk</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowWarrantySection(!showWarrantySection)}
+                    data-testid="button-toggle-warranty"
+                  >
+                    {showWarrantySection ? "Tutup Garansi" : "Tambah Garansi"}
+                  </Button>
+                </div>
+                
+                {showWarrantySection && (
+                  <div className="space-y-3 border-t pt-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="warrantyDuration">
+                        Lama Garansi (Hari)
+                      </Label>
+                      <Input
+                        id="warrantyDuration"
+                        type="number"
+                        min="0"
+                        value={warrantyDuration || ""}
+                        onChange={(e) => setWarrantyDuration(Number(e.target.value) || 0)}
+                        placeholder="Masukkan lama garansi dalam hari"
+                        data-testid="input-warranty-duration"
+                      />
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <p>Contoh: 30 = 30 hari, 365 = 1 tahun, 9999 = tanpa batas</p>
+                        {warrantyDuration > 0 && (
+                          <div className="text-orange-600">
+                            <p><strong>Durasi:</strong> {
+                              warrantyDuration >= 9999 
+                                ? "Tanpa batas waktu" 
+                                : warrantyDuration === 1 
+                                ? "1 hari" 
+                                : warrantyDuration < 30 
+                                ? `${warrantyDuration} hari`
+                                : warrantyDuration < 365
+                                ? `${Math.floor(warrantyDuration / 30)} bulan ${warrantyDuration % 30} hari`
+                                : `${Math.floor(warrantyDuration / 365)} tahun ${Math.floor((warrantyDuration % 365) / 30)} bulan`
+                            }</p>
+                            {warrantyDuration < 9999 && (
+                              <p><strong>Berakhir:</strong> {
+                                new Date(Date.now() + warrantyDuration * 24 * 60 * 60 * 1000)
+                                  .toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                              }</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
