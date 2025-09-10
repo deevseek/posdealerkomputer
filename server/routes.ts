@@ -1209,7 +1209,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/transactions', isAuthenticated, async (req: any, res) => {
     try {
+      console.log("Raw request body:", JSON.stringify(req.body, null, 2));
+      
       const { transaction: transactionData, items } = createTransactionSchema.parse(req.body);
+      
+      console.log("Parsed transaction data:", JSON.stringify(transactionData, null, 2));
+      console.log("Parsed items:", JSON.stringify(items, null, 2));
       
       // Generate transaction number
       const transactionNumber = `TRX-${Date.now()}`;
@@ -1221,6 +1226,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: req.session.user?.id
       };
       
+      console.log("Complete transaction data before storage:", JSON.stringify(completeTransactionData, null, 2));
+      
       const transaction = await storage.createTransaction(
         completeTransactionData,
         items
@@ -1229,6 +1236,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(transaction);
     } catch (error) {
       console.error("Error creating transaction:", error);
+      if (error instanceof Error) {
+        console.error("Error stack:", error.stack);
+      }
       res.status(500).json({ message: "Failed to create transaction" });
     }
   });
