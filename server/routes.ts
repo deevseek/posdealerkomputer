@@ -1227,14 +1227,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         warrantyEndDate: normalize(transactionData.warrantyEndDate)
       };
       
+      console.log("DEBUG - Warranty dates after normalization:");
+      console.log("- warrantyStartDate:", normalizedData.warrantyStartDate, "Type:", typeof normalizedData.warrantyStartDate);
+      console.log("- warrantyEndDate:", normalizedData.warrantyEndDate, "Type:", typeof normalizedData.warrantyEndDate);
+      console.log("- Is warrantyStartDate a Date?", normalizedData.warrantyStartDate instanceof Date);
+      console.log("- Is warrantyEndDate a Date?", normalizedData.warrantyEndDate instanceof Date);
+      
       // Add transaction number and user ID to transaction data  
       const completeTransactionData = {
         ...normalizedData,
         transactionNumber,
         userId: req.session.user?.id
       };
-      
-      console.log("Complete transaction data before storage:", JSON.stringify(completeTransactionData, null, 2));
       
       const transaction = await storage.createTransaction(
         completeTransactionData,
