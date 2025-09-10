@@ -118,13 +118,17 @@ class WebSocketManager {
     const queryKeyMap: Record<string, string[]> = {
       users: ['/api/users'],
       customers: ['/api/customers'],
-      products: ['/api/products'],
+      products: ['/api/products', '/api/products/low-stock'],
+      categories: ['/api/categories'],
       'service-tickets': ['/api/service-tickets'],
       suppliers: ['/api/suppliers'],
       transactions: ['/api/transactions'],
       roles: ['/api/roles'],
       dashboard: ['/api/dashboard/stats'],
-      whatsapp: ['/api/whatsapp/status']
+      whatsapp: ['/api/whatsapp/status'],
+      inventory: ['/api/products', '/api/categories', '/api/reports/stock-movements'],
+      'purchase-orders': ['/api/purchase-orders', '/api/purchase-orders/outstanding-items'],
+      'stock-movements': ['/api/reports/stock-movements', '/api/products']
     };
 
     // Invalidate relevant queries to trigger refetch

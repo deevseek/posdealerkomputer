@@ -26,6 +26,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient } from "@/lib/queryClient";
 import { insertProductSchema, insertCategorySchema } from "@shared/schema";
+import { useWebSocket } from "@/lib/websocket";
 
 const pricingSchema = z.object({
   sellingPrice: z.string().min(1, "Harga jual harus diisi"),
@@ -473,6 +474,11 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
 export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  
+  // Connect to WebSocket for real-time updates
+  const { isConnected } = useWebSocket();
+  
+  console.log('📡 Inventory page WebSocket status:', isConnected);
 
   // Products with stock info
   const { data: products = [], isLoading: productsLoading } = useQuery({
