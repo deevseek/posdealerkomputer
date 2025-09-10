@@ -182,6 +182,7 @@ export default function ServiceTickets() {
       estimatedCost: "",
       laborCost: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const createMutation = useMutation({

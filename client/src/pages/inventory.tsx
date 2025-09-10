@@ -45,6 +45,7 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
       name: "",
       description: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const addCategoryMutation = useMutation({
@@ -70,6 +71,9 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const onSubmit = (data: CategoryFormData) => {
+    console.log("🔥 Category handleSubmit called with data:", data);
+    console.log("🔥 Category Form errors:", form.formState.errors);
+    console.log("🔥 Category Form is valid:", form.formState.isValid);
     addCategoryMutation.mutate(data);
   };
 
@@ -109,6 +113,11 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
             type="submit" 
             disabled={addCategoryMutation.isPending}
             data-testid="button-add-category-submit"
+            onClick={(e) => {
+              console.log("🔥 Category Button clicked!");
+              console.log("🔥 Category Form state:", form.formState);
+              console.log("🔥 Category Form values:", form.getValues());
+            }}
           >
             {addCategoryMutation.isPending ? "Menambah..." : "Tambah Kategori"}
           </Button>
@@ -133,7 +142,7 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
     defaultValues: {
       name: "",
       description: "",
-      categoryId: undefined,
+      categoryId: "",
       brand: "",
       model: "",
       unit: "pcs",
@@ -142,6 +151,7 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
       minStock: 5,
       maxStock: 100,
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const addProductMutation = useMutation({
@@ -167,6 +177,9 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const onSubmit = (data: ProductFormData) => {
+    console.log("🔥 Product handleSubmit called with data:", data);
+    console.log("🔥 Product Form errors:", form.formState.errors);
+    console.log("🔥 Product Form is valid:", form.formState.isValid);
     addProductMutation.mutate(data);
   };
 
@@ -343,6 +356,11 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
             type="submit" 
             disabled={addProductMutation.isPending}
             data-testid="button-add-product-submit"
+            onClick={(e) => {
+              console.log("🔥 Product Button clicked!");
+              console.log("🔥 Product Form state:", form.formState);
+              console.log("🔥 Product Form values:", form.getValues());
+            }}
           >
             {addProductMutation.isPending ? "Adding..." : "Tambah Produk"}
           </Button>
