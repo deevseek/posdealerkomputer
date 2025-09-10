@@ -44,10 +44,36 @@ export default function POS() {
     setShowTransactionModal(true);
   };
 
-  const handleTransactionComplete = (transaction: any) => {
-    setCurrentTransaction(transaction);
+  const handleTransactionComplete = async (transaction: any) => {
+    console.log('Transaction completed:', transaction);
+    
+    // Close transaction modal first
     setShowTransactionModal(false);
+    
+    try {
+      // Fetch the complete transaction data with all related information
+      const response = await fetch(`/api/transactions/${transaction.id}`, {
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const completeTransaction = await response.json();
+        console.log('Complete transaction data:', completeTransaction);
+        setCurrentTransaction(completeTransaction);
+      } else {
+        // Fallback to the original data if fetch fails
+        console.log('Using original transaction data as fallback');
+        setCurrentTransaction(transaction);
+      }
+    } catch (error) {
+      console.error('Error fetching complete transaction:', error);
+      // Fallback to the original data
+      setCurrentTransaction(transaction);
+    }
+    
+    // Show receipt modal after setting transaction data
     setShowReceiptModal(true);
+    
     // Refresh data after transaction
     queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
