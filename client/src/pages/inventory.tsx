@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign, Plus, Tag } from "lucide-react";
+import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign, Plus, Tag, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -27,6 +27,8 @@ import { z } from "zod";
 import { queryClient } from "@/lib/queryClient";
 import { insertProductSchema, insertCategorySchema } from "@shared/schema";
 import { useWebSocket } from "@/lib/websocket";
+import { validateExcelFile, downloadTemplate, uploadExcelFile, type ImportResult } from "@/lib/importExportUtils";
+import ImportResultsDialog from "@/components/ImportResultsDialog";
 
 const pricingSchema = z.object({
   sellingPrice: z.string().min(1, "Harga jual harus diisi"),
@@ -468,8 +470,95 @@ export default function Inventory() {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   
+  // Import/Export state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showImportResults, setShowImportResults] = useState(false);
+  const [importResults, setImportResults] = useState<ImportResult | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
   // Connect to WebSocket for real-time updates
   const { isConnected } = useWebSocket();
+
+  // Import/Export handlers
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloading(true);
+      await downloadTemplate('/api/products/template', 'product-template.xlsx');
+      toast({ 
+        title: "Success", 
+        description: "Template downloaded successfully" 
+      });
+    } catch (error) {
+      console.error('Download template error:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to download template", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateExcelFile(file);
+    if (!validation.isValid) {
+      toast({ 
+        title: "Invalid File", 
+        description: validation.error, 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  const handleImportExcel = async () => {
+    if (!selectedFile) {
+      toast({ 
+        title: "No File Selected", 
+        description: "Please select an Excel file to import", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const result = await uploadExcelFile(selectedFile, '/api/products/import');
+      setImportResults(result);
+      setShowImportResults(true);
+      setSelectedFile(null);
+      
+      // Clear the file input
+      const fileInput = document.getElementById('product-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      // Refresh products data
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      
+      if (result.successCount > 0) {
+        toast({ 
+          title: "Import Completed", 
+          description: `Successfully imported ${result.successCount} products` 
+        });
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast({ 
+        title: "Import Failed", 
+        description: error instanceof Error ? error.message : "Failed to import file", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Products with stock info - with auto-refresh every 5 seconds for real-time updates
   const { data: products = [], isLoading: productsLoading } = useQuery({
@@ -535,8 +624,90 @@ export default function Inventory() {
         <Header 
           title="Inventory Management" 
           breadcrumb="Home / Inventory"
+          action={
+            <div className="flex items-center space-x-2">
+              {/* Import/Export Buttons */}
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadTemplate}
+                disabled={isDownloading}
+                data-testid="button-download-product-template"
+              >
+                {isDownloading ? (
+                  <FileSpreadsheet className="w-4 h-4 mr-2 animate-pulse" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                {isDownloading ? "Downloading..." : "Download Template"}
+              </Button>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  id="product-file-input"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-product-file"
+                />
+                <Button 
+                  variant="outline"
+                  onClick={() => document.getElementById('product-file-input')?.click()}
+                  data-testid="button-select-product-file"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Select File
+                </Button>
+                
+                {selectedFile && (
+                  <Button 
+                    onClick={handleImportExcel}
+                    disabled={isUploading}
+                    data-testid="button-import-products"
+                  >
+                    {isUploading ? (
+                      <Upload className="w-4 h-4 mr-2 animate-pulse" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    {isUploading ? "Importing..." : "Import Excel"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          }
         />
         <main className="flex-1 overflow-y-auto p-6">
+          {/* Selected File Indicator */}
+          {selectedFile && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-800 dark:text-blue-200" data-testid="selected-file-name">
+                    Selected: {selectedFile.name}
+                  </span>
+                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                    ({(selectedFile.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setSelectedFile(null);
+                    const fileInput = document.getElementById('product-file-input') as HTMLInputElement;
+                    if (fileInput) fileInput.value = '';
+                  }}
+                  data-testid="button-clear-selected-file"
+                  className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList className="grid w-full grid-cols-5">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
@@ -1037,6 +1208,14 @@ export default function Inventory() {
           </Tabs>
         </main>
       </div>
+      
+      {/* Import Results Dialog */}
+      <ImportResultsDialog
+        open={showImportResults}
+        onOpenChange={setShowImportResults}
+        result={importResults}
+        title="Product Import Results"
+      />
     </div>
   );
 }

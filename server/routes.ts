@@ -12,6 +12,7 @@ import {
 } from "./objectStorage";
 // import htmlPdf from 'html-pdf-node';  // Removed due to Chromium dependencies issues
 import * as XLSX from 'xlsx';
+import multer from 'multer';
 import { db } from "./db";
 import { eq, and, gte, lte, lt, desc, count, sql } from "drizzle-orm";
 import {
@@ -188,6 +189,23 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Configure multer for file uploads
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Accept only Excel files
+      if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+          file.mimetype === 'application/vnd.ms-excel') {
+        cb(null, true);
+      } else {
+        cb(new Error('Only Excel files are allowed!') as any, false);
+      }
+    }
+  });
+
   // Auth middleware
   // Always use local authentication for universal deployment compatibility
   const { setupAuth } = await import('./auth');
@@ -668,6 +686,256 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating product pricing:", error);
       res.status(500).json({ message: "Failed to update product pricing" });
+    }
+  });
+
+  // Product Excel Import/Export routes
+  app.get('/api/products/template', isAuthenticated, async (req, res) => {
+    try {
+      // Create Excel template with product columns
+      const templateData = [
+        ['name', 'sku', 'brand', 'model', 'sellingPrice', 'stock', 'minStock', 'unit', 'specifications']
+      ];
+      
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
+      
+      // Set column widths for better readability
+      worksheet['!cols'] = [
+        { width: 25 }, // name
+        { width: 20 }, // sku
+        { width: 15 }, // brand
+        { width: 15 }, // model
+        { width: 15 }, // sellingPrice
+        { width: 10 }, // stock
+        { width: 12 }, // minStock
+        { width: 10 }, // unit
+        { width: 30 }  // specifications
+      ];
+      
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
+      
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      
+      res.setHeader('Content-Disposition', 'attachment; filename=product-template.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(excelBuffer);
+    } catch (error) {
+      console.error("Error generating product template:", error);
+      res.status(500).json({ message: "Failed to generate product template" });
+    }
+  });
+
+  app.post('/api/products/import', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "No file uploaded",
+          imported: 0,
+          failed: 0,
+          errors: []
+        });
+      }
+
+      // Get client ID from authenticated session for multi-tenant security
+      const clientId = req.session?.user?.clientId || null;
+
+      // Parse Excel file
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON array
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      if (rawData.length < 2) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Excel file must contain header row and at least one data row",
+          imported: 0,
+          failed: 0,
+          errors: []
+        });
+      }
+
+      const headers = rawData[0] as string[];
+      const dataRows = rawData.slice(1);
+
+      // Validate headers
+      const expectedHeaders = ['name', 'sku', 'brand', 'model', 'sellingPrice', 'stock', 'minStock', 'unit', 'specifications'];
+      const headerMap: Record<string, number> = {};
+      
+      for (const expectedHeader of expectedHeaders) {
+        const headerIndex = headers.findIndex(h => h?.toString().toLowerCase().trim() === expectedHeader.toLowerCase());
+        if (headerIndex === -1 && ['name', 'sku'].includes(expectedHeader)) {
+          return res.status(400).json({ 
+            totalRows: dataRows.length,
+            successCount: 0,
+            errorCount: 0,
+            errors: [{ row: 0, message: `Required column '${expectedHeader}' not found in Excel file`, field: expectedHeader }]
+          });
+        }
+        headerMap[expectedHeader] = headerIndex;
+      }
+
+      const results = {
+        totalRows: dataRows.length,
+        successCount: 0,
+        errorCount: 0,
+        errors: [] as Array<{ row: number; message: string; field?: string }>
+      };
+
+      // Enhanced Zod schema with type coercion
+      const enhancedProductSchema = insertProductSchema.extend({
+        sellingPrice: z.coerce.string().optional(),
+        stock: z.coerce.number().int().min(0).optional(),
+        minStock: z.coerce.number().int().min(0).optional(),
+        clientId: z.string().nullable().optional()
+      });
+
+      // Check for existing SKUs to handle duplicates
+      const existingProducts = await storage.getProducts();
+      const existingSKUs = new Set(existingProducts.map(p => p.sku));
+
+      // Begin database transaction for data integrity
+      const successfulProducts = [];
+
+      // Process each row
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i] as any[];
+        const rowNumber = i + 2; // +2 because Excel rows start at 1 and we skip header
+        
+        try {
+          // Skip completely empty rows
+          if (row.every(cell => !cell || cell.toString().trim() === '')) {
+            continue;
+          }
+
+          // Extract data from row
+          const name = row[headerMap.name]?.toString().trim();
+          const sku = row[headerMap.sku]?.toString().trim();
+          const brand = row[headerMap.brand]?.toString().trim() || null;
+          const model = row[headerMap.model]?.toString().trim() || null;
+          const sellingPrice = row[headerMap.sellingPrice]?.toString().trim();
+          const stock = row[headerMap.stock]?.toString().trim();
+          const minStock = row[headerMap.minStock]?.toString().trim();
+          const unit = row[headerMap.unit]?.toString().trim() || 'pcs';
+          const specifications = row[headerMap.specifications]?.toString().trim() || null;
+
+          // Validate required fields
+          if (!name) {
+            results.errors.push({ row: rowNumber, message: "Name is required", field: "name" });
+            results.errorCount++;
+            continue;
+          }
+
+          if (!sku) {
+            results.errors.push({ row: rowNumber, message: "SKU is required", field: "sku" });
+            results.errorCount++;
+            continue;
+          }
+
+          // Check for duplicate SKU
+          if (existingSKUs.has(sku)) {
+            results.errors.push({ row: rowNumber, message: `SKU '${sku}' already exists`, field: "sku" });
+            results.errorCount++;
+            continue;
+          }
+
+          // Create product data with multi-tenant security
+          const productData: any = {
+            name,
+            sku,
+            brand: brand || undefined,
+            model: model || undefined,
+            unit,
+            specifications: specifications || undefined,
+            clientId, // CRITICAL: Add clientId for multi-tenant security
+          };
+
+          // Parse numeric fields with proper coercion
+          if (sellingPrice && sellingPrice.trim() !== '') {
+            const parsedPrice = parseFloat(sellingPrice);
+            if (!isNaN(parsedPrice) && parsedPrice >= 0) {
+              productData.sellingPrice = parsedPrice.toString();
+            }
+          }
+
+          if (stock && stock.trim() !== '') {
+            const parsedStock = parseInt(stock);
+            if (!isNaN(parsedStock) && parsedStock >= 0) {
+              productData.stock = parsedStock;
+            }
+          }
+
+          if (minStock && minStock.trim() !== '') {
+            const parsedMinStock = parseInt(minStock);
+            if (!isNaN(parsedMinStock) && parsedMinStock >= 0) {
+              productData.minStock = parsedMinStock;
+            }
+          }
+
+          // Validate with enhanced schema
+          const validatedData = enhancedProductSchema.parse(productData);
+          
+          // Add auto-generated barcode if not provided
+          const productWithCodes = {
+            ...validatedData,
+            barcode: generateBarcode(),
+          };
+
+          // Add to successful products list for transaction
+          successfulProducts.push(productWithCodes);
+          existingSKUs.add(sku); // Add to set to prevent duplicates within the same import
+
+        } catch (error) {
+          console.error(`Error processing row ${rowNumber}:`, error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          results.errors.push({ row: rowNumber, message: errorMessage });
+          results.errorCount++;
+        }
+      }
+
+      // Create all products in a transaction-safe manner
+      try {
+        for (const productData of successfulProducts) {
+          await storage.createProduct(productData);
+          results.successCount++;
+        }
+      } catch (error) {
+        console.error("Error during bulk product creation:", error);
+        return res.status(500).json({ 
+          totalRows: results.totalRows,
+          successCount: 0,
+          errorCount: results.totalRows,
+          errors: [{ row: 0, message: "Database transaction failed" }]
+        });
+      }
+
+      // Broadcast real-time update for imported products
+      realtimeService.broadcastToTenant(req.tenant?.id || clientId, {
+        resource: 'products',
+        action: 'import',
+        data: { imported: results.successful }
+      });
+
+      res.json({
+        totalRows: results.totalRows,
+        successCount: results.successCount,
+        errorCount: results.errorCount,
+        errors: results.errors
+      });
+
+    } catch (error) {
+      console.error("Error importing products:", error);
+      res.status(500).json({ 
+        totalRows: 0,
+        successCount: 0,
+        errorCount: 0,
+        errors: [{ row: 0, message: "Server error during import" }]
+      });
     }
   });
 
@@ -1152,6 +1420,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating customer:", error);
       res.status(500).json({ message: "Failed to update customer" });
+    }
+  });
+
+  // Customer Excel Import/Export routes
+  app.get('/api/customers/template', isAuthenticated, async (req, res) => {
+    try {
+      // Create Excel template with customer columns
+      const templateData = [
+        ['name', 'email', 'phone', 'address']
+      ];
+      
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
+      
+      // Set column widths for better readability
+      worksheet['!cols'] = [
+        { width: 20 }, // name
+        { width: 25 }, // email  
+        { width: 15 }, // phone
+        { width: 30 }  // address
+      ];
+      
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Customers');
+      
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      
+      res.setHeader('Content-Disposition', 'attachment; filename=customer-template.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(excelBuffer);
+    } catch (error) {
+      console.error("Error generating customer template:", error);
+      res.status(500).json({ message: "Failed to generate customer template" });
+    }
+  });
+
+  app.post('/api/customers/import', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "No file uploaded",
+          imported: 0,
+          failed: 0,
+          errors: []
+        });
+      }
+
+      // Get client ID from authenticated session for multi-tenant security
+      const clientId = req.session?.user?.clientId || null;
+
+      // Parse Excel file
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON array
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      if (rawData.length < 2) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Excel file must contain header row and at least one data row",
+          imported: 0,
+          failed: 0,
+          errors: []
+        });
+      }
+
+      const headers = rawData[0] as string[];
+      const dataRows = rawData.slice(1);
+
+      // Validate headers
+      const expectedHeaders = ['name', 'email', 'phone', 'address'];
+      const headerMap: Record<string, number> = {};
+      
+      for (const expectedHeader of expectedHeaders) {
+        const headerIndex = headers.findIndex(h => h?.toString().toLowerCase().trim() === expectedHeader);
+        if (headerIndex === -1 && expectedHeader === 'name') {
+          return res.status(400).json({ 
+            success: false,
+            message: `Required column '${expectedHeader}' not found in Excel file`,
+            imported: 0,
+            failed: 0,
+            errors: []
+          });
+        }
+        headerMap[expectedHeader] = headerIndex;
+      }
+
+      const results = {
+        totalRows: dataRows.length,
+        successCount: 0,
+        errorCount: 0,
+        errors: [] as Array<{ row: number; message: string; field?: string }>
+      };
+
+      // Enhanced Zod schema with type coercion
+      const enhancedCustomerSchema = insertCustomerSchema.extend({
+        clientId: z.string().nullable().optional(),
+        email: z.string().email().optional().or(z.literal("")).transform(val => val === "" ? undefined : val),
+        phone: z.string().optional().or(z.literal("")).transform(val => val === "" ? undefined : val),
+        address: z.string().optional().or(z.literal("")).transform(val => val === "" ? undefined : val)
+      });
+
+      // Check for existing customers to handle duplicates
+      const existingCustomers = await storage.getCustomers();
+      const existingEmails = new Set(existingCustomers.map(c => c.email).filter(Boolean));
+
+      // Begin database transaction for data integrity
+      const successfulCustomers = [];
+
+      // Process each row
+      for (let i = 0; i < dataRows.length; i++) {
+        const row = dataRows[i] as any[];
+        const rowNumber = i + 2; // +2 because Excel rows start at 1 and we skip header
+        
+        try {
+          // Skip completely empty rows
+          if (row.every(cell => !cell || cell.toString().trim() === '')) {
+            continue;
+          }
+
+          // Extract data from row
+          const name = row[headerMap.name]?.toString().trim();
+          const email = row[headerMap.email]?.toString().trim() || null;
+          const phone = row[headerMap.phone]?.toString().trim() || null;
+          const address = row[headerMap.address]?.toString().trim() || null;
+
+          // Validate required fields
+          if (!name) {
+            results.errors.push({ row: rowNumber, message: "Name is required", field: "name" });
+            results.errorCount++;
+            continue;
+          }
+
+          // Check for duplicate email if provided
+          if (email && existingEmails.has(email)) {
+            results.errors.push({ row: rowNumber, message: `Email '${email}' already exists`, field: "email" });
+            results.errorCount++;
+            continue;
+          }
+
+          // Create customer data with multi-tenant security
+          const customerData = {
+            name,
+            email: email || undefined,
+            phone: phone || undefined,
+            address: address || undefined,
+            clientId, // CRITICAL: Add clientId for multi-tenant security
+          };
+
+          // Validate with enhanced schema
+          const validatedData = enhancedCustomerSchema.parse(customerData);
+          
+          // Add to successful customers list for transaction
+          successfulCustomers.push(validatedData);
+          if (email) {
+            existingEmails.add(email); // Add to set to prevent duplicates within the same import
+          }
+
+        } catch (error) {
+          console.error(`Error processing row ${rowNumber}:`, error);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          results.errors.push({ row: rowNumber, message: errorMessage });
+          results.errorCount++;
+        }
+      }
+
+      // Create all customers in a transaction-safe manner
+      try {
+        for (const customerData of successfulCustomers) {
+          await storage.createCustomer(customerData);
+          results.successCount++;
+        }
+      } catch (error) {
+        console.error("Error during bulk customer creation:", error);
+        return res.status(500).json({ 
+          totalRows: results.totalRows,
+          successCount: 0,
+          errorCount: results.totalRows,
+          errors: [{ row: 0, message: "Database transaction failed" }]
+        });
+      }
+
+      // Broadcast real-time update for imported customers
+      realtimeService.broadcastToTenant(req.tenant?.id || clientId, {
+        resource: 'customers',
+        action: 'import',
+        data: { imported: results.successful }
+      });
+
+      res.json({
+        totalRows: results.totalRows,
+        successCount: results.successCount,
+        errorCount: results.errorCount,
+        errors: results.errors
+      });
+
+    } catch (error) {
+      console.error("Error importing customers:", error);
+      res.status(500).json({ 
+        totalRows: 0,
+        successCount: 0,
+        errorCount: 0,
+        errors: [{ row: 0, message: "Server error during import" }]
+      });
     }
   });
 

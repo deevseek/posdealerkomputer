@@ -28,7 +28,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, User, Edit, Trash2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Search, User, Edit, Trash2, Phone, Mail, MapPin, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,6 +36,8 @@ import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { validateExcelFile, downloadTemplate, uploadExcelFile, type ImportResult } from "@/lib/importExportUtils";
+import ImportResultsDialog from "@/components/ImportResultsDialog";
 
 const customerFormSchema = insertCustomerSchema;
 
@@ -43,6 +45,13 @@ export default function Customers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDialog, setShowDialog] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  
+  // Import/Export state
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [showImportResults, setShowImportResults] = useState(false);
+  const [importResults, setImportResults] = useState<ImportResult | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -187,6 +196,86 @@ export default function Customers() {
     setShowDialog(true);
   };
 
+  // Import/Export handlers
+  const handleDownloadTemplate = async () => {
+    try {
+      setIsDownloading(true);
+      await downloadTemplate('/api/customers/template', 'customer-template.xlsx');
+      toast({ 
+        title: "Success", 
+        description: "Template downloaded successfully" 
+      });
+    } catch (error) {
+      console.error('Download template error:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to download template", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateExcelFile(file);
+    if (!validation.isValid) {
+      toast({ 
+        title: "Invalid File", 
+        description: validation.error, 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+  };
+
+  const handleImportExcel = async () => {
+    if (!selectedFile) {
+      toast({ 
+        title: "No File Selected", 
+        description: "Please select an Excel file to import", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const result = await uploadExcelFile(selectedFile, '/api/customers/import');
+      setImportResults(result);
+      setShowImportResults(true);
+      setSelectedFile(null);
+      
+      // Clear the file input
+      const fileInput = document.getElementById('customer-file-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+
+      // Refresh customers data
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      
+      if (result.successCount > 0) {
+        toast({ 
+          title: "Import Completed", 
+          description: `Successfully imported ${result.successCount} customers` 
+        });
+      }
+    } catch (error) {
+      console.error('Import error:', error);
+      toast({ 
+        title: "Import Failed", 
+        description: error instanceof Error ? error.message : "Failed to import file", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
@@ -195,10 +284,61 @@ export default function Customers() {
           title="Manajemen Pelanggan" 
           breadcrumb="Beranda / Pelanggan"
           action={
-            <Button onClick={handleNew} data-testid="button-add-customer">
-              <Plus className="w-4 h-4 mr-2" />
-              Tambah Pelanggan
-            </Button>
+            <div className="flex items-center space-x-2">
+              {/* Import/Export Buttons */}
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadTemplate}
+                disabled={isDownloading}
+                data-testid="button-download-customer-template"
+              >
+                {isDownloading ? (
+                  <FileSpreadsheet className="w-4 h-4 mr-2 animate-pulse" />
+                ) : (
+                  <Download className="w-4 h-4 mr-2" />
+                )}
+                {isDownloading ? "Downloading..." : "Download Template"}
+              </Button>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  id="customer-file-input"
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  data-testid="input-customer-file"
+                />
+                <Button 
+                  variant="outline"
+                  onClick={() => document.getElementById('customer-file-input')?.click()}
+                  data-testid="button-select-customer-file"
+                >
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Select File
+                </Button>
+                
+                {selectedFile && (
+                  <Button 
+                    onClick={handleImportExcel}
+                    disabled={isUploading}
+                    data-testid="button-import-customers"
+                  >
+                    {isUploading ? (
+                      <Upload className="w-4 h-4 mr-2 animate-pulse" />
+                    ) : (
+                      <Upload className="w-4 h-4 mr-2" />
+                    )}
+                    {isUploading ? "Importing..." : "Import Excel"}
+                  </Button>
+                )}
+              </div>
+              
+              <Button onClick={handleNew} data-testid="button-add-customer">
+                <Plus className="w-4 h-4 mr-2" />
+                Tambah Pelanggan
+              </Button>
+            </div>
           }
         />
         <main className="flex-1 overflow-y-auto p-6">
@@ -216,6 +356,24 @@ export default function Customers() {
                     data-testid="input-customer-search"
                   />
                 </div>
+                {selectedFile && (
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span data-testid="selected-file-name">{selectedFile.name}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setSelectedFile(null);
+                        const fileInput = document.getElementById('customer-file-input') as HTMLInputElement;
+                        if (fileInput) fileInput.value = '';
+                      }}
+                      data-testid="button-clear-selected-file"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -439,6 +597,14 @@ export default function Customers() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Import Results Dialog */}
+      <ImportResultsDialog
+        open={showImportResults}
+        onOpenChange={setShowImportResults}
+        result={importResults}
+        title="Customer Import Results"
+      />
     </div>
   );
 }
