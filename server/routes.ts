@@ -1306,55 +1306,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send WhatsApp notification for new service (async, don't block response)
       setImmediate(async () => {
-        let retryCount = 0;
-        const maxRetries = 3;
-        
-        const attemptNotification = async (): Promise<void> => {
-          try {
-            const config = await storage.getStoreConfig();
-            console.log(`🔔 Service creation notification attempt ${retryCount + 1}/${maxRetries} for ticket ${ticket.ticketNumber}`);
+        try {
+          const config = await storage.getStoreConfig();
+          console.log(`🔔 Service creation notification for ticket ${ticket.ticketNumber}`);
+          
+          if (config?.whatsappEnabled && whatsappService.isConnected()) {
+            console.log(`WhatsApp enabled and connected, getting customer data...`);
+            const customer = await storage.getCustomerById(ticket.customerId);
             
-            if (config?.whatsappEnabled) {
-              console.log(`WhatsApp enabled in config, checking connection...`);
-              
-              if (whatsappService.isConnected()) {
-                console.log(`WhatsApp connected, getting customer data...`);
-                const customer = await storage.getCustomerById(ticket.customerId);
-                
-                if (customer?.phone) {
-                  console.log(`Sending service creation notification to ${customer.phone}...`);
-                  const success = await whatsappService.sendServiceCreatedNotification(
-                    customer.phone,
-                    ticket,
-                    customer,
-                    config
-                  );
-                  
-                  if (!success && retryCount < maxRetries - 1) {
-                    retryCount++;
-                    console.log(`Retrying service creation notification in 2 seconds...`);
-                    setTimeout(() => attemptNotification(), 2000);
-                  }
-                } else {
-                  console.log('No phone number for customer, skipping WhatsApp notification');
-                }
-              } else {
-                console.log(`WhatsApp not connected, skipping notification`);
-              }
+            if (customer?.phone) {
+              console.log(`Sending service creation notification to ${customer.phone}...`);
+              await whatsappService.sendServiceCreatedNotification(
+                customer.phone,
+                ticket,
+                customer,
+                config
+              );
             } else {
-              console.log('WhatsApp not enabled in config, skipping notification');
+              console.log('No phone number for customer, skipping WhatsApp notification');
             }
-          } catch (error) {
-            console.error(`Error sending WhatsApp notification for new service (attempt ${retryCount + 1}):`, error);
-            if (retryCount < maxRetries - 1) {
-              retryCount++;
-              console.log(`Retrying service creation notification in 2 seconds...`);
-              setTimeout(() => attemptNotification(), 2000);
-            }
+          } else {
+            console.log('WhatsApp not enabled or not connected, skipping notification');
           }
-        };
-        
-        await attemptNotification();
+        } catch (error) {
+          console.error('Error sending WhatsApp notification for new service:', error);
+        }
       });
       
       res.json(ticket);
@@ -1415,63 +1391,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send WhatsApp notification for status change (async, don't block response)
       if (status !== undefined && oldTicket && status !== oldTicket.status) {
         setImmediate(async () => {
-          let retryCount = 0;
-          const maxRetries = 3;
-          
-          const attemptStatusNotification = async (): Promise<void> => {
-            try {
-              const config = await storage.getStoreConfig();
-              console.log(`🔄 Status update notification attempt ${retryCount + 1}/${maxRetries} for ticket ${ticket.ticketNumber}: ${oldTicket.status} → ${status}`);
+          try {
+            const config = await storage.getStoreConfig();
+            console.log(`🔄 Status update notification for ticket ${ticket.ticketNumber}: ${oldTicket.status} → ${status}`);
+            
+            if (config?.whatsappEnabled && whatsappService.isConnected()) {
+              console.log(`WhatsApp enabled and connected, getting customer data...`);
+              const customer = await storage.getCustomerById(ticket.customerId);
               
-              if (config?.whatsappEnabled) {
-                console.log(`WhatsApp enabled in config, checking connection...`);
-                
-                if (whatsappService.isConnected()) {
-                  console.log(`WhatsApp connected, getting customer data...`);
-                  const customer = await storage.getCustomerById(ticket.customerId);
-                  
-                  if (customer?.phone) {
-                    console.log(`Sending status update notification to ${customer.phone}...`);
-                    const success = await whatsappService.sendServiceStatusNotification(
-                      customer.phone,
-                      ticket,
-                      customer,
-                      config
-                    );
-                    
-                    if (!success && retryCount < maxRetries - 1) {
-                      retryCount++;
-                      console.log(`Retrying status notification in 2 seconds...`);
-                      setTimeout(() => attemptStatusNotification(), 2000);
-                    }
-                  } else {
-                    console.log('No phone number for customer, skipping WhatsApp status notification');
-                  }
-                } else {
-                  console.log(`WhatsApp not connected for status update, current state: ${whatsappService.getConnectionState()}`);
-                  
-                  // Force reconnect attempt for status updates
-                  if (retryCount < maxRetries - 1) {
-                    console.log('Attempting WhatsApp reconnect for status notification...');
-                    whatsappService.initialize(); // Trigger reconnection
-                    retryCount++;
-                    setTimeout(() => attemptStatusNotification(), 5000); // Longer wait for reconnect
-                  }
-                }
+              if (customer?.phone) {
+                console.log(`Sending status update notification to ${customer.phone}...`);
+                await whatsappService.sendServiceStatusNotification(
+                  customer.phone,
+                  ticket,
+                  customer,
+                  config
+                );
               } else {
-                console.log('WhatsApp not enabled in config, skipping status notification');
+                console.log('No phone number for customer, skipping WhatsApp status notification');
               }
-            } catch (error) {
-              console.error(`Error sending WhatsApp notification for status change (attempt ${retryCount + 1}):`, error);
-              if (retryCount < maxRetries - 1) {
-                retryCount++;
-                console.log(`Retrying status notification in 2 seconds...`);
-                setTimeout(() => attemptStatusNotification(), 2000);
-              }
+            } else {
+              console.log('WhatsApp not enabled or not connected, skipping status notification');
             }
-          };
-          
-          await attemptStatusNotification();
+          } catch (error) {
+            console.error('Error sending WhatsApp notification for status change:', error);
+          }
         });
       }
       
