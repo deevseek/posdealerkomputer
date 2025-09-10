@@ -147,6 +147,12 @@ export default function Customers() {
   });
 
   const handleSubmit = (data: any) => {
+    console.log("🔥 Customer handleSubmit called with data:", data);
+    console.log("🔥 Customer Form errors:", form.formState.errors);
+    console.log("🔥 Customer Form is valid:", form.formState.isValid);
+    console.log("🔥 Customer Create mutation pending:", createMutation.isPending);
+    console.log("🔥 Customer Update mutation pending:", updateMutation.isPending);
+    
     if (editingCustomer) {
       updateMutation.mutate({ id: editingCustomer.id, data });
     } else {
@@ -414,6 +420,11 @@ export default function Customers() {
                   type="submit" 
                   disabled={createMutation.isPending || updateMutation.isPending}
                   data-testid="button-save-customer"
+                  onClick={(e) => {
+                    console.log("🔥 Customer Button clicked!");
+                    console.log("🔥 Customer Form state:", form.formState);
+                    console.log("🔥 Customer Form values:", form.getValues());
+                  }}
                 >
                   {editingCustomer ? "Update Customer" : "Create Customer"}
                 </Button>
