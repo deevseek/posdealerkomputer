@@ -189,7 +189,21 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
         console.log("🔥 Product Form submit event triggered!");
         console.log("🔥 Product Form valid before submit:", form.formState.isValid);
         console.log("🔥 Product Form errors before submit:", form.formState.errors);
-        form.handleSubmit(onSubmit)(e);
+        console.log("🔥 Current form data:", form.getValues());
+        
+        // Force validation check
+        form.trigger().then((isValid) => {
+          console.log("🔥 Force trigger validation result:", isValid);
+          console.log("🔥 Errors after trigger:", form.formState.errors);
+          
+          if (isValid) {
+            onSubmit(form.getValues() as ProductFormData);
+          } else {
+            console.log("🔥 Form validation failed, not submitting");
+          }
+        });
+        
+        e.preventDefault();
       }} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormField
