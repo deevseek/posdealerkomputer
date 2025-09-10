@@ -1,0 +1,116 @@
+🔌 WebSocket disconnected 1001 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 1/5 websocket.ts:45:19
+🔌 WebSocket disconnected 1001 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 2/5 websocket.ts:45:19
+🔌 WebSocket disconnected 1001 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 3/5 websocket.ts:45:19
+[vite] connecting... client:495:9
+GET
+wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/?token=WvWPm2wXIowm
+NS_ERROR_WEBSOCKET_CONNECTION_REFUSED
+
+Firefox can’t establish a connection to the server at wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/?token=WvWPm2wXIowm. client:536:19
+Uncaught (in promise) DOMException: An invalid or illegal string was specified
+    setupWebSocket client:536
+    fallback client:509
+    setupWebSocket client:555
+    setupWebSocket client:552
+    <anonymous> client:531
+client:536
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools chunk-RPCDYKBN.js:21551:25
+Setup Status Debug: 
+Object { setupStatus: undefined, isSetupLoading: true, isSetupCompleted: false, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: true, setupStatus: undefined, isAuthenticated: false, isLoading: true, error: undefined }
+App.tsx:66:13
+Setup Status Debug: 
+Object { setupStatus: undefined, isSetupLoading: true, isSetupCompleted: false, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: true, setupStatus: undefined, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:66:13
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:66:13
+🔄 Connecting to real-time updates... App.tsx:56:15
+🔄 Connecting to WebSocket... wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/ws websocket.ts:23:15
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757525604757_w7vr1fo6u", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757525604757_w7vr1fo6u" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17
+Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}. @radix-ui_react-dialog.js:340:36
+XHRPOST
+https://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/api/transactions
+[HTTP/1.1 500 Internal Server Error 3254ms]
+
+	
+POST
+	https://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/api/transactions
+Status
+500
+Internal Server Error
+VersionHTTP/1.1
+Transferred429 B (42 B size)
+Referrer Policystrict-origin-when-cross-origin
+Request PriorityHighest
+DNS ResolutionSystem
+
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:66:13
+🔄 Connecting to real-time updates... App.tsx:56:15
+🔄 Connecting to WebSocket... wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/ws websocket.ts:23:15
+🔌 WebSocket disconnected 1005 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 1/5 websocket.ts:45:19
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757525632420_irnhxglcm", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+🔄 Connecting to WebSocket... wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/ws websocket.ts:23:15
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757525635811_j58ggen9b", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757525635811_j58ggen9b" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17
+Setup Status Debug: 
+Object { setupStatus: {…}, isSetupLoading: false, isSetupCompleted: true, needsSetup: false, error: undefined }
+useSetup.ts:16:13
+Router Debug: 
+Object { needsSetup: false, isSetupLoading: false, setupStatus: {…}, isAuthenticated: true, isLoading: false, error: undefined }
+App.tsx:66:13
+🔄 Connecting to real-time updates... App.tsx:56:15
+🔄 Connecting to WebSocket... wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/ws websocket.ts:23:15
+🔌 WebSocket disconnected 1005 <empty string> websocket.ts:40:17
+🔄 Attempting reconnect 1/5 websocket.ts:45:19
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757525637540_ntry5x10x", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+🔄 Connecting to WebSocket... wss://2284d9d1-7f35-458f-a718-c7bd541a1d5f-00-cvozg2rpm716.pike.replit.dev/ws websocket.ts:23:15
+✅ WebSocket connected websocket.ts:26:17
+📨 WebSocket message received: 
+Object { type: "connected", clientId: "client_1757525640829_115b4nkfm", message: "Real-time connection established" }
+websocket.ts:69:13
+🎉 Real-time connection established websocket.ts:72:17
+📨 WebSocket message received: 
+Object { type: "auth_success", clientId: "client_1757525640829_115b4nkfm" }
+websocket.ts:69:13
+✅ WebSocket authenticated websocket.ts:75:17
