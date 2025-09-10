@@ -64,6 +64,10 @@ export default function Customers() {
       email: "",
       phone: "",
       address: "",
+      // Add additional fields that might be in schema
+      paymentTerms: 30,
+      creditLimit: "",
+      rating: 5,
     },
     mode: "onChange", // Enable real-time validation
   });
@@ -424,6 +428,8 @@ export default function Customers() {
                     console.log("🔥 Customer Button clicked!");
                     console.log("🔥 Customer Form state:", form.formState);
                     console.log("🔥 Customer Form values:", form.getValues());
+                    console.log("🔥 Customer Form errors:", form.formState.errors);
+                    console.log("🔥 Customer Form is valid:", form.formState.isValid);
                   }}
                 >
                   {editingCustomer ? "Update Customer" : "Create Customer"}
