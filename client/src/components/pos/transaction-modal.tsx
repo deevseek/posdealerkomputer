@@ -267,8 +267,8 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       
       warrantyData = {
         warrantyDuration: warrantyDuration,
-        warrantyStartDate: startDate.toISOString(),
-        warrantyEndDate: endDate ? endDate.toISOString() : null
+        warrantyStartDate: startDate,
+        warrantyEndDate: endDate
       };
     }
 
