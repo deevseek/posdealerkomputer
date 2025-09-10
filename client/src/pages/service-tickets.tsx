@@ -63,9 +63,12 @@ const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   partsCost: true,
   completedAt: true,
   estimatedCompletion: true,
+  warrantyStartDate: true,
+  warrantyEndDate: true,
 }).extend({
   estimatedCost: z.string().optional(),
   laborCost: z.string().optional(),
+  warrantyDuration: z.string().optional(),
 }).refine((data) => {
   return data.customerId && data.customerId.trim() !== "";
 }, {
@@ -181,6 +184,7 @@ export default function ServiceTickets() {
       status: "pending",
       estimatedCost: "",
       laborCost: "",
+      warrantyDuration: "",
     },
     mode: "onChange", // Enable real-time validation
   });
@@ -393,8 +397,27 @@ export default function ServiceTickets() {
       return;
     }
 
+    // Calculate warranty dates if status is delivered and warranty duration is provided
+    let warrantyData = {};
+    if (data.status === "delivered" && data.warrantyDuration) {
+      const warrantyDurationNum = parseInt(data.warrantyDuration);
+      if (warrantyDurationNum > 0) {
+        const startDate = new Date();
+        const endDate = warrantyDurationNum >= 9999 
+          ? null // Unlimited warranty
+          : new Date(startDate.getTime() + warrantyDurationNum * 24 * 60 * 60 * 1000);
+        
+        warrantyData = {
+          warrantyDuration: warrantyDurationNum,
+          warrantyStartDate: startDate.toISOString(),
+          warrantyEndDate: endDate ? endDate.toISOString() : null
+        };
+      }
+    }
+
     const submitData = {
       ...data,
+      ...warrantyData,
       parts: selectedParts.map(part => ({
         productId: part.productId,
         quantity: part.quantity,
@@ -977,6 +1000,62 @@ export default function ServiceTickets() {
                   )}
                 />
               </div>
+
+              {/* Warranty Section - Only show when status is delivered */}
+              {form.watch("status") === "delivered" && (
+                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg space-y-4">
+                  <h3 className="text-lg font-semibold text-orange-800">Informasi Garansi</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="warrantyDuration"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Lama Garansi (Hari) *</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              placeholder="Masukkan lama garansi dalam hari" 
+                              {...field}
+                              onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : "")}
+                              data-testid="input-warranty-duration" 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                          <p className="text-sm text-muted-foreground">
+                            Contoh: 30 = 30 hari, 365 = 1 tahun, 9999 = tanpa batas
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Info Garansi</label>
+                      <div className="p-3 bg-white border rounded text-sm">
+                        {form.watch("warrantyDuration") ? (
+                          <div>
+                            <p><strong>Durasi:</strong> {(() => {
+                              const duration = parseInt(form.watch("warrantyDuration")) || 0;
+                              if (duration >= 9999) return "Tanpa batas waktu";
+                              if (duration === 1) return "1 hari";
+                              if (duration < 30) return `${duration} hari`;
+                              if (duration < 365) return `${Math.floor(duration / 30)} bulan ${duration % 30} hari`;
+                              return `${Math.floor(duration / 365)} tahun ${Math.floor((duration % 365) / 30)} bulan`;
+                            })()}</p>
+                            {parseInt(form.watch("warrantyDuration")) < 9999 && (
+                              <p><strong>Berakhir:</strong> {
+                                new Date(Date.now() + (parseInt(form.watch("warrantyDuration")) || 0) * 24 * 60 * 60 * 1000)
+                                  .toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                              }</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground">Masukkan durasi garansi</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
                 </TabsContent>
 
                 <TabsContent value="spare-parts" className="space-y-4">
