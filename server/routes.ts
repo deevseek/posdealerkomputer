@@ -13,7 +13,7 @@ import {
 // import htmlPdf from 'html-pdf-node';  // Removed due to Chromium dependencies issues
 import * as XLSX from 'xlsx';
 import { db } from "./db";
-import { eq, and, gte, lte, desc, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, count, sql } from "drizzle-orm";
 import {
   products,
   categories, 
@@ -843,6 +843,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         productId: req.body.productId,
         quantity: quantity, // Maps to quantity field (NOT NULL)
         orderedQuantity: quantity, // Maps to ordered_quantity field
+        receivedQuantity: 0, // Initial received quantity is 0
+        outstandingQuantity: quantity, // Initial outstanding = quantity
         unitCost: String(unitCost), // Maps to unit_cost (varchar)
         totalCost: String(quantity * unitCost), // Maps to total_cost (varchar)
         notes: req.body.notes || "",
@@ -1013,6 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createInventoryAdjustmentItem({
         adjustmentId: adjustment.id,
         productId: poItem.productId,
+        quantity: quantityReceived, // Add required quantity field
         systemQuantity: 0, // Since it was refunded, system shows 0
         actualQuantity: quantityReceived,
         adjustmentQuantity: quantityReceived,
@@ -1278,12 +1281,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         solution: solution || null,
         status: status || 'pending',
         technicianId: technicianId || null,
-        estimatedCost: estimatedCost ? String(estimatedCost) : null,
+        estimatedCost: estimatedCost ? String(estimatedCost) : undefined,
         laborCost: laborCost ? String(laborCost) : null,
-        actualCost: null,
-        partsCost: null,
-        estimatedCompletion: null,
-        completedAt: null,
+        actualCost: undefined,
+        partsCost: undefined,
+        estimatedCompletion: undefined,
+        completedAt: undefined,
       };
       
       console.log("Processed ticket data:", JSON.stringify(ticketData, null, 2));
@@ -2092,6 +2095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: existingConfig?.email || "",
         taxRate: existingConfig?.taxRate || "11.00",
         defaultDiscount: existingConfig?.defaultDiscount || "0.00",
+        databasePort: existingConfig?.databasePort || 5432,
         whatsappEnabled: true,
       });
       res.json({ message: 'WhatsApp enabled successfully' });
@@ -2117,6 +2121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: existingConfig?.email || "",
         taxRate: existingConfig?.taxRate || "11.00",
         defaultDiscount: existingConfig?.defaultDiscount || "0.00",
+        databasePort: existingConfig?.databasePort || 5432,
         whatsappEnabled: false,
       });
       res.json({ message: 'WhatsApp disabled successfully' });
@@ -2377,13 +2382,13 @@ Terima kasih!
           currency: 'IDR',
           billingPeriod: 'monthly',
           isActive: true,
-          features: ["Full Features", "Unlimited Stores", "API Access", "Custom Reports", "Priority Support"],
-          limits: {
+          features: JSON.stringify(["Full Features", "Unlimited Stores", "API Access", "Custom Reports", "Priority Support"]),
+          limits: JSON.stringify({
             maxUsers: 50,
             maxProducts: 10000,
             maxTransactions: 50000,
             maxStorage: 20
-          },
+          }),
           maxUsers: 50,
           maxTransactionsPerMonth: 50000,
           maxStorageGB: 20,
@@ -2401,7 +2406,7 @@ Terima kasih!
         const planExists = existingPlans.some(plan => plan.name === planConfig.name);
         
         if (!planExists) {
-          await db.insert(plans).values(planConfig);
+          await db.insert(plans).values([planConfig]);
           console.log(`✅ Created subscription plan: ${planConfig.name}`);
         } else {
           console.log(`ℹ️ Subscription plan already exists: ${planConfig.name}`);
