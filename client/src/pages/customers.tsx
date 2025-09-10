@@ -65,6 +65,7 @@ export default function Customers() {
       phone: "",
       address: "",
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const createMutation = useMutation({
