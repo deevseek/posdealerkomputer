@@ -68,7 +68,10 @@ const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
 }).extend({
   estimatedCost: z.string().optional(),
   laborCost: z.string().optional(),
-  warrantyDuration: z.string().optional(),
+  warrantyDuration: z.union([z.string(), z.number()]).optional().transform((val) => {
+    if (val === "" || val === undefined || val === null) return undefined;
+    return typeof val === "string" ? (val === "" ? undefined : parseInt(val) || 0) : val;
+  }),
 }).refine((data) => {
   return data.customerId && data.customerId.trim() !== "";
 }, {
@@ -410,7 +413,7 @@ export default function ServiceTickets() {
         warrantyData = {
           warrantyDuration: warrantyDurationNum,
           warrantyStartDate: startDate.toISOString(),
-          warrantyEndDate: endDate ? endDate.toISOString() : null
+          warrantyEndDate: endDate ? endDate.toISOString() : undefined
         };
       }
     }
@@ -1116,6 +1119,9 @@ export default function ServiceTickets() {
                 estimatedCost: receiptData.estimatedCost || undefined,
                 status: receiptData.status || 'pending',
                 technicianId: receiptData.technicianId || undefined,
+                warrantyDuration: receiptData.warrantyDuration ?? undefined,
+                warrantyStartDate: receiptData.warrantyStartDate ? (receiptData.warrantyStartDate instanceof Date ? receiptData.warrantyStartDate.toISOString() : receiptData.warrantyStartDate) : undefined,
+                warrantyEndDate: receiptData.warrantyEndDate ? (receiptData.warrantyEndDate instanceof Date ? receiptData.warrantyEndDate.toISOString() : receiptData.warrantyEndDate) : undefined,
                 createdAt: receiptData.createdAt ? new Date(receiptData.createdAt).toISOString() : new Date().toISOString()
               }}
               customer={(() => {
@@ -1179,6 +1185,9 @@ export default function ServiceTickets() {
             partsCost: paymentReceiptData.partsCost || undefined,
             laborCost: paymentReceiptData.laborCost || undefined,
             status: paymentReceiptData.status || 'pending',
+            warrantyDuration: paymentReceiptData.warrantyDuration ?? undefined,
+            warrantyStartDate: paymentReceiptData.warrantyStartDate ? (paymentReceiptData.warrantyStartDate instanceof Date ? paymentReceiptData.warrantyStartDate.toISOString() : paymentReceiptData.warrantyStartDate) : undefined,
+            warrantyEndDate: paymentReceiptData.warrantyEndDate ? (paymentReceiptData.warrantyEndDate instanceof Date ? paymentReceiptData.warrantyEndDate.toISOString() : paymentReceiptData.warrantyEndDate) : undefined,
             createdAt: paymentReceiptData.createdAt ? new Date(paymentReceiptData.createdAt).toISOString() : new Date().toISOString(),
             completedAt: paymentReceiptData.completedAt ? new Date(paymentReceiptData.completedAt).toISOString() : undefined
           }}
