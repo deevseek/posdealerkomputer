@@ -460,6 +460,43 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                   )}
                 </div>
 
+                {/* Warranty Information */}
+                {transaction.warrantyDuration && (
+                  <>
+                    <div className="border-t border-dashed border-gray-400 my-2"></div>
+                    <div className={`${getTextSize()} space-y-1`}>
+                      <div className="text-center font-bold" style={{
+                        fontSize: paperSize === 'a4' ? '11px' : '8px',
+                        marginBottom: '2px'
+                      }}>
+                        === INFORMASI GARANSI ===
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Durasi Garansi:</span>
+                        <span data-testid="warranty-duration">
+                          {transaction.warrantyDuration === 999999 ? 'Unlimited' : `${transaction.warrantyDuration} hari`}
+                        </span>
+                      </div>
+                      {transaction.warrantyStartDate && (
+                        <div className="flex justify-between">
+                          <span>Mulai Garansi:</span>
+                          <span data-testid="warranty-start">
+                            {format(new Date(transaction.warrantyStartDate), 'dd/MM/yyyy', { locale: idLocale })}
+                          </span>
+                        </div>
+                      )}
+                      {transaction.warrantyEndDate && transaction.warrantyDuration !== 999999 && (
+                        <div className="flex justify-between">
+                          <span>Berakhir:</span>
+                          <span data-testid="warranty-end">
+                            {format(new Date(transaction.warrantyEndDate), 'dd/MM/yyyy', { locale: idLocale })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 <div className="border-t border-dashed border-gray-400 my-2"></div>
 
                 {/* Footer */}

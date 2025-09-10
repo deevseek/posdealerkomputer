@@ -335,12 +335,48 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
                 <span data-testid="text-total-cost">{formatCurrency(serviceData.totalCost)}</span>
               </div>
 
+              {/* Warranty Information */}
+              {(serviceData as any).warrantyDuration && (
+                <>
+                  <div className="border-t border-dashed border-gray-400 my-2"></div>
+                  <div className={`space-y-1 ${getTextSize()}`}>
+                    <div className="text-center font-bold">
+                      === INFORMASI GARANSI ===
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-bold">Durasi Garansi:</span>
+                      <span data-testid="warranty-duration">
+                        {(serviceData as any).warrantyDuration === 999999 ? 'Unlimited' : `${(serviceData as any).warrantyDuration} hari`}
+                      </span>
+                    </div>
+                    {(serviceData as any).warrantyStartDate && (
+                      <div className="flex justify-between">
+                        <span className="font-bold">Mulai Garansi:</span>
+                        <span data-testid="warranty-start">
+                          {format(new Date((serviceData as any).warrantyStartDate), 'dd/MM/yyyy', { locale: idLocale })}
+                        </span>
+                      </div>
+                    )}
+                    {(serviceData as any).warrantyEndDate && (serviceData as any).warrantyDuration !== 999999 && (
+                      <div className="flex justify-between">
+                        <span className="font-bold">Berakhir:</span>
+                        <span data-testid="warranty-end">
+                          {format(new Date((serviceData as any).warrantyEndDate), 'dd/MM/yyyy', { locale: idLocale })}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
               <div className="border-t border-dashed border-gray-400 my-2"></div>
 
               {/* Footer */}
               <div className={`text-center ${getTextSize()} text-gray-600 space-y-1 mt-6`}>
                 <div>Terima kasih atas kepercayaan Anda!</div>
-                <div>Garansi service 30 hari</div>
+                {!(serviceData as any).warrantyDuration && (
+                  <div>Garansi service 30 hari</div>
+                )}
                 <div data-testid="text-print-date">Cetak: {format(new Date(), 'dd/MM/yy HH:mm', { locale: idLocale })}</div>
               </div>
             </div>
