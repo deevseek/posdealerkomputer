@@ -35,6 +35,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
   const [paperSize, setPaperSize] = useState<PaperSize>('a4');
   const [isGenerating, setIsGenerating] = useState(false);
 
+
   // Get store config for receipt header - WITH BETTER CACHING
   const { data: storeConfig } = useQuery({
     queryKey: ['store-config-receipt'],
@@ -384,19 +385,34 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
 
                 {/* Items */}
                 <div className={`${getTextSize()} space-y-1`}>
-                  {transaction.items?.map((item: any, index: number) => (
-                    <div key={index} className="space-y-1">
-                      <div className="font-bold" data-testid={`item-name-${index}`}>
-                        {item.product?.name || item.name}
-                      </div>
-                      <div className="flex justify-between">
-                        <span>{item.quantity} x {formatCurrency(item.unitPrice || item.price)}</span>
-                        <span data-testid={`item-total-${index}`}>
-                          {formatCurrency(item.totalPrice || (item.price * item.quantity))}
-                        </span>
-                      </div>
+                  {(transaction.items && transaction.items.length > 0) ? (
+                    transaction.items.map((item: any, index: number) => {
+                      
+                      // Handle different data structures
+                      const itemName = item.product?.name || item.name || 'Unknown Product';
+                      const unitPrice = parseFloat(item.unitPrice || item.price || '0');
+                      const quantity = item.quantity || 1;
+                      const totalPrice = parseFloat(item.totalPrice || '0') || (unitPrice * quantity);
+                      
+                      return (
+                        <div key={item.id || index} className="space-y-1">
+                          <div className="font-bold" data-testid={`item-name-${index}`}>
+                            {itemName}
+                          </div>
+                          <div className="flex justify-between">
+                            <span>{quantity} x {formatCurrency(unitPrice)}</span>
+                            <span data-testid={`item-total-${index}`}>
+                              {formatCurrency(totalPrice)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-2 text-muted-foreground">
+                      Tidak ada item ditemukan
                     </div>
-                  )) || []}
+                  )}
                 </div>
 
                 <div className="border-t border-solid border-gray-800 my-2"></div>
