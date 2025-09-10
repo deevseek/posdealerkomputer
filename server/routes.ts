@@ -1219,9 +1219,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate transaction number
       const transactionNumber = `TRX-${Date.now()}`;
       
+      // Convert ISO string dates back to Date objects for database
+      const processedTransactionData = { ...transactionData };
+      if (processedTransactionData.warrantyStartDate) {
+        processedTransactionData.warrantyStartDate = new Date(processedTransactionData.warrantyStartDate);
+      }
+      if (processedTransactionData.warrantyEndDate) {
+        processedTransactionData.warrantyEndDate = new Date(processedTransactionData.warrantyEndDate);
+      }
+      
       // Add transaction number and user ID to transaction data
       const completeTransactionData = {
-        ...transactionData,
+        ...processedTransactionData,
         transactionNumber,
         userId: req.session.user?.id
       };
