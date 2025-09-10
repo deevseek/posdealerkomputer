@@ -59,7 +59,23 @@ export default function Suppliers() {
       phone: "",
       address: "",
       contactPerson: "",
+      // Add other optional fields to match schema
+      companyName: "",
+      altPhone: "",
+      website: "",
+      city: "",
+      province: "",
+      postalCode: "",
+      country: "Indonesia",
+      paymentTerms: 30,
+      creditLimit: "",
+      rating: 5,
+      notes: "",
+      taxId: "",
+      businessType: "",
+      isActive: true,
     },
+    mode: "onChange", // Enable real-time validation
   });
 
   const createMutation = useMutation({
