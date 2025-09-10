@@ -132,10 +132,11 @@ function AddCategoryForm({ onSuccess }: { onSuccess: () => void }) {
 function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
   const { toast } = useToast();
   
-  // Get categories for dropdown
+  // Get categories for dropdown - with auto-refresh
   const { data: categories = [] } = useQuery({
     queryKey: ["/api/categories"],
     retry: false,
+    refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
   
   const form = useForm<ProductFormData>({
@@ -470,7 +471,7 @@ export default function Inventory() {
   // Connect to WebSocket for real-time updates
   const { isConnected } = useWebSocket();
 
-  // Products with stock info
+  // Products with stock info - with auto-refresh every 5 seconds for real-time updates
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/products", searchQuery],
     queryFn: async () => {
@@ -480,19 +481,23 @@ export default function Inventory() {
       return response.json();
     },
     retry: false,
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
+    refetchIntervalInBackground: true, // Continue refreshing in background
   });
 
-  // Stock movements for tracking
+  // Stock movements for tracking - with auto-refresh
   const { data: stockMovementsData } = useQuery({
     queryKey: ["/api/reports/stock-movements"],
     retry: false,
+    refetchInterval: 5000, // Auto-refresh every 5 seconds
   });
   const stockMovements = stockMovementsData?.movements || [];
 
-  // Purchase orders untuk show incoming stock
+  // Purchase orders untuk show incoming stock - with auto-refresh
   const { data: purchaseOrders = [] } = useQuery({
     queryKey: ["/api/purchase-orders"],
     retry: false,
+    refetchInterval: 8000, // Auto-refresh every 8 seconds
   });
 
   const getStockStatus = (product: any) => {

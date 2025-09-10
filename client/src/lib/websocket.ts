@@ -37,7 +37,6 @@ class WebSocketManager {
 
       this.ws.onopen = () => {
         console.log('✅ WebSocket connected');
-        console.log('🔧 WebSocket readyState:', this.ws?.readyState);
         this.reconnectAttempts = 0;
         this.isConnecting = false;
         
@@ -47,13 +46,11 @@ class WebSocketManager {
       };
 
       this.ws.onmessage = (event) => {
-        console.log('🔧 Raw WebSocket message received:', event.data);
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          console.log('🔧 Parsed WebSocket message:', message);
           this.handleMessage(message);
         } catch (error) {
-          console.error('❌ Error parsing WebSocket message:', error, 'Raw data:', event.data);
+          console.error('Error parsing WebSocket message:', error);
         }
       };
 
@@ -82,15 +79,12 @@ class WebSocketManager {
 
   private sendAuth() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      const authMessage = {
+      // For now, send basic auth - we can enhance this later
+      this.ws.send(JSON.stringify({
         type: 'auth',
         tenantId: 'main', // Default tenant for now
         userId: 'current_user'
-      };
-      console.log('📤 Sending auth message:', authMessage);
-      this.ws.send(JSON.stringify(authMessage));
-    } else {
-      console.log('⚠️ Cannot send auth - WebSocket not ready. ReadyState:', this.ws?.readyState);
+      }));
     }
   }
 
@@ -107,7 +101,6 @@ class WebSocketManager {
         break;
         
       case 'data_update':
-        console.log('🔄 Processing data_update for resource:', message.resource);
         this.handleDataUpdate(message);
         break;
         
@@ -117,13 +110,7 @@ class WebSocketManager {
   }
 
   private handleDataUpdate(message: WebSocketMessage) {
-    if (!this.queryClient || !message.resource) {
-      console.log('⚠️ handleDataUpdate: missing queryClient or resource:', {
-        hasQueryClient: !!this.queryClient,
-        resource: message.resource
-      });
-      return;
-    }
+    if (!this.queryClient || !message.resource) return;
 
     console.log(`🔄 Updating ${message.resource} data (${message.action})`);
 
@@ -147,10 +134,7 @@ class WebSocketManager {
     // Invalidate relevant queries to trigger refetch
     const queryKeys = queryKeyMap[message.resource] || [];
     
-    console.log(`📋 Found ${queryKeys.length} query keys for resource '${message.resource}':`, queryKeys);
-    
     queryKeys.forEach(queryKey => {
-      console.log(`🔄 Invalidating query: ${queryKey}`);
       this.queryClient.invalidateQueries({ queryKey: [queryKey] });
     });
 
