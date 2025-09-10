@@ -99,12 +99,16 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
       return await apiRequest('POST', '/api/transactions', data);
     },
     onSuccess: (data) => {
+      console.log('Transaction created successfully:', data);
       toast({
         title: "Success",
         description: "Transaction completed successfully",
       });
-      onComplete(data);
-      resetForm();
+      // Delay to ensure data is properly set before showing receipt
+      setTimeout(() => {
+        onComplete(data);
+        resetForm();
+      }, 100);
     },
     onError: (error: any) => {
       toast({

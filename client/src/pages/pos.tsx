@@ -45,6 +45,7 @@ export default function POS() {
   };
 
   const handleTransactionComplete = (transaction: any) => {
+    console.log('handleTransactionComplete called with:', transaction);
     setCurrentTransaction(transaction);
     setShowTransactionModal(false);
     setShowReceiptModal(true);
