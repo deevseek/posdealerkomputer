@@ -185,7 +185,12 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={(e) => {
+        console.log("🔥 Product Form submit event triggered!");
+        console.log("🔥 Product Form valid before submit:", form.formState.isValid);
+        console.log("🔥 Product Form errors before submit:", form.formState.errors);
+        form.handleSubmit(onSubmit)(e);
+      }} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
@@ -360,6 +365,9 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
               console.log("🔥 Product Button clicked!");
               console.log("🔥 Product Form state:", form.formState);
               console.log("🔥 Product Form values:", form.getValues());
+              console.log("🔥 Product Form isValid:", form.formState.isValid);
+              console.log("🔥 Product Form isDirty:", form.formState.isDirty);
+              console.log("🔥 Product Form dirtyFields:", form.formState.dirtyFields);
             }}
           >
             {addProductMutation.isPending ? "Adding..." : "Tambah Produk"}
