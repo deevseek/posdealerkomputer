@@ -51,9 +51,12 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
   const [showDiscountSection, setShowDiscountSection] = useState(false);
   const { toast } = useToast();
 
-  // Fetch products
+  // Fetch products - with real-time refresh capability
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/products"],
+    staleTime: 0, // Allow immediate refetch
+    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: true, // Refetch when component mounts
   });
 
   // Fetch store config for tax rate - WITH PROPER REFRESH
