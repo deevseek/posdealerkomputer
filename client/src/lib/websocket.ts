@@ -37,6 +37,7 @@ class WebSocketManager {
 
       this.ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        console.log('🔧 WebSocket readyState:', this.ws?.readyState);
         this.reconnectAttempts = 0;
         this.isConnecting = false;
         
@@ -46,11 +47,13 @@ class WebSocketManager {
       };
 
       this.ws.onmessage = (event) => {
+        console.log('🔧 Raw WebSocket message received:', event.data);
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
+          console.log('🔧 Parsed WebSocket message:', message);
           this.handleMessage(message);
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error('❌ Error parsing WebSocket message:', error, 'Raw data:', event.data);
         }
       };
 
@@ -79,12 +82,15 @@ class WebSocketManager {
 
   private sendAuth() {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      // For now, send basic auth - we can enhance this later
-      this.ws.send(JSON.stringify({
+      const authMessage = {
         type: 'auth',
         tenantId: 'main', // Default tenant for now
         userId: 'current_user'
-      }));
+      };
+      console.log('📤 Sending auth message:', authMessage);
+      this.ws.send(JSON.stringify(authMessage));
+    } else {
+      console.log('⚠️ Cannot send auth - WebSocket not ready. ReadyState:', this.ws?.readyState);
     }
   }
 
