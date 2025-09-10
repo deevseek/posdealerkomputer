@@ -28,6 +28,7 @@ import Setup from "@/pages/setup";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminSaaS from "@/pages/admin-saas";
 import ClientOnboarding from "@/pages/client-onboarding";
+import Warranty from "@/pages/warranty";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -94,6 +95,7 @@ function Router() {
           <Route path="/reports" component={Reports} />
           <Route path="/stock-movements" component={StockMovements} />
           <Route path="/settings" component={Settings} />
+          <Route path="/warranty" component={Warranty} />
           <Route path="/admin-dashboard" component={AdminDashboard} />
           <Route path="/admin-saas" component={AdminSaaS} />
         </>

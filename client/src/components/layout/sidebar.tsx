@@ -20,7 +20,8 @@ import {
   Layers,
   LogOut,
   User,
-  ShoppingCart
+  ShoppingCart,
+  Clock
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ const navigation = [
   { name: "Peran", href: "/roles", icon: Shield, roles: ["admin", "owner"] },
   { name: "Laporan", href: "/reports", icon: FileText, roles: ["admin", "finance", "owner"] },
   { name: "Pergerakan Stok", href: "/stock-movements", icon: Layers, roles: ["admin", "purchasing", "owner"] },
+  { name: "Management Garansi", href: "/warranty", icon: Clock, roles: ["admin", "kasir", "teknisi", "owner"] },
   { name: "Pengaturan", href: "/settings", icon: Settings, roles: ["admin", "owner"] },
 ];
 
