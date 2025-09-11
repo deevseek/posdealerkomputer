@@ -59,6 +59,16 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, gt } from "drizzle-orm";
+import {
+  getCurrentJakartaTime,
+  toJakartaTime,
+  formatDateForDatabase,
+  parseWithTimezone,
+  getStartOfDayJakarta,
+  getEndOfDayJakarta,
+  createJakartaTimestamp,
+  createDatabaseTimestamp
+} from "@shared/utils/timezone";
 
 export interface IStorage {
   // User operations
@@ -240,7 +250,6 @@ export class DatabaseStorage implements IStorage {
     } else {
       // User doesn't exist, create them with defaults
       const newUserData: InsertUser = {
-        id: userData.id,
         username: userData.email || `user_${userData.id}`,
         email: userData.email || null,
         firstName: userData.firstName || '',
@@ -449,7 +458,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProduct(productData: InsertProduct): Promise<Product> {
-    const [product] = await db.insert(products).values(productData).returning();
+    const [product] = await db.insert(products).values(productData as any).returning();
     return product;
   }
 
@@ -526,7 +535,30 @@ export class DatabaseStorage implements IStorage {
     // Get base purchase orders first
     const purchaseOrdersWithSupplier = await db
       .select({
-        ...purchaseOrders,
+        id: purchaseOrders.id,
+        clientId: purchaseOrders.clientId,
+        createdAt: purchaseOrders.createdAt,
+        updatedAt: purchaseOrders.updatedAt,
+        status: purchaseOrders.status,
+        notes: purchaseOrders.notes,
+        paymentTerms: purchaseOrders.paymentTerms,
+        supplierId: purchaseOrders.supplierId,
+        subtotal: purchaseOrders.subtotal,
+        taxAmount: purchaseOrders.taxAmount,
+        discountAmount: purchaseOrders.discountAmount,
+        totalAmount: purchaseOrders.totalAmount,
+        poNumber: purchaseOrders.poNumber,
+        orderDate: purchaseOrders.orderDate,
+        expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
+        actualDeliveryDate: purchaseOrders.actualDeliveryDate,
+        approvedBy: purchaseOrders.approvedBy,
+        approvedDate: purchaseOrders.approvedDate,
+        requestedBy: purchaseOrders.requestedBy,
+        deliveryAddress: purchaseOrders.deliveryAddress,
+        shippingMethod: purchaseOrders.shippingMethod,
+        trackingNumber: purchaseOrders.trackingNumber,
+        shippingCost: purchaseOrders.shippingCost,
+        internalNotes: purchaseOrders.internalNotes,
         supplierName: suppliers.name,
       })
       .from(purchaseOrders)
@@ -556,6 +588,7 @@ export class DatabaseStorage implements IStorage {
 
         return {
           ...po,
+          supplierName: po.supplierName || 'Unknown Supplier',
           itemCount: itemCountResult[0]?.count || 0,
           outstandingCount: outstandingResult[0]?.count || 0,
         };
@@ -611,22 +644,64 @@ export class DatabaseStorage implements IStorage {
 
   // Purchase Order Items
   async getPurchaseOrderItems(poId: string): Promise<(PurchaseOrderItem & { productName: string; productSku: string })[]> {
-    return await db
+    const items = await db
       .select({
-        ...purchaseOrderItems,
+        id: purchaseOrderItems.id,
+        clientId: purchaseOrderItems.clientId,
+        createdAt: purchaseOrderItems.createdAt,
+        updatedAt: purchaseOrderItems.updatedAt,
+        notes: purchaseOrderItems.notes,
+        productId: purchaseOrderItems.productId,
+        quantity: purchaseOrderItems.quantity,
+        unitPrice: purchaseOrderItems.unitPrice,
+        unitCost: purchaseOrderItems.unitCost,
+        receivedQuantity: purchaseOrderItems.receivedQuantity,
+        outstandingQuantity: purchaseOrderItems.outstandingQuantity,
+        outstandingStatus: purchaseOrderItems.outstandingStatus,
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        orderedQuantity: purchaseOrderItems.orderedQuantity,
+        outstandingReason: purchaseOrderItems.outstandingReason,
+        outstandingUpdatedBy: purchaseOrderItems.outstandingUpdatedBy,
+        outstandingUpdatedAt: purchaseOrderItems.outstandingUpdatedAt,
+        totalCost: purchaseOrderItems.totalCost,
+        totalPrice: purchaseOrderItems.totalPrice,
         productName: products.name,
         productSku: products.sku,
       })
       .from(purchaseOrderItems)
       .leftJoin(products, eq(purchaseOrderItems.productId, products.id))
       .where(eq(purchaseOrderItems.purchaseOrderId, poId));
+    
+    return items.map(item => ({
+      ...item,
+      productName: item.productName || 'Unknown Product',
+      productSku: item.productSku || 'N/A'
+    }));
   }
 
   // Get ALL outstanding items from ALL purchase orders (for reports)
   async getAllOutstandingItems(): Promise<(PurchaseOrderItem & { productName: string; productSku: string; poNumber: string })[]> {
-    return await db
+    const items = await db
       .select({
-        ...purchaseOrderItems,
+        id: purchaseOrderItems.id,
+        clientId: purchaseOrderItems.clientId,
+        createdAt: purchaseOrderItems.createdAt,
+        updatedAt: purchaseOrderItems.updatedAt,
+        notes: purchaseOrderItems.notes,
+        productId: purchaseOrderItems.productId,
+        quantity: purchaseOrderItems.quantity,
+        unitPrice: purchaseOrderItems.unitPrice,
+        unitCost: purchaseOrderItems.unitCost,
+        receivedQuantity: purchaseOrderItems.receivedQuantity,
+        outstandingQuantity: purchaseOrderItems.outstandingQuantity,
+        outstandingStatus: purchaseOrderItems.outstandingStatus,
+        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
+        orderedQuantity: purchaseOrderItems.orderedQuantity,
+        outstandingReason: purchaseOrderItems.outstandingReason,
+        outstandingUpdatedBy: purchaseOrderItems.outstandingUpdatedBy,
+        outstandingUpdatedAt: purchaseOrderItems.outstandingUpdatedAt,
+        totalCost: purchaseOrderItems.totalCost,
+        totalPrice: purchaseOrderItems.totalPrice,
         productName: products.name,
         productSku: products.sku,
         poNumber: purchaseOrders.poNumber,
@@ -639,6 +714,13 @@ export class DatabaseStorage implements IStorage {
         gt(purchaseOrderItems.outstandingQuantity, 0)
       ))
       .orderBy(desc(purchaseOrders.orderDate));
+    
+    return items.map(item => ({
+      ...item,
+      productName: item.productName || 'Unknown Product',
+      productSku: item.productSku || 'N/A',
+      poNumber: item.poNumber || 'N/A'
+    }));
   }
 
   async createPurchaseOrderItem(itemData: InsertPurchaseOrderItem): Promise<PurchaseOrderItem> {
@@ -1230,7 +1312,7 @@ export class DatabaseStorage implements IStorage {
   async createTransaction(transactionData: InsertTransaction, items: InsertTransactionItem[]): Promise<Transaction> {
     return await db.transaction(async (tx) => {
       // Create transaction
-      const [transaction] = await tx.insert(transactions).values(transactionData).returning();
+      const [transaction] = await tx.insert(transactions).values(transactionData as any).returning();
       
       // Create transaction items
       const itemsWithTransactionId = items.map(item => ({
@@ -1259,7 +1341,7 @@ export class DatabaseStorage implements IStorage {
             referenceId: transaction.id,
             referenceType: 'sale',
             notes: `Penjualan - ${transaction.transactionNumber}`,
-            userId: transactionData.userId,
+            userId: transaction.userId,
           });
         }
 
@@ -1277,7 +1359,7 @@ export class DatabaseStorage implements IStorage {
             referenceType: 'sale',
             reference: transaction.id,
             paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
-            userId: transactionData.userId
+            userId: transaction.userId
           });
 
           // Calculate and record COGS (Cost of Goods Sold) using average purchase price
@@ -1300,7 +1382,7 @@ export class DatabaseStorage implements IStorage {
               referenceType: 'sale',
               reference: transaction.id,
               paymentMethod: 'system',
-              userId: transactionData.userId
+              userId: transaction.userId
             });
           }
         } catch (error) {
@@ -1318,7 +1400,32 @@ export class DatabaseStorage implements IStorage {
   async getServiceTickets(): Promise<ServiceTicket[]> {
     const tickets = await db
       .select({
-        ...serviceTickets,
+        id: serviceTickets.id,
+        clientId: serviceTickets.clientId,
+        createdAt: serviceTickets.createdAt,
+        updatedAt: serviceTickets.updatedAt,
+        status: serviceTickets.status,
+        customerId: serviceTickets.customerId,
+        deviceType: serviceTickets.deviceType,
+        deviceBrand: serviceTickets.deviceBrand,
+        deviceModel: serviceTickets.deviceModel,
+        serialNumber: serviceTickets.serialNumber,
+        completeness: serviceTickets.completeness,
+        problem: serviceTickets.problem,
+        diagnosis: serviceTickets.diagnosis,
+        solution: serviceTickets.solution,
+        estimatedCost: serviceTickets.estimatedCost,
+        actualCost: serviceTickets.actualCost,
+        laborCost: serviceTickets.laborCost,
+        partsCost: serviceTickets.partsCost,
+        estimatedCompletion: serviceTickets.estimatedCompletion,
+        technicianId: serviceTickets.technicianId,
+        warrantyDuration: serviceTickets.warrantyDuration,
+        warrantyStartDate: serviceTickets.warrantyStartDate,
+        warrantyEndDate: serviceTickets.warrantyEndDate,
+
+        ticketNumber: serviceTickets.ticketNumber,
+        completedAt: serviceTickets.completedAt,
         customerName: customers.name
       })
       .from(serviceTickets)
@@ -1340,7 +1447,32 @@ export class DatabaseStorage implements IStorage {
   async getActiveServiceTickets(): Promise<ServiceTicket[]> {
     const tickets = await db
       .select({
-        ...serviceTickets,
+        id: serviceTickets.id,
+        clientId: serviceTickets.clientId,
+        createdAt: serviceTickets.createdAt,
+        updatedAt: serviceTickets.updatedAt,
+        status: serviceTickets.status,
+        customerId: serviceTickets.customerId,
+        deviceType: serviceTickets.deviceType,
+        deviceBrand: serviceTickets.deviceBrand,
+        deviceModel: serviceTickets.deviceModel,
+        serialNumber: serviceTickets.serialNumber,
+        completeness: serviceTickets.completeness,
+        problem: serviceTickets.problem,
+        diagnosis: serviceTickets.diagnosis,
+        solution: serviceTickets.solution,
+        estimatedCost: serviceTickets.estimatedCost,
+        actualCost: serviceTickets.actualCost,
+        laborCost: serviceTickets.laborCost,
+        partsCost: serviceTickets.partsCost,
+        estimatedCompletion: serviceTickets.estimatedCompletion,
+        technicianId: serviceTickets.technicianId,
+        warrantyDuration: serviceTickets.warrantyDuration,
+        warrantyStartDate: serviceTickets.warrantyStartDate,
+        warrantyEndDate: serviceTickets.warrantyEndDate,
+
+        ticketNumber: serviceTickets.ticketNumber,
+        completedAt: serviceTickets.completedAt,
         customerName: customers.name
       })
       .from(serviceTickets)
@@ -1521,6 +1653,7 @@ export class DatabaseStorage implements IStorage {
     const parts = await db
       .select({
         id: serviceTicketParts.id,
+        clientId: serviceTicketParts.clientId,
         serviceTicketId: serviceTicketParts.serviceTicketId,
         productId: serviceTicketParts.productId,
         quantity: serviceTicketParts.quantity,

@@ -673,7 +673,7 @@ export class FinanceManager {
       if (item.name) {
         inventory[item.name] = {
           value: Number(item.totalValue),
-          stock: item.stock,
+          stock: item.stock || 0,
           avgCost: Number(item.averageCost || 0)
         };
       }
@@ -682,7 +682,6 @@ export class FinanceManager {
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
-      totalRefunds: totalRefunds.toString(), // Track refunds separately
       netProfit: (totalIncome - totalExpense).toString(), // Profit excludes refunds
       transactionCount: countResult.count,
       inventoryValue: totalInventoryValue.toString(),

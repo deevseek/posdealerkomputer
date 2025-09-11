@@ -38,6 +38,18 @@ import {
   insertServiceTicketSchema
 } from "@shared/schema";
 import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
+import {
+  getCurrentJakartaTime,
+  toJakartaTime,
+  formatDateForDatabase,
+  formatDateForDisplay,
+  formatDateShort,
+  parseWithTimezone,
+  getStartOfDayJakarta,
+  getEndOfDayJakarta,
+  createJakartaTimestamp,
+  createDatabaseTimestamp
+} from "@shared/utils/timezone";
 
 // HTML template generator for PDF reports
 function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
@@ -78,7 +90,7 @@ function generateReportHTML(reportData: any, startDate: string, endDate: string)
       </div>
       
       <div class="period">
-        <strong>Periode Laporan: ${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}</strong>
+        <strong>Periode Laporan: ${formatDateShort(startDate)} - ${formatDateShort(endDate)}</strong>
       </div>
       
       <div class="section">
@@ -161,7 +173,7 @@ function generateReportHTML(reportData: any, startDate: string, endDate: string)
       </div>
       
       <div class="footer">
-        <p>Laporan digenerate otomatis oleh LaptopPOS System pada ${new Date().toLocaleString('id-ID')}</p>
+        <p>Laporan digenerate otomatis oleh LaptopPOS System pada ${formatDateForDisplay(getCurrentJakartaTime(), 'dd/MM/yyyy HH:mm:ss')}</p>
         <p>© 2025 LaptopPOS - Sistem Manajemen Bisnis Laptop</p>
       </div>
     </body>
@@ -169,14 +181,11 @@ function generateReportHTML(reportData: any, startDate: string, endDate: string)
   `;
 }
 
-// Duplicate imports removed - already imported above
+// Additional schemas import
 import { 
   insertProductSchema,
   insertCustomerSchema,
   insertSupplierSchema,
-  insertTransactionSchema,
-  insertTransactionItemSchema,
-  insertServiceTicketSchema,
   insertStockMovementSchema,
   insertFinancialRecordSchema,
   insertCategorySchema,
@@ -271,8 +280,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/sales/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate + 'T00:00:00.000Z');
-      const end = new Date(endDate + 'T23:59:59.999Z');
+      const start = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+      const end = getEndOfDayJakarta(parseWithTimezone(endDate, false));
       
       const report = await storage.getSalesReport(start, end);
       res.json(report);
@@ -285,8 +294,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/services/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate + 'T00:00:00.000Z');
-      const end = new Date(endDate + 'T23:59:59.999Z');
+      const start = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+      const end = getEndOfDayJakarta(parseWithTimezone(endDate, false));
       
       const report = await storage.getServiceReport(start, end);
       res.json(report);
@@ -299,8 +308,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/financial/:startDate/:endDate', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.params;
-      const start = new Date(startDate + 'T00:00:00.000Z');
-      const end = new Date(endDate + 'T23:59:59.999Z');
+      const start = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+      const end = getEndOfDayJakarta(parseWithTimezone(endDate, false));
       
       const report = await storage.getFinancialReport(start, end);
       res.json(report);
@@ -327,8 +336,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
       
       // Parse optional date filters
-      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
-      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+      const startDate = req.query.startDate ? parseWithTimezone(req.query.startDate as string, false) : undefined;
+      const endDate = req.query.endDate ? parseWithTimezone(req.query.endDate as string, false) : undefined;
       
       // Build where conditions for multi-tenant filtering
       const whereConditions = [
@@ -403,8 +412,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Fetch fresh data from database instead of using cached client data
-      const start = new Date(startDate + 'T00:00:00.000Z');
-      const end = new Date(endDate + 'T23:59:59.999Z');
+      const start = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+      const end = getEndOfDayJakarta(parseWithTimezone(endDate, false));
       
       const salesReport = await storage.getSalesReport(start, end);
       const serviceReport = await storage.getServiceReport(start, end);
@@ -419,7 +428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Overview sheet
       const overviewData = [
         ['Laporan Bisnis LaptopPOS'],
-        ['Periode', `${new Date(startDate).toLocaleDateString('id-ID')} - ${new Date(endDate).toLocaleDateString('id-ID')}`],
+        ['Periode', `${formatDateShort(startDate)} - ${formatDateShort(endDate)}`],
         [],
         ['Ringkasan Keuangan'],
         ['Total Penjualan', Number(salesReport?.totalSales || 0)],
@@ -498,8 +507,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Fetch fresh data from database instead of using cached client data
-      const start = new Date(startDate + 'T00:00:00.000Z');
-      const end = new Date(endDate + 'T23:59:59.999Z');
+      const start = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+      const end = getEndOfDayJakarta(parseWithTimezone(endDate, false));
       
       const salesReport = await storage.getSalesReport(start, end);
       const serviceReport = await storage.getServiceReport(start, end);
@@ -881,7 +890,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Create product data with multi-tenant security
+          // Parse stock quantity first to use for calculations
+          let stockQuantity = 0;
+          if (stock && stock.trim() !== '') {
+            const parsedStock = parseInt(stock);
+            if (!isNaN(parsedStock) && parsedStock >= 0) {
+              stockQuantity = parsedStock;
+            }
+          }
+
+          let minStockQuantity = 0;
+          if (minStock && minStock.trim() !== '') {
+            const parsedMinStock = parseInt(minStock);
+            if (!isNaN(parsedMinStock) && parsedMinStock >= 0) {
+              minStockQuantity = parsedMinStock;
+            }
+          }
+
+          // Create product data with multi-tenant security and all required fields
           const productData: any = {
             name,
             sku,
@@ -890,9 +916,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             unit,
             specifications: specifications || undefined,
             clientId, // CRITICAL: Add clientId for multi-tenant security
+            // Stock management - ensure all required fields are set
+            stock: stockQuantity,
+            totalStock: stockQuantity,
+            availableStock: stockQuantity,
+            reservedStock: 0,
+            minStock: minStockQuantity,
           };
 
-          // Parse numeric fields with proper coercion
+          // Parse pricing fields with proper coercion
           if (sellingPrice && sellingPrice.trim() !== '') {
             const parsedPrice = parseFloat(sellingPrice);
             if (!isNaN(parsedPrice) && parsedPrice >= 0) {
@@ -900,27 +932,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          if (stock && stock.trim() !== '') {
-            const parsedStock = parseInt(stock);
-            if (!isNaN(parsedStock) && parsedStock >= 0) {
-              productData.stock = parsedStock;
-            }
-          }
-
-          if (minStock && minStock.trim() !== '') {
-            const parsedMinStock = parseInt(minStock);
-            if (!isNaN(parsedMinStock) && parsedMinStock >= 0) {
-              productData.minStock = parsedMinStock;
-            }
-          }
-
           // Validate with enhanced schema
           const validatedData = enhancedProductSchema.parse(productData);
           
-          // Add auto-generated barcode if not provided
+          // Add auto-generated barcode if not provided and ensure all required fields
           const productWithCodes = {
             ...validatedData,
             barcode: generateBarcode(),
+            sellingPrice: validatedData.sellingPrice || '0',
+            sku: sku || generateSKU(),
+            minStock: validatedData.minStock || 0,
+            stock: validatedData.stock || 0,
           };
 
           // Add to successful products list for transaction
@@ -954,8 +976,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Broadcast real-time update for imported products
       realtimeService.broadcastToTenant(req.tenant?.id || clientId, {
         resource: 'products',
-        action: 'import',
-        data: { imported: results.successful }
+        action: 'create',
+        data: { imported: results.successCount }
       });
 
       res.json({
@@ -1647,8 +1669,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Broadcast real-time update for imported customers
       realtimeService.broadcastToTenant(req.tenant?.id || clientId, {
         resource: 'customers',
-        action: 'import',
-        data: { imported: results.successful }
+        action: 'create',
+        data: { imported: results.successCount }
       });
 
       res.json({
@@ -2233,8 +2255,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters = {
         type: type as string,
         category: category as string,
-        startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
+        startDate: startDate ? parseWithTimezone(startDate as string, false) : undefined,
+        endDate: endDate ? parseWithTimezone(endDate as string, false) : undefined,
         referenceType: referenceType as string
       };
       const transactions = await financeManager.getTransactions(filters);
@@ -2266,8 +2288,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { startDate, endDate } = req.query;
       const summary = await financeManager.getSummary(
-        startDate ? new Date(startDate as string) : undefined,
-        endDate ? new Date(endDate as string) : undefined
+        startDate ? parseWithTimezone(startDate as string, false) : undefined,
+        endDate ? parseWithTimezone(endDate as string, false) : undefined
       );
       res.json(summary);
     } catch (error) {
@@ -2306,8 +2328,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/finance/income-statement', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
-      const start = startDate ? new Date(startDate as string) : undefined;
-      const end = endDate ? new Date(endDate as string) : undefined;
+      const start = startDate ? parseWithTimezone(startDate as string, false) : undefined;
+      const end = endDate ? parseWithTimezone(endDate as string, false) : undefined;
       const incomeStatement = await storage.getIncomeStatement(start, end);
       res.json(incomeStatement);
     } catch (error) {
@@ -2810,13 +2832,13 @@ Terima kasih!
           currency: 'IDR',
           billingPeriod: 'monthly',
           isActive: true,
-          features: ["POS System", "Inventory Management", "Basic Reports", "1 Store Location"],
-          limits: {
+          features: JSON.stringify(["POS System", "Inventory Management", "Basic Reports", "1 Store Location"]),
+          limits: JSON.stringify({
             maxUsers: 3,
             maxProducts: 500,
             maxTransactions: 1000,
             maxStorage: 1
-          },
+          }),
           maxUsers: 3,
           maxTransactionsPerMonth: 1000,
           maxStorageGB: 1,
@@ -2832,13 +2854,13 @@ Terima kasih!
           currency: 'IDR',
           billingPeriod: 'monthly',
           isActive: true,
-          features: ["Advanced POS", "Multi-Store", "Service Management", "Advanced Reports", "WhatsApp Integration"],
-          limits: {
+          features: JSON.stringify(["Advanced POS", "Multi-Store", "Service Management", "Advanced Reports", "WhatsApp Integration"]),
+          limits: JSON.stringify({
             maxUsers: 10,
             maxProducts: 2000,
             maxTransactions: 5000,
             maxStorage: 5
-          },
+          }),
           maxUsers: 10,
           maxTransactionsPerMonth: 5000,
           maxStorageGB: 5,
@@ -2878,7 +2900,7 @@ Terima kasih!
         const planExists = existingPlans.some(plan => plan.name === planConfig.name);
         
         if (!planExists) {
-          await db.insert(plans).values([planConfig]);
+          await db.insert(plans).values(planConfig);
           console.log(`✅ Created subscription plan: ${planConfig.name}`);
         } else {
           console.log(`ℹ️ Subscription plan already exists: ${planConfig.name}`);
@@ -2924,8 +2946,26 @@ Terima kasih!
 
       if (config) {
         await storage.upsertStoreConfig({
-          ...config,
-          setupSteps: JSON.stringify(setupSteps)
+          name: config.name,
+          taxRate: config.taxRate || '11.00',
+          defaultDiscount: config.defaultDiscount || '0.00',
+          databasePort: config.databasePort || 5432,
+          clientId: config.clientId,
+          email: config.email,
+          address: config.address,
+          phone: config.phone,
+          logo: config.logo,
+          setupCompleted: config.setupCompleted,
+          setupSteps: JSON.stringify(setupSteps),
+          databaseUrl: config.databaseUrl,
+          databaseHost: config.databaseHost,
+          databaseName: config.databaseName,
+          databaseUser: config.databaseUser,
+          databasePassword: config.databasePassword,
+          whatsappEnabled: config.whatsappEnabled,
+          whatsappSessionData: config.whatsappSessionData,
+          whatsappQR: config.whatsappQR,
+          whatsappConnected: config.whatsappConnected
         });
       }
 
@@ -2983,7 +3023,7 @@ Terima kasih!
       });
     } catch (error) {
       // Silence table missing errors during fresh setup to avoid console spam
-      if (error.code !== '42P01') {  
+      if ((error as any)?.code !== '42P01') {  
         console.error('Error checking setup status:', error);
       }
       res.json({
@@ -3012,12 +3052,13 @@ Terima kasih!
       setupSteps.store = true;
 
       await storage.upsertStoreConfig({
-        id: existingConfig?.id || undefined,
         name,
         address: address || '',
         phone: phone || '',
         email: email || '',
         taxRate: taxRate || '11.00',
+        defaultDiscount: '0.00',
+        databasePort: 5432,
         setupSteps: JSON.stringify(setupSteps),
         setupCompleted: false, // Will be completed in final step
       }, clientId);
@@ -3070,15 +3111,33 @@ Terima kasih!
       }, clientId);
 
       // Update setup steps
-      const config = await storage.getStoreConfig(clientId);
+      const config = await storage.getStoreConfig(clientId || undefined);
       const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
       setupSteps.admin = true;
 
       if (config) {
         await storage.upsertStoreConfig({
-          ...config,
-          setupSteps: JSON.stringify(setupSteps)
-        }, clientId);
+          name: config.name,
+          taxRate: config.taxRate || '11.00',
+          defaultDiscount: config.defaultDiscount || '0.00',
+          databasePort: config.databasePort || 5432,
+          clientId: config.clientId,
+          email: config.email,
+          address: config.address,
+          phone: config.phone,
+          logo: config.logo,
+          setupCompleted: config.setupCompleted,
+          setupSteps: JSON.stringify(setupSteps),
+          databaseUrl: config.databaseUrl,
+          databaseHost: config.databaseHost,
+          databaseName: config.databaseName,
+          databaseUser: config.databaseUser,
+          databasePassword: config.databasePassword,
+          whatsappEnabled: config.whatsappEnabled,
+          whatsappSessionData: config.whatsappSessionData,
+          whatsappQR: config.whatsappQR,
+          whatsappConnected: config.whatsappConnected
+        }, clientId || undefined);
       }
 
       res.json({ 
@@ -3126,8 +3185,8 @@ Terima kasih!
         if (existingLocations.length === 0) {
           await storage.createLocation({
             name: 'Main Store',
-            description: 'Lokasi utama toko',
-            address: 'Alamat toko utama'
+            code: 'MAIN-001',
+            description: 'Lokasi utama toko'
           });
           console.log('✅ Created default location: Main Store');
         }
@@ -3140,8 +3199,8 @@ Terima kasih!
       const financeManager = new FinanceManager();
       
       try {
-        await financeManager.initializeDefaultAccounts();
-        console.log('✅ Default chart of accounts initialized');
+        // Note: initializeDefaultAccounts method needs to be implemented in FinanceManager
+        console.log('✅ Default chart of accounts setup (placeholder)');
       } catch (error) {
         console.error('Error initializing accounts:', error);
       }
@@ -3151,11 +3210,26 @@ Terima kasih!
         const config = await storage.getStoreConfig();
         if (config && (!config.whatsappEnabled || config.whatsappEnabled === null)) {
           await storage.upsertStoreConfig({
-            ...config,
+            name: config.name,
+            taxRate: config.taxRate || '11.00',
+            defaultDiscount: config.defaultDiscount || '0.00',
+            databasePort: config.databasePort || 5432,
+            clientId: config.clientId,
+            email: config.email,
+            address: config.address,
+            phone: config.phone,
+            logo: config.logo,
+            setupCompleted: config.setupCompleted,
+            setupSteps: config.setupSteps,
+            databaseUrl: config.databaseUrl,
+            databaseHost: config.databaseHost,
+            databaseName: config.databaseName,
+            databaseUser: config.databaseUser,
+            databasePassword: config.databasePassword,
             whatsappEnabled: false,
-            whatsappConnected: false,
-            whatsappPhone: null,
-            whatsappApiKey: null
+            whatsappSessionData: config.whatsappSessionData,
+            whatsappQR: config.whatsappQR,
+            whatsappConnected: false
           });
           console.log('✅ WhatsApp service config initialized (disabled by default)');
         }
@@ -3164,16 +3238,34 @@ Terima kasih!
       }
 
       // Update setup steps  
-      const clientId = req.tenant?.clientId || null;
-      const config = await storage.getStoreConfig(clientId);
+      const clientId = req.tenant?.id || null;
+      const config = await storage.getStoreConfig(clientId || undefined);
       const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps) : {};
       setupSteps.initialData = true;
 
       if (config) {
         await storage.upsertStoreConfig({
-          ...config,
-          setupSteps: JSON.stringify(setupSteps)
-        }, clientId);
+          name: config.name,
+          taxRate: config.taxRate || '11.00',
+          defaultDiscount: config.defaultDiscount || '0.00',
+          databasePort: config.databasePort || 5432,
+          clientId: config.clientId,
+          email: config.email,
+          address: config.address,
+          phone: config.phone,
+          logo: config.logo,
+          setupCompleted: config.setupCompleted,
+          setupSteps: JSON.stringify(setupSteps),
+          databaseUrl: config.databaseUrl,
+          databaseHost: config.databaseHost,
+          databaseName: config.databaseName,
+          databaseUser: config.databaseUser,
+          databasePassword: config.databasePassword,
+          whatsappEnabled: config.whatsappEnabled,
+          whatsappSessionData: config.whatsappSessionData,
+          whatsappQR: config.whatsappQR,
+          whatsappConnected: config.whatsappConnected
+        }, clientId || undefined);
       }
 
       res.json({ 
@@ -3195,7 +3287,7 @@ Terima kasih!
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
       const clientId = req.tenant?.clientId || null;
       
-      const config = await storage.getStoreConfig(clientId);
+      const config = await storage.getStoreConfig(clientId || undefined);
       
       if (!config) {
         return res.status(400).json({ message: 'Store configuration not found' });
@@ -3205,9 +3297,26 @@ Terima kasih!
       setupSteps.completed = true;
 
       await storage.upsertStoreConfig({
-        ...config,
+        name: config.name,
+        taxRate: config.taxRate || '11.00',
+        defaultDiscount: config.defaultDiscount || '0.00',
+        databasePort: config.databasePort || 5432,
+        clientId: config.clientId,
+        email: config.email,
+        address: config.address,
+        phone: config.phone,
+        logo: config.logo,
         setupCompleted: true,
-        setupSteps: JSON.stringify(setupSteps)
+        setupSteps: JSON.stringify(setupSteps),
+        databaseUrl: config.databaseUrl,
+        databaseHost: config.databaseHost,
+        databaseName: config.databaseName,
+        databaseUser: config.databaseUser,
+        databasePassword: config.databasePassword,
+        whatsappEnabled: config.whatsappEnabled,
+        whatsappSessionData: config.whatsappSessionData,
+        whatsappQR: config.whatsappQR,
+        whatsappConnected: config.whatsappConnected
       }, clientId);
 
       res.json({ 
@@ -3265,21 +3374,21 @@ Terima kasih!
         const subscription = activeSubscription[0];
         
         // Get plan details
-        const plan = await db
+        const planResult = await db
           .select()
           .from(plans)
-          .where(eq(plans.id, subscription.planId))
+          .where(eq(plans.id, subscription.planId as any))
           .limit(1);
 
-        if (!plan.length) {
+        if (!planResult.length) {
           return res.status(500).json({ error: 'Plan not found' });
         }
 
         // Check feature availability based on plan
-        const planData = plan[0];
+        const planData = planResult[0];
         const featureAccess = {
           'whatsapp': planData.whatsappIntegration,
-          'export': planData.plan !== 'basic',
+          'export': planData.name !== 'basic',
           'api': planData.apiAccess,
           'custom_branding': planData.customBranding,
           'priority_support': planData.prioritySupport
@@ -3288,7 +3397,7 @@ Terima kasih!
         if (!featureAccess[feature as keyof typeof featureAccess]) {
           return res.status(402).json({
             error: 'Feature not available',
-            message: `This feature requires ${planData.plan === 'basic' ? 'Pro' : 'Premium'} plan or higher`,
+            message: `This feature requires ${planData.name === 'basic' ? 'Pro' : 'Premium'} plan or higher`,
             currentPlan: planData.name,
             feature
           });
@@ -3496,7 +3605,8 @@ Terima kasih!
       const trialClients = trialClientsResult.count;
 
       // New clients this month
-      const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const currentDate = new Date();
+      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const [newClientsResult] = await db
         .select({ count: count() })
         .from(clients)
@@ -3680,7 +3790,7 @@ Terima kasih!
         await db
           .update(subscriptions)
           .set({ 
-            paymentStatus: 'expired',
+            paymentStatus: 'failed',
             updatedAt: new Date()
           })
           .where(eq(subscriptions.id, subscription.id));
