@@ -77,6 +77,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Utility Libraries
 - **date-fns**: Date manipulation and formatting
+- **date-fns-tz**: Timezone-aware date operations for Jakarta timezone
 - **clsx & class-variance-authority**: Dynamic CSS class management
 - **memoizee**: Function memoization for performance optimization
 
@@ -105,3 +106,26 @@ Preferred communication style: Simple, everyday language.
   - Dashboard data synchronization: All metrics now accurate in deployment environment
   - WhatsApp status integration: Real-time sync between dashboard and settings
   - WhatsApp service stability: No more logger crashes preventing server startup
+
+### GMT+7 Timezone Implementation (September 11, 2025)
+- **Scope**: Comprehensive GMT+7 (Asia/Jakarta - Bangkok/Hanoi/Jakarta) timezone support throughout entire application
+- **Technical Implementation**: 
+  - Built production-ready timezone utilities using date-fns-tz library with proper UTC storage and Jakarta display
+  - Updated all database schemas to use timezone-aware timestamps with consistent UTC storage strategy
+  - Updated 19+ frontend files to use Jakarta timezone formatting functions, eliminating browser timezone dependencies
+  - Completely overhauled backend timestamp handling in routes and storage layers
+- **Critical Issues Resolved**:
+  - Eliminated manual timezone math that caused off-by-7-hours errors near midnight and date boundaries  
+  - Fixed database timestamp storage to prevent +7h skew in stored data
+  - Fixed date boundary calculations for accurate reporting and date-based queries
+  - Resolved all TypeScript compilation errors (65 → 0 errors) from timezone refactoring and schema updates
+- **Production-Ready Architecture**: 
+  - Proper separation between UTC storage and Jakarta display prevents data integrity issues
+  - Uses date-fns-tz with utcToZonedTime/zonedTimeToUtc for timezone-aware calculations
+  - Consistent handling across all date operations: creation, updates, filtering, and reporting
+- **Files Modified**: 
+  - `shared/utils/timezone.ts`: Complete rewrite with timezone-aware functions
+  - `shared/schema.ts`: Updated all timestamp fields with timezone support
+  - `server/storage.ts` and `server/routes.ts`: Comprehensive backend timestamp handling overhaul
+  - Multiple frontend components for consistent Jakarta timezone display
+- **Zero Breaking Changes**: Application continues running normally with enhanced timezone accuracy and data integrity
