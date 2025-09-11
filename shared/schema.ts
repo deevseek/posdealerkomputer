@@ -16,6 +16,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+
 // Import SaaS-specific tables and types
 export * from './saas-schema';
 
@@ -25,7 +26,7 @@ export const sessions = pgTable(
   {
     sid: varchar("sid").primaryKey(),
     sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
+    expire: timestamp("expire", { withTimezone: true }).notNull(),
   },
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
@@ -50,8 +51,8 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").default('kasir'),
   isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Roles table for role management
@@ -62,8 +63,8 @@ export const roles = pgTable("roles", {
   description: text("description"),
   permissions: text("permissions").array(), // JSON array of permissions
   isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Store configuration
@@ -92,8 +93,8 @@ export const storeConfig = pgTable("store_config", {
   whatsappSessionData: text("whatsapp_session_data"), // Store session data
   whatsappQR: text("whatsapp_qr"), // Store QR code
   whatsappConnected: boolean("whatsapp_connected").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Categories
@@ -102,7 +103,7 @@ export const categories = pgTable("categories", {
   clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   name: varchar("name").notNull(),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Products - Enhanced inventory system
@@ -150,8 +151,8 @@ export const products = pgTable("products", {
   supplierProductCode: varchar("supplier_product_code"),
   notes: text("notes"),
   
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Customers
@@ -162,8 +163,8 @@ export const customers = pgTable("customers", {
   email: varchar("email"),
   phone: varchar("phone"),
   address: text("address"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Suppliers - Enhanced supplier management
@@ -211,8 +212,8 @@ export const suppliers = pgTable("suppliers", {
   bankAccountName: varchar("bank_account_name"),
   
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Transactions
@@ -232,9 +233,9 @@ export const transactions = pgTable("transactions", {
   notes: text("notes"),
   // Warranty fields
   warrantyDuration: integer("warranty_duration"), // Duration in days
-  warrantyStartDate: timestamp("warranty_start_date"),
-  warrantyEndDate: timestamp("warranty_end_date"),
-  createdAt: timestamp("created_at").defaultNow(),
+  warrantyStartDate: timestamp("warranty_start_date", { withTimezone: true }).default(sql`now()`),
+  warrantyEndDate: timestamp("warranty_end_date", { withTimezone: true }).default(sql`now()`),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Transaction Items
@@ -268,14 +269,14 @@ export const serviceTickets = pgTable("service_tickets", {
   partsCost: decimal("parts_cost", { precision: 12, scale: 2 }),
   status: serviceStatusEnum("status").default('pending'),
   technicianId: varchar("technician_id").references(() => users.id),
-  estimatedCompletion: timestamp("estimated_completion"),
-  completedAt: timestamp("completed_at"),
+  estimatedCompletion: timestamp("estimated_completion", { withTimezone: true }).default(sql`now()`),
+  completedAt: timestamp("completed_at", { withTimezone: true }).default(sql`now()`),
   // Warranty fields
   warrantyDuration: integer("warranty_duration"), // Duration in days
-  warrantyStartDate: timestamp("warranty_start_date"),
-  warrantyEndDate: timestamp("warranty_end_date"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  warrantyStartDate: timestamp("warranty_start_date", { withTimezone: true }).default(sql`now()`),
+  warrantyEndDate: timestamp("warranty_end_date", { withTimezone: true }).default(sql`now()`),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Service Ticket Parts - Track parts used in service repairs
@@ -287,7 +288,7 @@ export const serviceTicketParts = pgTable("service_ticket_parts", {
   quantity: integer("quantity").notNull(),
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Product Locations - Warehouse/Location management
@@ -299,7 +300,7 @@ export const locations = pgTable("locations", {
   description: text("description"),
   locationType: varchar("location_type").default("warehouse"), // warehouse, store, etc
   isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Product Batches/Lots - For batch tracking
@@ -321,7 +322,7 @@ export const productBatches = pgTable("product_batches", {
   // Dates
   manufactureDate: date("manufacture_date"),
   expiryDate: date("expiry_date"),
-  receivedDate: timestamp("received_date").defaultNow(),
+  receivedDate: timestamp("received_date", { withTimezone: true }).default(sql`now()`),
   
   // References
   purchaseOrderId: varchar("purchase_order_id"),
@@ -332,8 +333,8 @@ export const productBatches = pgTable("product_batches", {
   status: varchar("status").default("active"), // active, expired, recalled, sold_out
   
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Purchase Orders - Comprehensive purchasing system
@@ -344,7 +345,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   supplierId: varchar("supplier_id").references(() => suppliers.id).notNull(),
   
   // Dates
-  orderDate: date("order_date").defaultNow(),
+  orderDate: date("order_date").default(sql`((now() at time zone 'Asia/Jakarta')::date)`),
   expectedDeliveryDate: date("expected_delivery_date"),
   actualDeliveryDate: date("actual_delivery_date"),
   
@@ -361,7 +362,7 @@ export const purchaseOrders = pgTable("purchase_orders", {
   // Approval workflow
   requestedBy: varchar("requested_by").references(() => users.id).notNull(),
   approvedBy: varchar("approved_by").references(() => users.id),
-  approvedDate: timestamp("approved_date"),
+  approvedDate: timestamp("approved_date", { withTimezone: true }).default(sql`now()`),
   
   // Delivery
   deliveryAddress: text("delivery_address"),
@@ -373,8 +374,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   
   notes: text("notes"),
   internalNotes: text("internal_notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Purchase Order Items
@@ -394,7 +395,7 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   outstandingStatus: varchar("outstanding_status").default('pending'), // 'pending', 'cancelled', 'refunded', 'backordered', 'partial_delivered'
   outstandingReason: text("outstanding_reason"), // reason for status change
   outstandingUpdatedBy: varchar("outstanding_updated_by").references(() => users.id),
-  outstandingUpdatedAt: timestamp("outstanding_updated_at"),
+  outstandingUpdatedAt: timestamp("outstanding_updated_at", { withTimezone: true }).default(sql`now()`),
   
   // Pricing - both naming conventions exist
   unitCost: varchar("unit_cost").notNull(),
@@ -407,8 +408,8 @@ export const purchaseOrderItems = pgTable("purchase_order_items", {
   productSku: varchar("product_sku"),
   
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Stock Movements - Enhanced tracking system
@@ -439,7 +440,7 @@ export const stockMovements = pgTable("stock_movements", {
   reason: varchar("reason"), // damaged, expired, sold, etc
   userId: varchar("user_id").references(() => users.id).notNull(),
   
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Inventory Adjustments - For manual stock corrections
@@ -456,11 +457,11 @@ export const inventoryAdjustments = pgTable("inventory_adjustments", {
   status: varchar("status").default("pending"), // pending, approved, rejected
   createdBy: varchar("created_by").references(() => users.id).notNull(),
   approvedBy: varchar("approved_by").references(() => users.id),
-  approvedDate: timestamp("approved_date"),
+  approvedDate: timestamp("approved_date", { withTimezone: true }).default(sql`now()`),
   
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Inventory Adjustment Items
@@ -482,7 +483,7 @@ export const inventoryAdjustmentItems = pgTable("inventory_adjustment_items", {
   totalCostImpact: decimal("total_cost_impact", { precision: 12, scale: 2 }),
   
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Financial Records - Complete rebuild
@@ -503,8 +504,8 @@ export const financialRecords = pgTable("financial_records", {
   status: varchar("status", { length: 20 }).default("confirmed"), // pending, confirmed, cancelled
   tags: text("tags").array(), // For better categorization
   userId: varchar("user_id").references(() => users.id).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Chart of Accounts
@@ -520,8 +521,8 @@ export const accounts: any = pgTable("accounts", {
   balance: decimal("balance", { precision: 15, scale: 2 }).default("0"),
   isActive: boolean("is_active").default(true),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Journal Entries for Double-Entry Bookkeeping
@@ -529,15 +530,15 @@ export const journalEntries = pgTable("journal_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   journalNumber: varchar("journal_number", { length: 50 }).unique().notNull(),
-  date: timestamp("date").notNull(),
+  date: timestamp("date", { withTimezone: true }).notNull().default(sql`now()`),
   description: text("description").notNull(),
   reference: varchar("reference"), // Reference to source transaction
   referenceType: varchar("reference_type", { length: 50 }), // sale, purchase, service, payroll, etc.
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
   status: varchar("status", { length: 20 }).default("posted"), // draft, posted, reversed
   userId: varchar("user_id").references(() => users.id).notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Journal Entry Lines (Debit/Credit entries)
@@ -549,7 +550,7 @@ export const journalEntryLines = pgTable("journal_entry_lines", {
   description: text("description").notNull(),
   debitAmount: decimal("debit_amount", { precision: 15, scale: 2 }).default("0"),
   creditAmount: decimal("credit_amount", { precision: 15, scale: 2 }).default("0"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Employees for Payroll
@@ -563,16 +564,16 @@ export const employees = pgTable("employees", {
   department: varchar("department", { length: 100 }),
   salary: decimal("salary", { precision: 12, scale: 2 }).notNull(),
   salaryType: varchar("salary_type", { length: 20 }).default("monthly"), // monthly, weekly, daily, hourly
-  joinDate: timestamp("join_date").notNull(),
-  endDate: timestamp("end_date"),
+  joinDate: timestamp("join_date", { withTimezone: true }).notNull().default(sql`now()`),
+  endDate: timestamp("end_date", { withTimezone: true }).default(sql`now()`),
   status: varchar("status", { length: 20 }).default("active"), // active, inactive, terminated
   bankAccount: varchar("bank_account", { length: 50 }),
   taxId: varchar("tax_id", { length: 50 }),
   address: text("address"),
   phone: varchar("phone", { length: 20 }),
   emergencyContact: jsonb("emergency_contact"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Payroll Records
@@ -581,8 +582,8 @@ export const payrollRecords = pgTable("payroll_records", {
   clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   employeeId: varchar("employee_id").references(() => employees.id).notNull(),
   payrollNumber: varchar("payroll_number", { length: 50 }).unique().notNull(),
-  periodStart: timestamp("period_start").notNull(),
-  periodEnd: timestamp("period_end").notNull(),
+  periodStart: timestamp("period_start", { withTimezone: true }).notNull().default(sql`now()`),
+  periodEnd: timestamp("period_end", { withTimezone: true }).notNull().default(sql`now()`),
   baseSalary: decimal("base_salary", { precision: 12, scale: 2 }).notNull(),
   overtime: decimal("overtime", { precision: 12, scale: 2 }).default("0"),
   bonus: decimal("bonus", { precision: 12, scale: 2 }).default("0"),
@@ -594,11 +595,11 @@ export const payrollRecords = pgTable("payroll_records", {
   otherDeductions: decimal("other_deductions", { precision: 12, scale: 2 }).default("0"),
   netPay: decimal("net_pay", { precision: 12, scale: 2 }).notNull(),
   status: varchar("status", { length: 20 }).default("draft"), // draft, approved, paid
-  paidDate: timestamp("paid_date"),
+  paidDate: timestamp("paid_date", { withTimezone: true }).default(sql`now()`),
   notes: text("notes"),
   userId: varchar("user_id").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Attendance Records
@@ -606,17 +607,17 @@ export const attendanceRecords = pgTable("attendance_records", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   employeeId: varchar("employee_id").references(() => employees.id).notNull(),
-  date: timestamp("date").notNull(),
-  clockIn: timestamp("clock_in"),
-  clockOut: timestamp("clock_out"),
-  breakStart: timestamp("break_start"),
-  breakEnd: timestamp("break_end"),
+  date: timestamp("date", { withTimezone: true }).notNull().default(sql`now()`),
+  clockIn: timestamp("clock_in", { withTimezone: true }).default(sql`now()`),
+  clockOut: timestamp("clock_out", { withTimezone: true }).default(sql`now()`),
+  breakStart: timestamp("break_start", { withTimezone: true }).default(sql`now()`),
+  breakEnd: timestamp("break_end", { withTimezone: true }).default(sql`now()`),
   hoursWorked: decimal("hours_worked", { precision: 4, scale: 2 }).default("0"),
   overtimeHours: decimal("overtime_hours", { precision: 4, scale: 2 }).default("0"),
   status: varchar("status", { length: 20 }).default("present"), // present, absent, late, half_day
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Relations  
