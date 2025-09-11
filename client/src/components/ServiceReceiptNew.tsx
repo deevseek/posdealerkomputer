@@ -5,8 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Printer, Download } from 'lucide-react';
 import QRCode from 'qrcode';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateLong, formatDateShort, formatDateForDisplay } from '@shared/utils/timezone';
 
 interface ServiceReceiptProps {
   serviceTicket: {
@@ -232,7 +231,7 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
   };
 
   const formatDate = (dateString: string) => {
-    return format(new Date(dateString), 'dd MMMM yyyy', { locale: id });
+    return formatDateLong(dateString);
   };
 
   const formatCurrency = (amount: string | number) => {
@@ -411,7 +410,7 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   <div className="field">
                     <span className={`label ${isThermal ? 'text-xs' : 'text-sm'} text-blue-700`}>Mulai:</span>
                     <span className={`value ml-2 ${isThermal ? 'text-xs' : 'text-sm'} font-medium text-blue-900`}>
-                      {format(new Date(serviceTicket.warrantyStartDate), 'dd/MM/yyyy', { locale: id })}
+                      {formatDateShort(serviceTicket.warrantyStartDate)}
                     </span>
                   </div>
                 )}
@@ -419,7 +418,7 @@ export default function ServiceReceiptNew({ serviceTicket, customer, storeConfig
                   <div className="field">
                     <span className={`label ${isThermal ? 'text-xs' : 'text-sm'} text-blue-700`}>Berakhir:</span>
                     <span className={`value ml-2 ${isThermal ? 'text-xs' : 'text-sm'} font-medium text-blue-900`}>
-                      {format(new Date(serviceTicket.warrantyEndDate), 'dd/MM/yyyy', { locale: id })}
+                      {formatDateShort(serviceTicket.warrantyEndDate)}
                     </span>
                   </div>
                 )}

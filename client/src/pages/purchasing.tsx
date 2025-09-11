@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useWebSocket } from "@/lib/websocket";
+import { formatDateShort } from '@shared/utils/timezone';
 
 // Schema for forms
 const purchaseOrderSchema = z.object({
@@ -57,7 +58,11 @@ export default function PurchasingPage() {
   const queryClient = useQueryClient();
   
   // WebSocket for real-time updates
-  const { socket, isConnected } = useWebSocket();
+  const websocketHook = useWebSocket();
+  const { isConnected } = websocketHook;
+  
+  // Type guard for WebSocket with socket property
+  const websocket = (websocketHook as any).socket;
 
   // Forms
   const poForm = useForm({
@@ -81,36 +86,36 @@ export default function PurchasingPage() {
     mode: "onChange", // Enable real-time validation
   });
 
-  // Queries
-  const { data: purchaseOrders, isLoading: ordersLoading } = useQuery({
+  // Queries with proper type guards and array defaults
+  const { data: purchaseOrders = [], isLoading: ordersLoading } = useQuery<any[]>({
     queryKey: ["/api/purchase-orders"],
     enabled: selectedTab === "orders",
   });
 
-  const { data: suppliers } = useQuery({
+  const { data: suppliers = [] } = useQuery<any[]>({
     queryKey: ["/api/suppliers"],
   });
 
-  const { data: products } = useQuery({
+  const { data: products = [] } = useQuery<any[]>({
     queryKey: ["/api/products"],
   });
 
-  const { data: selectedPOItems } = useQuery({
+  const { data: selectedPOItems = [] } = useQuery<any[]>({
     queryKey: ["/api/purchase-orders", selectedPO?.id, "items"],
     enabled: !!selectedPO?.id,
   });
 
   // Get ALL outstanding items from ALL purchase orders for reports
-  const { data: allOutstandingItemsData } = useQuery({
+  const { data: allOutstandingItemsData = [] } = useQuery<any[]>({
     queryKey: ["/api/purchase-orders/outstanding-items"],
     retry: false,
   });
   
   // Data untuk outstanding items dari SEMUA PO (untuk laporan)
-  const allOutstandingItems = allOutstandingItemsData || [];
+  const allOutstandingItems = Array.isArray(allOutstandingItemsData) ? allOutstandingItemsData : [];
   
   // Data untuk outstanding items dari PO terpilih saja (untuk dialog detail PO)
-  const selectedPOOutstandingItems = (selectedPOItems || []).filter((item: any) => (item.outstandingQuantity || 0) > 0);
+  const selectedPOOutstandingItems = Array.isArray(selectedPOItems) ? selectedPOItems.filter((item: any) => (item.outstandingQuantity || 0) > 0) : [];
   
   // Auto-refresh data saat page focus kembali - lebih agresif
   useEffect(() => {
@@ -146,7 +151,7 @@ export default function PurchasingPage() {
   
   // WebSocket event listeners untuk real-time updates - lebih responsif
   useEffect(() => {
-    if (!socket || !isConnected) return;
+    if (!websocket || !isConnected) return;
 
     const handlePurchaseUpdate = (data: any) => {
       console.log('Real-time update received:', data);
@@ -170,24 +175,24 @@ export default function PurchasingPage() {
     };
 
     // Listen untuk berbagai event real-time
-    socket.on('data_update', handlePurchaseUpdate);
-    socket.on('purchase_updated', handlePurchaseUpdate);
-    socket.on('purchase_order_updated', handlePurchaseUpdate);
-    socket.on('purchase_orders', handlePurchaseUpdate);
-    socket.on('purchase_order_items', handlePurchaseUpdate);
-    socket.on('stock_updated', handleInventoryUpdate);
-    socket.on('inventory', handleInventoryUpdate);
+    websocket.on('data_update', handlePurchaseUpdate);
+    websocket.on('purchase_updated', handlePurchaseUpdate);
+    websocket.on('purchase_order_updated', handlePurchaseUpdate);
+    websocket.on('purchase_orders', handlePurchaseUpdate);
+    websocket.on('purchase_order_items', handlePurchaseUpdate);
+    websocket.on('stock_updated', handleInventoryUpdate);
+    websocket.on('inventory', handleInventoryUpdate);
 
     return () => {
-      socket.off('data_update', handlePurchaseUpdate);
-      socket.off('purchase_updated', handlePurchaseUpdate);
-      socket.off('purchase_order_updated', handlePurchaseUpdate);
-      socket.off('purchase_orders', handlePurchaseUpdate);
-      socket.off('purchase_order_items', handlePurchaseUpdate);
-      socket.off('stock_updated', handleInventoryUpdate);
-      socket.off('inventory', handleInventoryUpdate);
+      websocket.off('data_update', handlePurchaseUpdate);
+      websocket.off('purchase_updated', handlePurchaseUpdate);
+      websocket.off('purchase_order_updated', handlePurchaseUpdate);
+      websocket.off('purchase_orders', handlePurchaseUpdate);
+      websocket.off('purchase_order_items', handlePurchaseUpdate);
+      websocket.off('stock_updated', handleInventoryUpdate);
+      websocket.off('inventory', handleInventoryUpdate);
     };
-  }, [socket, isConnected, queryClient, selectedPO?.id]);
+  }, [websocket, isConnected, queryClient, selectedPO?.id]);
   
   // Auto-refresh setiap 5 detik untuk data terbaru yang instan
   useEffect(() => {
@@ -409,10 +414,10 @@ export default function PurchasingPage() {
     }
   };
 
-  const filteredOrders = purchaseOrders?.filter((order: any) =>
+  const filteredOrders = Array.isArray(purchaseOrders) ? purchaseOrders.filter((order: any) =>
     order.poNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     order.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -502,7 +507,7 @@ export default function PurchasingPage() {
                         variant="outline" 
                         size="sm"
                         onClick={() => {
-                          const product = products?.[0];
+                          const product = Array.isArray(products) && products.length > 0 ? products[0] : null;
                           if (product) {
                             addItemToPO({
                               productId: product.id,
@@ -529,7 +534,7 @@ export default function PurchasingPage() {
                                 <Select 
                                   value={item.productId} 
                                   onValueChange={(value) => {
-                                    const product = products?.find(p => p.id === value);
+                                    const product = Array.isArray(products) ? products.find((p: any) => p.id === value) : null;
                                     setPOItems(poItems.map((it, i) => 
                                       i === index ? { ...it, productId: value, productName: product?.name } : it
                                     ));
@@ -539,11 +544,11 @@ export default function PurchasingPage() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {products?.map((product: any) => (
+                                    {Array.isArray(products) ? products.map((product: any) => (
                                       <SelectItem key={product.id} value={product.id}>
                                         {product.name}
                                       </SelectItem>
-                                    ))}
+                                    )) : null}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -672,8 +677,8 @@ export default function PurchasingPage() {
                           {order.poNumber}
                         </TableCell>
                         <TableCell>{(order as any).supplierName || order.supplierId}</TableCell>
-                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
-                        <TableCell>{new Date(order.expectedDeliveryDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatDateShort(order.orderDate)}</TableCell>
+                        <TableCell>{formatDateShort(order.expectedDeliveryDate)}</TableCell>
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
                         <TableCell>Rp {Number(order.totalAmount || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
@@ -754,11 +759,11 @@ export default function PurchasingPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {purchaseOrders?.filter((order: any) => order.status === 'confirmed' || order.status === 'partial_received').map((order: any) => (
+                    {Array.isArray(purchaseOrders) ? purchaseOrders.filter((order: any) => order.status === 'confirmed' || order.status === 'partial_received').map((order: any) => (
                       <TableRow key={order.id}>
                         <TableCell className="font-medium">{order.poNumber}</TableCell>
                         <TableCell>{(order as any).supplierName || order.supplierId}</TableCell>
-                        <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{formatDateShort(order.orderDate)}</TableCell>
                         <TableCell>{getStatusBadge(order.status)}</TableCell>
                         <TableCell>Rp {Number(order.totalAmount || 0).toLocaleString()}</TableCell>
                         <TableCell className="text-right">
@@ -777,14 +782,14 @@ export default function PurchasingPage() {
                           </Button>
                         </TableCell>
                       </TableRow>
-                    ))}
-                    {!purchaseOrders?.some((order: any) => order.status === 'confirmed' || order.status === 'partial_received') && (
+                    )) : null}
+                    {!Array.isArray(purchaseOrders) || !purchaseOrders.some((order: any) => order.status === 'confirmed' || order.status === 'partial_received') ? (
                       <TableRow>
                         <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                           No purchase orders ready for receiving
                         </TableCell>
                       </TableRow>
-                    )}
+                    ) : null}
                   </TableBody>
                 </Table>
               )}
@@ -824,7 +829,7 @@ export default function PurchasingPage() {
                 <ShoppingCart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold" data-testid="stat-total-po">{purchaseOrders?.length || 0}</div>
+                <div className="text-2xl font-bold" data-testid="stat-total-po">{Array.isArray(purchaseOrders) ? purchaseOrders.length : 0}</div>
                 <p className="text-xs text-muted-foreground">Purchase orders</p>
               </CardContent>
             </Card>
@@ -835,7 +840,7 @@ export default function PurchasingPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-orange-600" data-testid="stat-pending-po">
-                  {purchaseOrders?.filter((po: any) => po.status === "pending").length || 0}
+                  {Array.isArray(purchaseOrders) ? purchaseOrders.filter((po: any) => po.status === "pending").length : 0}
                 </div>
                 <p className="text-xs text-muted-foreground">Menunggu persetujuan</p>
               </CardContent>
@@ -847,7 +852,7 @@ export default function PurchasingPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600" data-testid="stat-partial-received-po">
-                  {purchaseOrders?.filter((po: any) => po.status === "partial_received").length || 0}
+                  {Array.isArray(purchaseOrders) ? purchaseOrders.filter((po: any) => po.status === "partial_received").length : 0}
                 </div>
                 <p className="text-xs text-muted-foreground">Masih ada barang belum diterima</p>
               </CardContent>
@@ -859,7 +864,7 @@ export default function PurchasingPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600" data-testid="stat-received-po">
-                  {purchaseOrders?.filter((po: any) => po.status === "received").length || 0}
+                  {Array.isArray(purchaseOrders) ? purchaseOrders.filter((po: any) => po.status === "received").length : 0}
                 </div>
                 <p className="text-xs text-muted-foreground">Semua barang sudah diterima</p>
               </CardContent>
@@ -993,11 +998,11 @@ export default function PurchasingPage() {
               </div>
               <div>
                 <Label>Tanggal Order</Label>
-                <p className="text-sm">{selectedPO && new Date(selectedPO.orderDate).toLocaleDateString()}</p>
+                <p className="text-sm">{selectedPO && formatDateShort(selectedPO.orderDate)}</p>
               </div>
               <div>
                 <Label>Expected Delivery</Label>
-                <p className="text-sm">{selectedPO && new Date(selectedPO.expectedDeliveryDate).toLocaleDateString()}</p>
+                <p className="text-sm">{selectedPO && formatDateShort(selectedPO.expectedDeliveryDate)}</p>
               </div>
             </div>
             

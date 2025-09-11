@@ -43,6 +43,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { serviceTickets, type ServiceTicket, type Customer } from "@shared/schema";
+import { formatDateShort, formatDateLong, formatDateForDatabase, getCurrentJakartaTime, createDatabaseTimestamp } from '@shared/utils/timezone';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -405,7 +406,7 @@ export default function ServiceTickets() {
     if (data.status === "delivered" && data.warrantyDuration) {
       const warrantyDurationNum = parseInt(data.warrantyDuration);
       if (warrantyDurationNum > 0) {
-        const startDate = new Date();
+        const startDate = getCurrentJakartaTime();
         const endDate = warrantyDurationNum >= 9999 
           ? null // Unlimited warranty
           : new Date(startDate.getTime() + warrantyDurationNum * 24 * 60 * 60 * 1000);
@@ -670,7 +671,7 @@ export default function ServiceTickets() {
                             <div className="flex items-center text-sm">
                               <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
                               <span data-testid={`ticket-date-${ticket.id}`}>
-                                {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString('id-ID') : '-'}
+                                {ticket.createdAt ? formatDateShort(ticket.createdAt) : '-'}
                               </span>
                             </div>
                           </TableCell>
@@ -1046,8 +1047,7 @@ export default function ServiceTickets() {
                             })()}</p>
                             {parseInt(form.watch("warrantyDuration")) < 9999 && (
                               <p><strong>Berakhir:</strong> {
-                                new Date(Date.now() + (parseInt(form.watch("warrantyDuration")) || 0) * 24 * 60 * 60 * 1000)
-                                  .toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                                formatDateLong(new Date(Date.now() + (parseInt(form.watch("warrantyDuration")) || 0) * 24 * 60 * 60 * 1000))
                               }</p>
                             )}
                           </div>
@@ -1122,7 +1122,7 @@ export default function ServiceTickets() {
                 warrantyDuration: receiptData.warrantyDuration ?? undefined,
                 warrantyStartDate: receiptData.warrantyStartDate ? (receiptData.warrantyStartDate instanceof Date ? receiptData.warrantyStartDate.toISOString() : receiptData.warrantyStartDate) : undefined,
                 warrantyEndDate: receiptData.warrantyEndDate ? (receiptData.warrantyEndDate instanceof Date ? receiptData.warrantyEndDate.toISOString() : receiptData.warrantyEndDate) : undefined,
-                createdAt: receiptData.createdAt ? new Date(receiptData.createdAt).toISOString() : new Date().toISOString()
+                createdAt: receiptData.createdAt ? (typeof receiptData.createdAt === 'string' ? receiptData.createdAt : receiptData.createdAt.toISOString()) : createDatabaseTimestamp()
               }}
               customer={(() => {
                 // Gunakan data customer yang sudah disimpan saat membuat tiket
@@ -1188,8 +1188,8 @@ export default function ServiceTickets() {
             warrantyDuration: paymentReceiptData.warrantyDuration ?? undefined,
             warrantyStartDate: paymentReceiptData.warrantyStartDate ? (paymentReceiptData.warrantyStartDate instanceof Date ? paymentReceiptData.warrantyStartDate.toISOString() : paymentReceiptData.warrantyStartDate) : undefined,
             warrantyEndDate: paymentReceiptData.warrantyEndDate ? (paymentReceiptData.warrantyEndDate instanceof Date ? paymentReceiptData.warrantyEndDate.toISOString() : paymentReceiptData.warrantyEndDate) : undefined,
-            createdAt: paymentReceiptData.createdAt ? new Date(paymentReceiptData.createdAt).toISOString() : new Date().toISOString(),
-            completedAt: paymentReceiptData.completedAt ? new Date(paymentReceiptData.completedAt).toISOString() : undefined
+            createdAt: paymentReceiptData.createdAt ? (typeof paymentReceiptData.createdAt === 'string' ? paymentReceiptData.createdAt : paymentReceiptData.createdAt.toISOString()) : createDatabaseTimestamp(),
+            completedAt: paymentReceiptData.completedAt ? (typeof paymentReceiptData.completedAt === 'string' ? paymentReceiptData.completedAt : paymentReceiptData.completedAt.toISOString()) : undefined
           }}
           customer={(() => {
             const foundCustomer = (customers as Customer[])?.find((c: Customer) => c.id === paymentReceiptData.customerId);

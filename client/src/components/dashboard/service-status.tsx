@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Laptop, Clock, CheckCircle, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { formatDateShort } from '@shared/utils/timezone';
 
 export default function ServiceStatus() {
   const { data: serviceTickets, isLoading } = useQuery({
@@ -109,7 +110,7 @@ export default function ServiceStatus() {
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {ticket.estimatedCompletion 
-                        ? `Est: ${new Date(ticket.estimatedCompletion).toLocaleDateString()}`
+                        ? `Est: ${formatDateShort(ticket.estimatedCompletion)}`
                         : "No estimate"
                       }
                     </p>

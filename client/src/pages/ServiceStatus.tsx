@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings, TestTube, FileText } from "lucide-react";
-import { format } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
+import { formatDateLong } from '@shared/utils/timezone';
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const statusConfig = {
@@ -190,7 +189,7 @@ export default function ServiceStatus() {
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-gray-400" />
                       <span data-testid="text-created-date">
-                        {format(new Date(serviceData.createdAt), 'dd MMMM yyyy', { locale: idLocale })}
+                        {formatDateLong(serviceData.createdAt)}
                       </span>
                     </div>
                   </div>
@@ -200,7 +199,7 @@ export default function ServiceStatus() {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-gray-400" />
                         <span data-testid="text-estimated-completion">
-                          {format(new Date(serviceData.estimatedCompletion), 'dd MMMM yyyy', { locale: idLocale })}
+                          {formatDateLong(serviceData.estimatedCompletion)}
                         </span>
                       </div>
                     </div>
@@ -213,7 +212,7 @@ export default function ServiceStatus() {
                     <div className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-green-500" />
                       <span data-testid="text-completed-date">
-                        {format(new Date(serviceData.completedAt), 'dd MMMM yyyy', { locale: idLocale })}
+                        {formatDateLong(serviceData.completedAt)}
                       </span>
                     </div>
                   </div>

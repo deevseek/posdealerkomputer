@@ -10,8 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Printer, Download, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
+import { formatDateWithTime, formatDateShort } from '@shared/utils/timezone';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useState } from "react";
@@ -374,7 +373,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                   <div className="flex justify-between">
                     <span>Tanggal:</span>
                     <span data-testid="text-receipt-date">
-                      {format(new Date(transaction.createdAt || transaction.date || new Date()), 'dd/MM/yyyy HH:mm', { locale: idLocale })}
+                      {formatDateWithTime(transaction.createdAt || transaction.date || new Date())}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -493,7 +492,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                         <div className="flex justify-between">
                           <span>Mulai Garansi:</span>
                           <span data-testid="warranty-start">
-                            {format(new Date(transaction.warrantyStartDate), 'dd/MM/yyyy', { locale: idLocale })}
+                            {formatDateShort(transaction.warrantyStartDate)}
                           </span>
                         </div>
                       )}
@@ -501,7 +500,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                         <div className="flex justify-between">
                           <span>Berakhir:</span>
                           <span data-testid="warranty-end">
-                            {format(new Date(transaction.warrantyEndDate), 'dd/MM/yyyy', { locale: idLocale })}
+                            {formatDateShort(transaction.warrantyEndDate)}
                           </span>
                         </div>
                       )}
@@ -539,7 +538,7 @@ export default function ReceiptModal({ open, onClose, transaction }: ReceiptModa
                     borderTop: '1px dashed #ccc',
                     paddingTop: '2px'
                   }}>
-                    Cetak: {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: idLocale })}
+                    Cetak: {formatDateWithTime(new Date())}
                   </div>
                 </div>
               </div>

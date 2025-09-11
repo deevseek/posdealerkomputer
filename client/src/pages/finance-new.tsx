@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Plus, TrendingUp, TrendingDown, DollarSign, Users, Calendar, Eye } from "lucide-react";
-import { format } from "date-fns";
+import { formatDateShort, createDatabaseTimestamp } from '@shared/utils/timezone';
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 
@@ -108,6 +108,12 @@ const TRANSACTION_CATEGORIES = {
     'Insurance',
     'Taxes',
     'Other Expense'
+  ],
+  transfer: [
+    'Account Transfer',
+    'Internal Transfer',
+    'Cash Movement',
+    'Bank Transfer'
   ]
 };
 
@@ -153,7 +159,7 @@ export default function FinanceNew() {
     department: '',
     salary: '',
     salaryType: 'monthly' as 'monthly' | 'weekly' | 'daily' | 'hourly',
-    joinDate: new Date().toISOString().split('T')[0],
+    joinDate: createDatabaseTimestamp().split('T')[0],
     phone: '',
     bankAccount: '',
     address: ''
@@ -259,7 +265,7 @@ export default function FinanceNew() {
         department: '',
         salary: '',
         salaryType: 'monthly',
-        joinDate: new Date().toISOString().split('T')[0],
+        joinDate: createDatabaseTimestamp().split('T')[0],
         phone: '',
         bankAccount: '',
         address: ''
@@ -787,7 +793,7 @@ export default function FinanceNew() {
                         <SelectValue placeholder="Pilih kategori" />
                       </SelectTrigger>
                       <SelectContent>
-                        {TRANSACTION_CATEGORIES[transactionForm.type]?.map((cat) => (
+                        {TRANSACTION_CATEGORIES[transactionForm.type]?.map((cat: string) => (
                           <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                         ))}
                       </SelectContent>
@@ -899,7 +905,7 @@ export default function FinanceNew() {
                   {Array.isArray(transactions) ? transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
-                        {format(new Date(transaction.createdAt), 'dd/MM/yyyy')}
+                        {formatDateShort(transaction.createdAt)}
                       </TableCell>
                       <TableCell>
                         {(() => {
@@ -1114,7 +1120,7 @@ export default function FinanceNew() {
                       <TableCell>{formatCurrency(employee.salary)}</TableCell>
                       <TableCell>{getStatusBadge(employee.status)}</TableCell>
                       <TableCell>
-                        {format(new Date(employee.joinDate), 'dd/MM/yyyy')}
+                        {formatDateShort(employee.joinDate)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1312,7 +1318,7 @@ export default function FinanceNew() {
                         {employees?.find(e => e.id === payroll.employeeId)?.name || 'Tidak Diketahui'}
                       </TableCell>
                       <TableCell>
-                        {format(new Date(payroll.periodStart), 'dd/MM')} - {format(new Date(payroll.periodEnd), 'dd/MM/yyyy')}
+                        {formatDateShort(payroll.periodStart)} - {formatDateShort(payroll.periodEnd)}
                       </TableCell>
                       <TableCell>{formatCurrency(payroll.grossPay)}</TableCell>
                       <TableCell>

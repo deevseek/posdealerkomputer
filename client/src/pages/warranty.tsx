@@ -15,6 +15,7 @@ import {
 import { Search, Calendar, Clock, Wrench, ShoppingCart, Filter } from "lucide-react";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
+import { getCurrentJakartaTime, formatDateShort } from '@shared/utils/timezone';
 import {
   Select,
   SelectContent,
@@ -48,7 +49,7 @@ function getWarrantyStatus(endDate?: string, duration?: number): { status: 'acti
     return { status: 'expired' };
   }
   
-  const now = new Date();
+  const now = getCurrentJakartaTime();
   const end = new Date(endDate);
   const diffTime = end.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -402,14 +403,14 @@ export default function WarrantyPage() {
                           </TableCell>
                           
                           <TableCell>
-                            {new Date(warranty.warrantyStartDate).toLocaleDateString('id-ID')}
+                            {formatDateShort(warranty.warrantyStartDate)}
                           </TableCell>
                           
                           <TableCell>
                             {warranty.status === 'unlimited' 
                               ? 'Tanpa Batas' 
                               : warranty.warrantyEndDate 
-                                ? new Date(warranty.warrantyEndDate).toLocaleDateString('id-ID')
+                                ? formatDateShort(warranty.warrantyEndDate)
                                 : '-'
                             }
                           </TableCell>

@@ -19,6 +19,7 @@ import type { User } from "@shared/schema";
 import { z } from "zod";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
+import { formatDateShort } from '@shared/utils/timezone';
 
 const userUpdateSchema = z.object({
   firstName: z.string().min(1, "Nama depan harus diisi"),
@@ -485,7 +486,7 @@ export default function UsersPage() {
                           data-testid={`user-created-${user.id}`}
                         >
                           {user.createdAt 
-                            ? new Date(user.createdAt).toLocaleDateString("id-ID")
+                            ? formatDateShort(user.createdAt)
                             : "-"
                           }
                         </span>

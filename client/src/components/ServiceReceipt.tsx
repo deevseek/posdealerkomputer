@@ -4,8 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { format } from "date-fns";
-import { id as idLocale } from "date-fns/locale";
+import { formatDateWithTime, formatDateShort } from '@shared/utils/timezone';
 import { Printer, Download, FileText } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -277,7 +276,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
               <div className={`space-y-1 ${getTextSize()}`}>
                 <div className="flex justify-between">
                   <span className="font-bold">Tanggal:</span>
-                  <span data-testid="text-service-date">{format(new Date(serviceData.createdAt), 'dd/MM/yy HH:mm', { locale: idLocale })}</span>
+                  <span data-testid="text-service-date">{formatDateWithTime(serviceData.createdAt)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold">Customer:</span>
@@ -357,7 +356,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
                       <div className="flex justify-between">
                         <span className="font-bold">Mulai Garansi:</span>
                         <span data-testid="warranty-start">
-                          {format(new Date((serviceData as any).warrantyStartDate), 'dd/MM/yyyy', { locale: idLocale })}
+                          {formatDateShort((serviceData as any).warrantyStartDate)}
                         </span>
                       </div>
                     )}
@@ -365,7 +364,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
                       <div className="flex justify-between">
                         <span className="font-bold">Berakhir:</span>
                         <span data-testid="warranty-end">
-                          {format(new Date((serviceData as any).warrantyEndDate), 'dd/MM/yyyy', { locale: idLocale })}
+                          {formatDateShort((serviceData as any).warrantyEndDate)}
                         </span>
                       </div>
                     )}
@@ -381,7 +380,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
                 {!(serviceData as any).warrantyDuration && (
                   <div>Garansi service 30 hari</div>
                 )}
-                <div data-testid="text-print-date">Cetak: {format(new Date(), 'dd/MM/yy HH:mm', { locale: idLocale })}</div>
+                <div data-testid="text-print-date">Cetak: {formatDateWithTime(new Date())}</div>
               </div>
             </div>
           </CardContent>

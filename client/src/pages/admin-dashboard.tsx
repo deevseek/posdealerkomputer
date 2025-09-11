@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDateShort } from '@shared/utils/timezone';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -64,8 +65,18 @@ export default function AdminDashboard() {
     planId: ''
   });
 
+  // Define stats interface with proper types
+  interface AdminStats {
+    totalClients?: number;
+    newClientsThisMonth?: number;
+    activeClients?: number;
+    monthlyRevenue?: number;
+    revenueGrowth?: number;
+    expiringTrials?: number;
+  }
+
   // Fetch dashboard stats
-  const { data: stats } = useQuery({
+  const { data: stats } = useQuery<AdminStats>({
     queryKey: ['/api/admin/stats'],
   });
 
@@ -238,10 +249,10 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-total-clients">
-                {stats?.totalClients || 0}
+                {stats?.totalClients ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                +{stats?.newClientsThisMonth || 0} bulan ini
+                +{stats?.newClientsThisMonth ?? 0} bulan ini
               </p>
             </CardContent>
           </Card>
@@ -253,10 +264,10 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-600" data-testid="stat-active-clients">
-                {stats?.activeClients || 0}
+                {stats?.activeClients ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                {((stats?.activeClients / stats?.totalClients) * 100 || 0).toFixed(1)}% dari total
+                {stats?.activeClients && stats?.totalClients ? ((stats.activeClients / stats.totalClients) * 100).toFixed(1) : '0'}% dari total
               </p>
             </CardContent>
           </Card>
@@ -268,10 +279,10 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold" data-testid="stat-monthly-revenue">
-                Rp {(stats?.monthlyRevenue || 0).toLocaleString()}
+                Rp {(stats?.monthlyRevenue ?? 0).toLocaleString()}
               </div>
               <p className="text-xs text-muted-foreground">
-                +{stats?.revenueGrowth || 0}% dari bulan lalu
+                +{stats?.revenueGrowth ?? 0}% dari bulan lalu
               </p>
             </CardContent>
           </Card>
@@ -283,7 +294,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-yellow-600" data-testid="stat-expiring-trials">
-                {stats?.expiringTrials || 0}
+                {stats?.expiringTrials ?? 0}
               </div>
               <p className="text-xs text-muted-foreground">
                 7 hari ke depan
@@ -351,7 +362,7 @@ export default function AdminDashboard() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {new Date(client.createdAt).toLocaleDateString('id-ID')}
+                          {formatDateShort(client.createdAt)}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
@@ -424,7 +435,7 @@ export default function AdminDashboard() {
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2 text-sm">
-                          {JSON.parse(plan.features || '[]').map((feature: string, index: number) => (
+                          {(Array.isArray(plan.features) ? plan.features : JSON.parse(plan.features || '[]')).map((feature: string, index: number) => (
                             <li key={index} className="flex items-center gap-2">
                               <CheckCircle className="h-4 w-4 text-green-500" />
                               {feature}

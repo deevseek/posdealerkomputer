@@ -21,6 +21,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import CustomerCreateModal from "@/components/customers/customer-create-modal";
+import { getCurrentJakartaTime, formatDateLong } from '@shared/utils/timezone';
 
 interface TransactionModalProps {
   open: boolean;
@@ -260,7 +261,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     // Calculate warranty data if warranty is provided
     let warrantyData = {};
     if (warrantyDuration > 0) {
-      const startDate = new Date();
+      const startDate = getCurrentJakartaTime();
       const endDate = warrantyDuration >= 9999 
         ? null // Unlimited warranty
         : new Date(startDate.getTime() + warrantyDuration * 24 * 60 * 60 * 1000);
@@ -638,8 +639,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                             }</p>
                             {warrantyDuration < 9999 && (
                               <p><strong>Berakhir:</strong> {
-                                new Date(Date.now() + warrantyDuration * 24 * 60 * 60 * 1000)
-                                  .toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                                formatDateLong(new Date(Date.now() + warrantyDuration * 24 * 60 * 60 * 1000))
                               }</p>
                             )}
                           </div>

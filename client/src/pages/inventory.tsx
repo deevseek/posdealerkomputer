@@ -28,6 +28,7 @@ import { queryClient } from "@/lib/queryClient";
 import { insertProductSchema, insertCategorySchema } from "@shared/schema";
 import { useWebSocket } from "@/lib/websocket";
 import { validateExcelFile, downloadTemplate, uploadExcelFile, type ImportResult } from "@/lib/importExportUtils";
+import { formatDateShort } from '@shared/utils/timezone';
 import ImportResultsDialog from "@/components/ImportResultsDialog";
 
 const pricingSchema = z.object({
@@ -574,8 +575,13 @@ export default function Inventory() {
     refetchIntervalInBackground: true, // Continue refreshing in background
   });
 
+  // Define interface for stock movements data
+  interface StockMovementsData {
+    movements?: any[];
+  }
+
   // Stock movements for tracking - with auto-refresh
-  const { data: stockMovementsData } = useQuery({
+  const { data: stockMovementsData } = useQuery<StockMovementsData>({
     queryKey: ["/api/reports/stock-movements"],
     retry: false,
     refetchInterval: 5000, // Auto-refresh every 5 seconds
@@ -1107,7 +1113,7 @@ export default function Inventory() {
                         stockMovements.slice(0, 20).map((movement: any) => (
                           <TableRow key={movement.id}>
                             <TableCell className="text-sm">
-                              {new Date(movement.createdAt).toLocaleDateString('id-ID')}
+                              {formatDateShort(movement.createdAt)}
                             </TableCell>
                             <TableCell className="font-medium">
                               {movement.productName || movement.productId}
@@ -1173,7 +1179,7 @@ export default function Inventory() {
                               {po.supplierName || po.supplierId}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {new Date(po.orderDate).toLocaleDateString('id-ID')}
+                              {formatDateShort(po.orderDate)}
                             </TableCell>
                             <TableCell>
                               <Badge variant={

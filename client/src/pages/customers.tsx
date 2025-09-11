@@ -35,6 +35,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCustomerSchema, type Customer } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateShort } from '@shared/utils/timezone';
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { validateExcelFile, downloadTemplate, uploadExcelFile, type ImportResult } from "@/lib/importExportUtils";
 import ImportResultsDialog from "@/components/ImportResultsDialog";
@@ -456,7 +457,7 @@ export default function Customers() {
                         </TableCell>
                         <TableCell>
                           <span className="text-sm text-muted-foreground" data-testid={`customer-joined-${customer.id}`}>
-                            {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('id-ID') : '-'}
+                            {customer.createdAt ? formatDateShort(customer.createdAt) : '-'}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

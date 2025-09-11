@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Printer, Download, X } from 'lucide-react';
 import QRCode from 'qrcode';
-import { format } from 'date-fns';
-import { id } from 'date-fns/locale';
+import { formatDateShort, formatDateWithTime, formatDateForDisplay } from '@shared/utils/timezone';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -398,7 +397,7 @@ export default function ServicePaymentReceipt({
                     paperSize === '58' ? 'text-xs' : 
                     'text-xs'
                   }`}>
-                    <div><span className="text-gray-600">Tanggal:</span> {format(new Date(), 'dd/MM/yyyy HH:mm', { locale: id })}</div>
+                    <div><span className="text-gray-600">Tanggal:</span> {formatDateWithTime(new Date())}</div>
                     <div><span className="text-gray-600">Status:</span> <span className="text-green-600 font-medium">LUNAS</span></div>
                   </div>
                 </div>
@@ -540,7 +539,7 @@ export default function ServicePaymentReceipt({
                       <div className="flex justify-between py-1">
                         <span className="text-blue-700">Tanggal Mulai:</span>
                         <span className="font-medium text-blue-900">
-                          {format(new Date(serviceTicket.warrantyStartDate), 'dd/MM/yyyy', { locale: id })}
+                          {formatDateShort(serviceTicket.warrantyStartDate)}
                         </span>
                       </div>
                     )}
@@ -548,7 +547,7 @@ export default function ServicePaymentReceipt({
                       <div className="flex justify-between py-1">
                         <span className="text-blue-700">Berlaku Sampai:</span>
                         <span className="font-medium text-blue-900">
-                          {format(new Date(serviceTicket.warrantyEndDate), 'dd/MM/yyyy', { locale: id })}
+                          {formatDateShort(serviceTicket.warrantyEndDate)}
                         </span>
                       </div>
                     )}
@@ -568,12 +567,12 @@ export default function ServicePaymentReceipt({
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Tanggal Masuk:</span>
-                      <span>{format(new Date(serviceTicket.createdAt), 'dd/MM/yyyy', { locale: id })}</span>
+                      <span>{formatDateShort(serviceTicket.createdAt)}</span>
                     </div>
                     {serviceTicket.completedAt && (
                       <div className="flex justify-between">
                         <span className="text-gray-600">Tanggal Selesai:</span>
-                        <span>{format(new Date(serviceTicket.completedAt), 'dd/MM/yyyy', { locale: id })}</span>
+                        <span>{formatDateShort(serviceTicket.completedAt)}</span>
                       </div>
                     )}
                   </div>
