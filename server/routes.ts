@@ -616,6 +616,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Product Excel Template route - MUST be before /:id route to avoid route conflict
+  app.get('/api/products/template', isAuthenticated, async (req, res) => {
+    try {
+      // Create Excel template with product columns
+      const templateData = [
+        ['name', 'sku', 'brand', 'model', 'sellingPrice', 'stock', 'minStock', 'unit', 'specifications']
+      ];
+      
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
+      
+      // Set column widths for better readability
+      worksheet['!cols'] = [
+        { width: 25 }, // name
+        { width: 20 }, // sku
+        { width: 15 }, // brand
+        { width: 15 }, // model
+        { width: 15 }, // sellingPrice
+        { width: 10 }, // stock
+        { width: 12 }, // minStock
+        { width: 10 }, // unit
+        { width: 30 }  // specifications
+      ];
+      
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
+      
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      
+      res.setHeader('Content-Disposition', 'attachment; filename=product-template.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(excelBuffer);
+    } catch (error) {
+      console.error("Error generating product template:", error);
+      res.status(500).json({ message: "Failed to generate product template" });
+    }
+  });
+
   app.get('/api/products/:id', isAuthenticated, async (req, res) => {
     try {
       const product = await storage.getProductById(req.params.id);
@@ -726,43 +764,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Product Excel Import/Export routes
-  app.get('/api/products/template', isAuthenticated, async (req, res) => {
-    try {
-      // Create Excel template with product columns
-      const templateData = [
-        ['name', 'sku', 'brand', 'model', 'sellingPrice', 'stock', 'minStock', 'unit', 'specifications']
-      ];
-      
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
-      
-      // Set column widths for better readability
-      worksheet['!cols'] = [
-        { width: 25 }, // name
-        { width: 20 }, // sku
-        { width: 15 }, // brand
-        { width: 15 }, // model
-        { width: 15 }, // sellingPrice
-        { width: 10 }, // stock
-        { width: 12 }, // minStock
-        { width: 10 }, // unit
-        { width: 30 }  // specifications
-      ];
-      
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
-      
-      // Generate Excel buffer
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-      
-      res.setHeader('Content-Disposition', 'attachment; filename=product-template.xlsx');
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.send(excelBuffer);
-    } catch (error) {
-      console.error("Error generating product template:", error);
-      res.status(500).json({ message: "Failed to generate product template" });
-    }
-  });
-
   app.post('/api/products/import', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
       if (!req.file) {
@@ -1407,6 +1408,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Customer Excel Template route - MUST be before /:id route to avoid route conflict
+  app.get('/api/customers/template', isAuthenticated, async (req, res) => {
+    try {
+      // Create Excel template with customer columns
+      const templateData = [
+        ['name', 'email', 'phone', 'address']
+      ];
+      
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
+      
+      // Set column widths for better readability
+      worksheet['!cols'] = [
+        { width: 20 }, // name
+        { width: 25 }, // email  
+        { width: 15 }, // phone
+        { width: 30 }  // address
+      ];
+      
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Customers');
+      
+      // Generate Excel buffer
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+      
+      res.setHeader('Content-Disposition', 'attachment; filename=customer-template.xlsx');
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(excelBuffer);
+    } catch (error) {
+      console.error("Error generating customer template:", error);
+      res.status(500).json({ message: "Failed to generate customer template" });
+    }
+  });
+
   app.get('/api/customers/:id', isAuthenticated, async (req, res) => {
     try {
       const customer = await storage.getCustomerById(req.params.id);
@@ -1460,37 +1494,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Customer Excel Import/Export routes
-  app.get('/api/customers/template', isAuthenticated, async (req, res) => {
-    try {
-      // Create Excel template with customer columns
-      const templateData = [
-        ['name', 'email', 'phone', 'address']
-      ];
-      
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.aoa_to_sheet(templateData);
-      
-      // Set column widths for better readability
-      worksheet['!cols'] = [
-        { width: 20 }, // name
-        { width: 25 }, // email  
-        { width: 15 }, // phone
-        { width: 30 }  // address
-      ];
-      
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Customers');
-      
-      // Generate Excel buffer
-      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-      
-      res.setHeader('Content-Disposition', 'attachment; filename=customer-template.xlsx');
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.send(excelBuffer);
-    } catch (error) {
-      console.error("Error generating customer template:", error);
-      res.status(500).json({ message: "Failed to generate customer template" });
-    }
-  });
 
   app.post('/api/customers/import', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
