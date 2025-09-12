@@ -846,12 +846,28 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
         throw new Error("Item garansi tidak ditemukan");
       }
 
+      // Get customerId from the warranty item data
+      // We need to find the original transaction/service ticket to get customerId
+      let customerId: string | undefined;
+      
+      if (selectedItem.type === 'service') {
+        const serviceTicket = serviceTickets.find((t: any) => t.id === selectedItem.id);
+        customerId = serviceTicket?.customerId;
+      } else if (selectedItem.type === 'sale') {
+        const transaction = transactions.find((t: any) => t.id === selectedItem.id);
+        customerId = transaction?.customerId;
+      }
+      
+      if (!customerId) {
+        throw new Error("Customer ID tidak ditemukan untuk item garansi ini");
+      }
+
       // Transform data to match backend schema
-      // The warranty item ID is actually the direct ticket/transaction ID
       const payload = {
         claimType: data.claimType,
         claimReason: data.claimReason,
         notes: data.notes,
+        customerId: customerId,
         // Map based on warranty item type
         originalTransactionId: selectedItem.type === 'sale' ? selectedItem.id : undefined,
         originalServiceTicketId: selectedItem.type === 'service' ? selectedItem.id : undefined,
@@ -952,7 +968,7 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
           <Select 
             value={form.watch("claimType")} 
             onValueChange={(value) => {
-              form.setValue("claimType", value as 'service' | 'sales_return');
+              form.setValue("claimType", value as any);
             }}
           >
             <SelectTrigger data-testid="select-claim-type">
@@ -1048,7 +1064,7 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
           <Select 
             value={form.watch("action")} 
             onValueChange={(value) => {
-              form.setValue("action", value as 'approve' | 'reject');
+              form.setValue("action", value as any);
             }}
           >
             <SelectTrigger data-testid="select-process-action">
@@ -1129,7 +1145,7 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucc
           </div>
         )}
         
-        {claim.claimType === 'sale' && (
+        {claim.claimType === 'sales_return' && (
           <div className="bg-green-50 p-3 rounded text-sm">
             <strong>Sales Return:</strong> Pilih kondisi barang untuk update stok dan keuangan yang sesuai.
           </div>
@@ -1142,7 +1158,7 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucc
             <Label>Kondisi Barang</Label>
             <Select 
               value={form.watch("returnCondition") || ''} 
-              onValueChange={(value: 'normal_stock' | 'damaged_stock') => form.setValue("returnCondition", value)}
+              onValueChange={(value) => form.setValue("returnCondition", value as any)}
             >
               <SelectTrigger data-testid="select-return-condition">
                 <SelectValue placeholder="Pilih kondisi barang" />
