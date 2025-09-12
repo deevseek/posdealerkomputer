@@ -389,6 +389,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate ? lte(stockMovements.createdAt, endDate) : undefined
       ].filter(Boolean);
       
+      // DEBUG: Check the date filtering issue
+      console.log('🐛 Date filter DEBUG:');
+      console.log('- startDate:', startDate);
+      console.log('- endDate:', endDate);
+      console.log('- Where conditions count:', whereConditions.length);
+      
+      // Test query without date filters 
+      const testNoDateQuery = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(stockMovements)
+        .where(clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId));
+      console.log('🐛 Records without date filter:', testNoDateQuery[0]?.count || 0);
+      
       // Get stock movements with product names and readable references
       const movementData = await db
         .select({
