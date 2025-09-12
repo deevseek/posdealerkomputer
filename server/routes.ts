@@ -355,13 +355,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           unitPrice: sql<string>`
             COALESCE(
               (SELECT unit_price FROM transaction_items WHERE transaction_id = ${stockMovements.referenceId} AND product_id = ${stockMovements.productId} LIMIT 1),
-              ${products.price}
+              ${products.sellingPrice}
             )
           `,
           totalValue: sql<string>`
             ${stockMovements.quantity} * COALESCE(
               (SELECT unit_price FROM transaction_items WHERE transaction_id = ${stockMovements.referenceId} AND product_id = ${stockMovements.productId} LIMIT 1),
-              ${products.price}
+              ${products.sellingPrice}
             )
           `,
           originalTransactionNumber: sql<string>`
