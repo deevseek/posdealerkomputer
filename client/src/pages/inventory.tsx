@@ -715,12 +715,13 @@ export default function Inventory() {
           )}
           
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
               <TabsTrigger value="pricing" data-testid="tab-pricing">HPP & Pricing</TabsTrigger>
               <TabsTrigger value="movements" data-testid="tab-movements">Stock Movements</TabsTrigger>
               <TabsTrigger value="incoming" data-testid="tab-incoming">Incoming Stock</TabsTrigger>
+              <TabsTrigger value="damaged" data-testid="tab-damaged">Barang Rusak</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -1211,6 +1212,11 @@ export default function Inventory() {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            {/* Damaged Goods Tab */}
+            <TabsContent value="damaged" className="space-y-6">
+              <DamagedGoodsView />
+            </TabsContent>
           </Tabs>
         </main>
       </div>
@@ -1223,5 +1229,173 @@ export default function Inventory() {
         title="Product Import Results"
       />
     </div>
+  );
+}
+
+// Damaged Goods Component
+function DamagedGoodsView() {
+  const { toast } = useToast();
+  
+  const { data: damagedGoodsData, isLoading: isDamagedLoading, error: damagedError } = useQuery({
+    queryKey: ["/api/reports/damaged-goods"],
+    retry: 1,
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  if (isDamagedLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center space-x-2">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            <span>Memuat data barang rusak...</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (damagedError) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-red-600">
+            <AlertTriangle className="h-8 w-8 mx-auto mb-2" />
+            <p>Gagal memuat data barang rusak</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const damagedGoods = damagedGoodsData?.damagedGoods || [];
+  const totalDamagedValue = damagedGoodsData?.totalDamagedValue || 0;
+  const totalItems = damagedGoodsData?.totalItems || 0;
+
+  return (
+    <>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Barang Rusak</CardTitle>
+            <Package className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalItems}</div>
+            <p className="text-xs text-muted-foreground">Item yang rusak</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Nilai Kerugian</CardTitle>
+            <DollarSign className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">
+              Rp {Number(totalDamagedValue).toLocaleString('id-ID')}
+            </div>
+            <p className="text-xs text-muted-foreground">Nilai total barang rusak</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rata-rata Nilai per Item</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              Rp {Number(totalItems > 0 ? totalDamagedValue / totalItems : 0).toLocaleString('id-ID')}
+            </div>
+            <p className="text-xs text-muted-foreground">Kerugian per item</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Damaged Goods Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            Daftar Barang Rusak dari Warranty Return
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Barang yang dikembalikan customer dalam kondisi rusak melalui warranty claim
+          </p>
+        </CardHeader>
+        <CardContent>
+          {damagedGoods.length === 0 ? (
+            <div className="text-center py-8">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">Tidak ada barang rusak</p>
+              <p className="text-sm text-muted-foreground">
+                Barang rusak dari warranty return akan tampil di sini
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produk</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Harga Satuan</TableHead>
+                    <TableHead className="text-right">Total Nilai</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Transaksi Asli</TableHead>
+                    <TableHead>Tanggal Rusak</TableHead>
+                    <TableHead>Catatan</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {damagedGoods.map((item: any) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium" data-testid={`damaged-product-${item.id}`}>
+                            {item.productName || 'Produk Tidak Diketahui'}
+                          </p>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {item.productSku || '-'}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {item.quantity}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        Rp {Number(item.unitPrice || 0).toLocaleString('id-ID')}
+                      </TableCell>
+                      <TableCell className="text-right font-medium text-destructive">
+                        Rp {Number(item.totalValue || 0).toLocaleString('id-ID')}
+                      </TableCell>
+                      <TableCell>
+                        {item.customerName || 'Customer Tidak Diketahui'}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {item.originalTransactionNumber}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {formatDateShort(item.damagedDate)}
+                      </TableCell>
+                      <TableCell className="max-w-xs">
+                        <p className="text-sm text-muted-foreground truncate">
+                          {item.notes || '-'}
+                        </p>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </>
   );
 }
