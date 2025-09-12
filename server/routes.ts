@@ -14,7 +14,7 @@ import {
 import * as XLSX from 'xlsx';
 import multer from 'multer';
 import { db } from "./db";
-import { eq, and, gte, lte, lt, desc, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, count, sql, isNull } from "drizzle-orm";
 import {
   products,
   categories, 
@@ -331,11 +331,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // TEMP DEBUG ENDPOINT (No auth for debugging)
+  app.get('/api/debug/stock-movements', async (req: any, res) => {
+    try {
+      console.log('🔍 DEBUG ENDPOINT: Stock movements debugging...');
+      
+      // Test 1: Count all records
+      const allRecords = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(stockMovements);
+      console.log('🔍 Total records in stock_movements:', allRecords[0]?.count || 0);
+      
+      // Test 2: Count records with null clientId only
+      const nullClientRecords = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(stockMovements)
+        .where(isNull(stockMovements.clientId));
+      console.log('🔍 Records with null clientId:', nullClientRecords[0]?.count || 0);
+      
+      // Test 3: Get actual data with null clientId
+      const actualData = await db
+        .select()
+        .from(stockMovements)
+        .where(isNull(stockMovements.clientId))
+        .limit(10);
+      console.log('🔍 Sample records with null clientId:', actualData.length);
+      
+      return res.json({
+        totalRecords: allRecords[0]?.count || 0,
+        nullClientRecords: nullClientRecords[0]?.count || 0,
+        sampleData: actualData
+      });
+    } catch (error) {
+      console.error('🔍 DEBUG ERROR:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   // Stock movements report - Clean implementation
   app.get('/api/reports/stock-movements', isAuthenticated, async (req: any, res) => {
     try {
       // Get client ID from authenticated session for multi-tenant security
       const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
+      console.log('🐛 Stock movements API DEBUG - clientId:', clientId, 'type:', typeof clientId, 'tenant:', req.tenant, 'user clientId:', req.session?.user?.clientId);
       
       // Parse optional date filters
       const startDate = req.query.startDate ? parseWithTimezone(req.query.startDate as string, false) : undefined;
@@ -344,8 +382,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Build where conditions for multi-tenant filtering
       const whereConditions = [
         // Multi-tenant filtering - filter by clientId if in multi-tenant mode
-        clientId ? eq(stockMovements.clientId, clientId) : undefined,
-        // Date filters
+        // In single-tenant mode (clientId is null), show all records with null clientId
+        clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId),
+        // Date filters - only apply if provided
         startDate ? gte(stockMovements.createdAt, startDate) : undefined,
         endDate ? lte(stockMovements.createdAt, endDate) : undefined
       ].filter(Boolean);
@@ -378,19 +417,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .leftJoin(products, and(
           eq(stockMovements.productId, products.id),
           // Add clientId filtering to joined tables for complete tenant isolation
-          clientId ? eq(products.clientId, clientId) : undefined
+          clientId ? eq(products.clientId, clientId) : isNull(products.clientId)
         ))
         .leftJoin(purchaseOrders, and(
           eq(stockMovements.referenceId, purchaseOrders.id),
-          clientId ? eq(purchaseOrders.clientId, clientId) : undefined
+          clientId ? eq(purchaseOrders.clientId, clientId) : isNull(purchaseOrders.clientId)
         ))
         .leftJoin(transactions, and(
           eq(stockMovements.referenceId, transactions.id),
-          clientId ? eq(transactions.clientId, clientId) : undefined
+          clientId ? eq(transactions.clientId, clientId) : isNull(transactions.clientId)
         ))
         .leftJoin(serviceTickets, and(
           eq(stockMovements.referenceId, serviceTickets.id),
-          clientId ? eq(serviceTickets.clientId, clientId) : undefined
+          clientId ? eq(serviceTickets.clientId, clientId) : isNull(serviceTickets.clientId)
         ))
         .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
         .orderBy(desc(stockMovements.createdAt));
