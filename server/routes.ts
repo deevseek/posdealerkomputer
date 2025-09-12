@@ -373,29 +373,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get client ID from authenticated session for multi-tenant security
       const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
-      console.log('🐛 Stock movements API DEBUG - clientId:', clientId, 'type:', typeof clientId, 'tenant:', req.tenant, 'user clientId:', req.session?.user?.clientId);
       
-      // FIXED: Remove date filtering to show all data
-      console.log('🐛 FIXED: Date filtering disabled to show all data');
-      
-      // Build where conditions for multi-tenant filtering ONLY
+      // Build where conditions for multi-tenant filtering ONLY 
       const whereConditions = [
         // Multi-tenant filtering - filter by clientId if in multi-tenant mode
         // In single-tenant mode (clientId is null), show all records with null clientId
         clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId)
       ].filter(Boolean);
-      
-      // DEBUG: Check the date filtering issue  
-      console.log('🐛 Date filter DEBUG:');
-      console.log('- Date filtering: DISABLED');
-      console.log('- Where conditions count:', whereConditions.length);
-      
-      // Test query without date filters 
-      const testNoDateQuery = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(stockMovements)
-        .where(clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId));
-      console.log('🐛 Records without date filter:', testNoDateQuery[0]?.count || 0);
       
       // Get stock movements with product names and readable references
       const movementData = await db

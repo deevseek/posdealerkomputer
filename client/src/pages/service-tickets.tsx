@@ -112,6 +112,7 @@ const statusColors = {
   completed: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
   delivered: { bg: "bg-purple-100", text: "text-purple-800", icon: CheckCircle },
   cancelled: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
+  warranty_claim: { bg: "bg-teal-100", text: "text-teal-800", icon: FileText },
 };
 
 const statusLabels = {
@@ -125,6 +126,7 @@ const statusLabels = {
   completed: "Selesai",
   delivered: "Sudah Diambil",
   cancelled: "Dibatalkan",
+  warranty_claim: "Klaim Garansi",
 };
 
 
@@ -518,6 +520,7 @@ export default function ServiceTickets() {
   const filteredTickets = (tickets as ServiceTicket[])
     .filter((ticket) => {
       const matchesSearch = 
+        ticket.ticketNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ticket.deviceType.toLowerCase().includes(searchQuery.toLowerCase()) ||
         ticket.problem.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (ticket.deviceBrand && ticket.deviceBrand.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -548,7 +551,7 @@ export default function ServiceTickets() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Cari berdasarkan perangkat atau masalah..."
+                    placeholder="Cari berdasarkan nomor servis, perangkat, atau masalah..."
                     className="pl-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
