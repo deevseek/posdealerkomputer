@@ -63,24 +63,16 @@ interface WarrantyItem {
   customerId: string; // Add customerId to warranty item
 }
 
-interface WarrantyClaim {
-  id: string;
-  claimNumber: string;
-  claimType: 'service' | 'sales_return';
-  status: 'pending' | 'approved' | 'rejected' | 'processed';
-  customerId: string;
+// Import specific schema types with aliasing
+import { WarrantyClaim as SharedWarrantyClaim } from "@shared/schema";
+
+// Extended WarrantyClaim interface with joined reference fields (type-safe)
+type EnhancedWarrantyClaim = SharedWarrantyClaim & {
   customerName?: string;
-  claimReason: string;
-  claimDate: string;
-  processedDate?: string;
-  processedBy?: string;
-  returnCondition?: 'normal_stock' | 'damaged_stock';
-  notes?: string;
-  originalTransactionId?: string;
-  originalServiceTicketId?: string;
-  deviceInfo?: string;
-  productName?: string;
-}
+  transactionNumber?: string;
+  serviceTicketNumber?: string;
+};
+
 
 function getWarrantyStatus(endDate?: string, duration?: number): { status: 'active' | 'expired' | 'unlimited', daysRemaining?: number } {
   if (!duration || duration >= 9999) {
@@ -129,7 +121,7 @@ export default function WarrantyPage() {
   const [processDialogOpen, setProcessDialogOpen] = useState(false);
   const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
   const [selectedWarranty, setSelectedWarranty] = useState<WarrantyItem | null>(null);
-  const [selectedClaim, setSelectedClaim] = useState<WarrantyClaim | null>(null);
+  const [selectedClaim, setSelectedClaim] = useState<EnhancedWarrantyClaim | null>(null);
   const [activeTab, setActiveTab] = useState("warranties");
   
   const { toast } = useToast();
@@ -175,12 +167,12 @@ export default function WarrantyPage() {
   });
 
   // Fetch warranty claims
-  const { data: warrantyClaims = [] } = useQuery<WarrantyClaim[]>({
+  const { data: warrantyClaims = [] } = useQuery<EnhancedWarrantyClaim[]>({
     queryKey: ["/api/warranty-claims"],
   });
 
   // Enhance warranty claims with customer data
-  const enhancedClaims: WarrantyClaim[] = warrantyClaims.map((claim: any) => {
+  const enhancedClaims: EnhancedWarrantyClaim[] = warrantyClaims.map((claim: EnhancedWarrantyClaim) => {
     const customer = customers.find((c: any) => c.id === claim.customerId);
     let deviceInfo = "";
     let productName = "";
@@ -637,18 +629,16 @@ export default function WarrantyPage() {
                               
                               <TableCell>
                                 <div className="space-y-1">
-                                  {claim.transactionNumber && (
+                                  {claim.transactionNumber ? (
                                     <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs">
                                       📋 {claim.transactionNumber}
                                     </Badge>
-                                  )}
-                                  {claim.serviceTicketNumber && (
+                                  ) : claim.serviceTicketNumber ? (
                                     <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
                                       🔧 {claim.serviceTicketNumber}
                                     </Badge>
-                                  )}
-                                  {!claim.transactionNumber && !claim.serviceTicketNumber && (
-                                    <span className="text-gray-400 text-xs">N/A</span>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">-</span>
                                   )}
                                 </div>
                               </TableCell>
@@ -1039,7 +1029,7 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
   );
 }
 
-function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSuccess: () => void }) {
+function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; onSuccess: () => void }) {
   const { toast } = useToast();
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   
@@ -1153,7 +1143,7 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
   );
 }
 
-function AcceptWarrantyForm({ claim, onSuccess }: { claim: WarrantyClaim; onSuccess: () => void }) {
+function AcceptWarrantyForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; onSuccess: () => void }) {
   const { toast } = useToast();
   const acceptWarrantySchema = createAcceptWarrantySchema(claim.claimType);
   
