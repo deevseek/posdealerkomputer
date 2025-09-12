@@ -2443,27 +2443,19 @@ export class DatabaseStorage implements IStorage {
           });
         
         } else if (returnCondition === 'damaged_stock') {
-          // Handle damaged stock - record as loss/expense
+          // Handle damaged stock - record stock movement only, NO financial expense
           await db.insert(stockMovements).values({
             productId: productId,
             movementType: 'adjustment',
             referenceType: 'warranty_return_damaged',
-            quantity: -quantity, // Negative quantity for expense
+            quantity: quantity, // Record damaged quantity for tracking
             referenceId: originalTransactionId,
             notes: `Warranty return - damaged stock condition`,
             userId: userId
           });
 
-          // Post expense entry for damaged goods
-          await db.insert(financialRecords).values({
-            type: 'expense',
-            category: 'damaged_goods',
-            description: `Warranty return - damaged goods write-off for product ID ${productId}`,
-            amount: (parseFloat(item.unitPrice) * quantity).toString(),
-            reference: originalTransactionId,
-            referenceType: 'warranty_return_damaged',
-            userId: userId
-          });
+          // NO financial record - damaged goods should not be recorded as expense
+          // They will be tracked separately in damaged goods inventory
         }
       }
 

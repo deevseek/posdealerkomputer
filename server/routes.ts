@@ -331,6 +331,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Damaged goods report - Get damaged items from warranty returns
+  app.get('/api/reports/damaged-goods', isAuthenticated, async (req: any, res) => {
+    try {
+      // Get client ID from authenticated session for multi-tenant security
+      const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
+      
+      // Build where conditions for multi-tenant filtering
+      const whereConditions = [
+        eq(stockMovements.referenceType, 'warranty_return_damaged'),
+        // Multi-tenant filtering
+        clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId)
+      ].filter(Boolean);
+      
+      // Get damaged goods with product details and original transaction info
+      const damagedGoods = await db
+        .select({
+          id: stockMovements.id,
+          productId: stockMovements.productId,
+          productName: products.name,
+          productSku: products.sku,
+          quantity: stockMovements.quantity,
+          unitPrice: sql<string>`
+            COALESCE(
+              (SELECT unit_price FROM transaction_items WHERE transaction_id = ${stockMovements.referenceId} AND product_id = ${stockMovements.productId} LIMIT 1),
+              ${products.price}
+            )
+          `,
+          totalValue: sql<string>`
+            ${stockMovements.quantity} * COALESCE(
+              (SELECT unit_price FROM transaction_items WHERE transaction_id = ${stockMovements.referenceId} AND product_id = ${stockMovements.productId} LIMIT 1),
+              ${products.price}
+            )
+          `,
+          originalTransactionNumber: sql<string>`
+            COALESCE(${transactions.transactionNumber}, 'TXN-' || substr(${stockMovements.referenceId}, 1, 8))
+          `,
+          customerName: sql<string>`
+            COALESCE(${customers.name}, 'Customer')
+          `,
+          damagedDate: stockMovements.createdAt,
+          notes: stockMovements.notes,
+        })
+        .from(stockMovements)
+        .leftJoin(products, and(
+          eq(stockMovements.productId, products.id),
+          clientId ? eq(products.clientId, clientId) : isNull(products.clientId)
+        ))
+        .leftJoin(transactions, and(
+          eq(stockMovements.referenceId, transactions.id),
+          clientId ? eq(transactions.clientId, clientId) : isNull(transactions.clientId)
+        ))
+        .leftJoin(customers, and(
+          eq(transactions.customerId, customers.id),
+          clientId ? eq(customers.clientId, clientId) : isNull(customers.clientId)
+        ))
+        .where(and(...whereConditions))
+        .orderBy(desc(stockMovements.createdAt));
+      
+      // Calculate total value of damaged goods
+      const totalDamagedValue = damagedGoods.reduce((sum, item) => {
+        return sum + Number(item.totalValue || 0);
+      }, 0);
+      
+      res.json({
+        damagedGoods,
+        totalDamagedValue,
+        totalItems: damagedGoods.length
+      });
+    } catch (error) {
+      console.error('Error fetching damaged goods report:', error);
+      res.status(500).json({ message: 'Failed to fetch damaged goods report' });
+    }
+  });
+
   // TEMP DEBUG ENDPOINT (No auth for debugging)
   app.get('/api/debug/stock-movements', async (req: any, res) => {
     try {
