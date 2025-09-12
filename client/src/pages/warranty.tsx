@@ -294,17 +294,51 @@ export default function WarrantyPage() {
     switch (item.status) {
       case 'active':
         const isUrgent = item.daysRemaining && item.daysRemaining <= 7;
+        const isExpiringSoon = item.daysRemaining && item.daysRemaining <= 30;
+        
+        if (isUrgent) {
+          return (
+            <Badge variant="destructive" className="flex items-center space-x-1">
+              <span>🚨</span>
+              <span>Segera Berakhir ({item.daysRemaining} hari)</span>
+            </Badge>
+          );
+        } else if (isExpiringSoon) {
+          return (
+            <Badge variant="outline" className="flex items-center space-x-1 text-orange-600 border-orange-200">
+              <span>⏰</span>
+              <span>Perhatian ({item.daysRemaining} hari)</span>
+            </Badge>
+          );
+        } else {
+          return (
+            <Badge variant="default" className="flex items-center space-x-1 bg-green-100 text-green-800">
+              <span>✅</span>
+              <span>Aktif ({item.daysRemaining} hari)</span>
+            </Badge>
+          );
+        }
+      case 'expired':
         return (
-          <Badge variant={isUrgent ? "destructive" : "default"}>
-            {isUrgent ? "Segera Berakhir" : "Aktif"}
+          <Badge variant="secondary" className="flex items-center space-x-1 bg-red-100 text-red-800">
+            <span>❌</span>
+            <span>Berakhir</span>
           </Badge>
         );
-      case 'expired':
-        return <Badge variant="secondary">Berakhir</Badge>;
       case 'unlimited':
-        return <Badge variant="outline">Tanpa Batas</Badge>;
+        return (
+          <Badge variant="outline" className="flex items-center space-x-1 bg-blue-100 text-blue-800">
+            <span>♾️</span>
+            <span>Tanpa Batas</span>
+          </Badge>
+        );
       default:
-        return <Badge variant="secondary">Unknown</Badge>;
+        return (
+          <Badge variant="secondary" className="flex items-center space-x-1">
+            <span>❓</span>
+            <span>Tidak Diketahui</span>
+          </Badge>
+        );
     }
   };
 
@@ -798,19 +832,57 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
       <div className="space-y-4">
         <div>
           <Label htmlFor="warrantyItemId">Item Garansi</Label>
+          <div className="text-sm text-muted-foreground mb-2">
+            💡 Pilih item yang ingin diklaim garansinya. Hanya item dengan status aktif yang dapat diklaim.
+          </div>
           <Select 
             value={form.watch("warrantyItemId")} 
             onValueChange={(value) => form.setValue("warrantyItemId", value)}
           >
             <SelectTrigger data-testid="select-warranty-item">
-              <SelectValue placeholder="Pilih item garansi" />
+              <SelectValue placeholder="Pilih item garansi yang ingin diklaim" />
             </SelectTrigger>
             <SelectContent>
-              {activeWarranties.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.customerName} - {item.productName || item.deviceInfo}
-                </SelectItem>
-              ))}
+              {activeWarranties.length === 0 ? (
+                <div className="p-3 text-center text-muted-foreground">
+                  <div className="text-yellow-600 mb-1">⚠️ Tidak ada item garansi aktif</div>
+                  <div className="text-xs">Semua item sudah tidak bergaransi atau sudah diklaim</div>
+                </div>
+              ) : (
+                activeWarranties.map((item) => {
+                  const isExpiringSoon = item.warrantyEndDate && 
+                    new Date(item.warrantyEndDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+                  
+                  return (
+                    <SelectItem key={item.id} value={item.id} className="py-3">
+                      <div className="flex flex-col space-y-1 w-full">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-green-600 text-xs">✅ Aktif</span>
+                          <span className="font-medium">
+                            {item.customerName} - {item.productName || item.deviceInfo}
+                          </span>
+                          {isExpiringSoon && (
+                            <span className="text-orange-500 text-xs bg-orange-50 px-1 rounded">
+                              ⏰ Segera Berakhir
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex space-x-4">
+                          <span>📅 Berakhir: {item.warrantyEndDate ? 
+                            new Date(item.warrantyEndDate).toLocaleDateString('id-ID') : 'Tidak diketahui'
+                          }</span>
+                          <span>🔧 Tipe: {item.type === 'sales' ? 'Garansi Penjualan' : 'Garansi Service'}</span>
+                        </div>
+                        {item.deviceInfo && (
+                          <div className="text-xs text-blue-600">
+                            📱 Info: {item.deviceInfo}
+                          </div>
+                        )}
+                      </div>
+                    </SelectItem>
+                  )
+                })
+              )}
             </SelectContent>
           </Select>
           {form.formState.errors.warrantyItemId && (
