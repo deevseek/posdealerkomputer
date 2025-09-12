@@ -3939,19 +3939,22 @@ Terima kasih!
   app.put('/api/warranty-claims/:id/process', isAuthenticated, async (req: any, res) => {
     try {
       const { id } = req.params;
-      const { status, returnCondition } = req.body;
+      const { action, adminNotes, returnCondition } = req.body;
       const userId = req.session.user?.id;
 
       if (!userId) {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Validate status
-      if (!['approved', 'rejected'].includes(status)) {
+      // Validate action and map to status
+      if (!['approve', 'reject'].includes(action)) {
         return res.status(400).json({ 
-          message: "Status must be either 'approved' or 'rejected'" 
+          message: "Action must be either 'approve' or 'reject'" 
         });
       }
+
+      // Map frontend action to backend status
+      const status = action === 'approve' ? 'approved' : 'rejected';
 
       // Get warranty claim details
       const existingClaim = await storage.getWarrantyClaimById(id);
