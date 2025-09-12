@@ -1,5 +1,5 @@
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
-import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
+import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { id } from 'date-fns/locale';
 
 /**
@@ -15,7 +15,7 @@ const JAKARTA_TIMEZONE = 'Asia/Jakarta';
  */
 export function getCurrentJakartaTime(): Date {
   const now = new Date();
-  return utcToZonedTime(now, JAKARTA_TIMEZONE);
+  return toZonedTime(now, JAKARTA_TIMEZONE);
 }
 
 /**
@@ -24,7 +24,7 @@ export function getCurrentJakartaTime(): Date {
  * @returns Date object adjusted to Jakarta timezone
  */
 export function toJakartaTime(date: Date): Date {
-  return utcToZonedTime(date, JAKARTA_TIMEZONE);
+  return toZonedTime(date, JAKARTA_TIMEZONE);
 }
 
 /**
@@ -33,7 +33,7 @@ export function toJakartaTime(date: Date): Date {
  * @returns Date object in UTC for database storage
  */
 export function jakartaTimeToUtc(jakartaDate: Date): Date {
-  return zonedTimeToUtc(jakartaDate, JAKARTA_TIMEZONE);
+  return fromZonedTime(jakartaDate, JAKARTA_TIMEZONE);
 }
 
 /**
