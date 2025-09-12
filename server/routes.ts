@@ -342,7 +342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eq(stockMovements.referenceType, 'warranty_return_damaged'),
         // Multi-tenant filtering
         clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId)
-      ].filter(Boolean);
+      ];
       
       // Get damaged goods with product details and original transaction info
       const damagedGoods = await db
