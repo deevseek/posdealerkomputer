@@ -779,9 +779,15 @@ const createClaimSchema = z.object({
   notes: z.string().optional(),
 });
 
-const processClaimSchema = z.object({
+// Dynamic schema for process claim - returnCondition required for approved sales_return
+const createProcessClaimSchema = (claimType: string, action: string) => z.object({
   action: z.enum(['approve', 'reject']),
   adminNotes: z.string().optional(),
+  returnCondition: (claimType === 'sales_return' && action === 'approve')
+    ? z.enum(['normal_stock', 'damaged_stock'], {
+        required_error: "Pilih kondisi barang untuk sales return yang disetujui"
+      })
+    : z.enum(['normal_stock', 'damaged_stock']).optional(),
 });
 
 // Dynamic schema validation for accept warranty - returnCondition required for sales_return
@@ -1016,16 +1022,21 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
 
 function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSuccess: () => void }) {
   const { toast } = useToast();
+  const [action, setAction] = useState<'approve' | 'reject'>('approve');
+  
+  const schema = createProcessClaimSchema(claim.claimType, action);
+  
   const form = useForm({
-    resolver: zodResolver(processClaimSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       action: "approve" as const,
       adminNotes: "",
+      returnCondition: "normal_stock" as const,
     },
   });
 
   const processClaimMutation = useMutation({
-    mutationFn: async (data: z.infer<typeof processClaimSchema>) => {
+    mutationFn: async (data: any) => {
       return apiRequest("PUT", `/api/warranty-claims/${claim.id}/process`, data);
     },
     onSuccess: () => {
@@ -1056,9 +1067,11 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
         <div>
           <Label>Keputusan</Label>
           <Select 
-            value={form.watch("action")} 
+            value={action} 
             onValueChange={(value) => {
-              form.setValue("action", value as any);
+              const newAction = value as 'approve' | 'reject';
+              setAction(newAction);
+              form.setValue("action", newAction);
             }}
           >
             <SelectTrigger data-testid="select-process-action">
@@ -1070,6 +1083,32 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
             </SelectContent>
           </Select>
         </div>
+
+        {/* Conditional return condition for sales return claims when approved */}
+        {claim.claimType === 'sales_return' && action === 'approve' && (
+          <div>
+            <Label>Kondisi Barang Retur <span className="text-red-500">*</span></Label>
+            <Select 
+              value={form.watch("returnCondition")} 
+              onValueChange={(value) => {
+                form.setValue("returnCondition", value as any);
+              }}
+            >
+              <SelectTrigger data-testid="select-return-condition">
+                <SelectValue placeholder="Pilih kondisi barang" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal_stock">Normal - Masuk Stok</SelectItem>
+                <SelectItem value="damaged_stock">Rusak - Stok Rusak</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.formState.errors.returnCondition && (
+              <p className="text-sm text-red-500 mt-1">
+                {form.formState.errors.returnCondition.message}
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <Label htmlFor="adminNotes">Catatan Admin (Opsional)</Label>
