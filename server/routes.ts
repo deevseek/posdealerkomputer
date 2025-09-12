@@ -375,29 +375,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
       console.log('🐛 Stock movements API DEBUG - clientId:', clientId, 'type:', typeof clientId, 'tenant:', req.tenant, 'user clientId:', req.session?.user?.clientId);
       
-      // DEBUG: Check request query params
-      console.log('🐛 Query params DEBUG:', req.query);
-      console.log('🐛 Raw startDate:', req.query.startDate);
-      console.log('🐛 Raw endDate:', req.query.endDate);
+      // FIXED: Remove date filtering to show all data
+      console.log('🐛 FIXED: Date filtering disabled to show all data');
       
-      // Parse optional date filters
-      const startDate = req.query.startDate ? parseWithTimezone(req.query.startDate as string, false) : undefined;
-      const endDate = req.query.endDate ? parseWithTimezone(req.query.endDate as string, false) : undefined;
-      
-      // Build where conditions for multi-tenant filtering
+      // Build where conditions for multi-tenant filtering ONLY
       const whereConditions = [
         // Multi-tenant filtering - filter by clientId if in multi-tenant mode
         // In single-tenant mode (clientId is null), show all records with null clientId
-        clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId),
-        // Date filters - only apply if provided
-        startDate ? gte(stockMovements.createdAt, startDate) : undefined,
-        endDate ? lte(stockMovements.createdAt, endDate) : undefined
+        clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId)
       ].filter(Boolean);
       
-      // DEBUG: Check the date filtering issue
+      // DEBUG: Check the date filtering issue  
       console.log('🐛 Date filter DEBUG:');
-      console.log('- startDate:', startDate);
-      console.log('- endDate:', endDate);
+      console.log('- Date filtering: DISABLED');
       console.log('- Where conditions count:', whereConditions.length);
       
       // Test query without date filters 
