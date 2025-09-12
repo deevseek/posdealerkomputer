@@ -18,6 +18,7 @@ import {
   serviceTicketParts,
   stockMovements,
   financialRecords,
+  warrantyClaims,
   type User,
   type InsertUser,
   type Role,
@@ -56,6 +57,8 @@ import {
   type InsertStockMovement,
   type FinancialRecord,
   type InsertFinancialRecord,
+  type WarrantyClaim,
+  type InsertWarrantyClaim,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, gt } from "drizzle-orm";
@@ -209,6 +212,14 @@ export interface IStorage {
     monthlyProfit: string;
     whatsappConnected: boolean;
   }>;
+  
+  // Warranty Claims
+  getWarrantyClaims(status?: string): Promise<WarrantyClaim[]>;
+  getWarrantyClaimById(id: string): Promise<WarrantyClaim | undefined>;
+  createWarrantyClaim(claim: InsertWarrantyClaim): Promise<WarrantyClaim>;
+  updateWarrantyClaimStatus(id: string, status: string, processedBy?: string): Promise<WarrantyClaim>;
+  processWarrantyClaim(id: string, status: string, processedBy: string, returnCondition?: string): Promise<WarrantyClaim>;
+  validateWarrantyEligibility(originalTransactionId?: string, originalServiceTicketId?: string): Promise<{ isValid: boolean; message: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2133,6 +2144,214 @@ export class DatabaseStorage implements IStorage {
     const { FinanceManager } = await import('./financeManager');
     const financeManager = new FinanceManager();
     return await financeManager.createJournalEntry(data);
+  }
+
+  // Warranty Claims
+  async getWarrantyClaims(status?: string): Promise<WarrantyClaim[]> {
+    if (status) {
+      return await db.select()
+        .from(warrantyClaims)
+        .where(eq(warrantyClaims.status, status as any))
+        .orderBy(desc(warrantyClaims.claimDate));
+    }
+    
+    return await db.select()
+      .from(warrantyClaims)
+      .orderBy(desc(warrantyClaims.claimDate));
+  }
+
+  async getWarrantyClaimById(id: string): Promise<WarrantyClaim | undefined> {
+    const [claim] = await db.select().from(warrantyClaims).where(eq(warrantyClaims.id, id));
+    return claim;
+  }
+
+  async createWarrantyClaim(claimData: InsertWarrantyClaim): Promise<WarrantyClaim> {
+    // Generate unique claim number
+    const claimNumber = `WC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+    
+    const [claim] = await db
+      .insert(warrantyClaims)
+      .values({
+        ...claimData,
+        claimNumber,
+        claimDate: createDatabaseTimestamp(),
+        createdAt: createDatabaseTimestamp(),
+        updatedAt: createDatabaseTimestamp(),
+      } as any)
+      .returning();
+
+    // For service warranty claims, auto-approve and create new service ticket
+    if (claimData.claimType === 'service' && claimData.originalServiceTicketId) {
+      await this.processServiceWarrantyClaim(claim.id, claimData.originalServiceTicketId, claimData.customerId);
+    }
+
+    return claim;
+  }
+
+  async updateWarrantyClaimStatus(id: string, status: string, processedBy?: string): Promise<WarrantyClaim> {
+    const updateData: any = {
+      status,
+      updatedAt: createDatabaseTimestamp(),
+    };
+
+    if (processedBy) {
+      updateData.processedBy = processedBy;
+      updateData.processedDate = createDatabaseTimestamp();
+    }
+
+    const [claim] = await db
+      .update(warrantyClaims)
+      .set(updateData)
+      .where(eq(warrantyClaims.id, id))
+      .returning();
+
+    return claim;
+  }
+
+  async processWarrantyClaim(id: string, status: string, processedBy: string, returnCondition?: string): Promise<WarrantyClaim> {
+    const updateData: any = {
+      status,
+      processedBy,
+      processedDate: createDatabaseTimestamp(),
+      updatedAt: createDatabaseTimestamp(),
+    };
+
+    if (returnCondition) {
+      updateData.returnCondition = returnCondition;
+    }
+
+    const [claim] = await db
+      .update(warrantyClaims)
+      .set(updateData)
+      .where(eq(warrantyClaims.id, id))
+      .returning();
+
+    return claim;
+  }
+
+  async validateWarrantyEligibility(originalTransactionId?: string, originalServiceTicketId?: string): Promise<{ isValid: boolean; message: string }> {
+    try {
+      if (originalTransactionId) {
+        // Validate sales warranty
+        const [transaction] = await db
+          .select()
+          .from(transactions)
+          .where(eq(transactions.id, originalTransactionId));
+
+        if (!transaction) {
+          return { isValid: false, message: 'Original transaction not found' };
+        }
+
+        if (!transaction.warrantyEndDate) {
+          return { isValid: false, message: 'No warranty information found for this transaction' };
+        }
+
+        const now = getCurrentJakartaTime();
+        if (now > transaction.warrantyEndDate) {
+          return { isValid: false, message: 'Warranty has expired' };
+        }
+
+        // Check for existing warranty claims
+        const [existingClaim] = await db
+          .select()
+          .from(warrantyClaims)
+          .where(eq(warrantyClaims.originalTransactionId, originalTransactionId));
+
+        if (existingClaim && existingClaim.status !== 'rejected') {
+          return { isValid: false, message: 'A warranty claim already exists for this transaction' };
+        }
+
+        return { isValid: true, message: 'Transaction is eligible for warranty claim' };
+      }
+
+      if (originalServiceTicketId) {
+        // Validate service warranty
+        const [serviceTicket] = await db
+          .select()
+          .from(serviceTickets)
+          .where(eq(serviceTickets.id, originalServiceTicketId));
+
+        if (!serviceTicket) {
+          return { isValid: false, message: 'Original service ticket not found' };
+        }
+
+        if (!serviceTicket.warrantyEndDate) {
+          return { isValid: false, message: 'No warranty information found for this service' };
+        }
+
+        const now = getCurrentJakartaTime();
+        if (now > serviceTicket.warrantyEndDate) {
+          return { isValid: false, message: 'Service warranty has expired' };
+        }
+
+        // Check for existing warranty claims
+        const [existingClaim] = await db
+          .select()
+          .from(warrantyClaims)
+          .where(eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId));
+
+        if (existingClaim && existingClaim.status !== 'rejected') {
+          return { isValid: false, message: 'A warranty claim already exists for this service' };
+        }
+
+        return { isValid: true, message: 'Service ticket is eligible for warranty claim' };
+      }
+
+      return { isValid: false, message: 'No original transaction or service ticket specified' };
+    } catch (error) {
+      console.error('Error validating warranty eligibility:', error);
+      return { isValid: false, message: 'Error validating warranty eligibility' };
+    }
+  }
+
+  // Private helper method for processing service warranty claims
+  private async processServiceWarrantyClaim(claimId: string, originalServiceTicketId: string, customerId: string): Promise<void> {
+    try {
+      // Get the original service ticket details
+      const [originalTicket] = await db
+        .select()
+        .from(serviceTickets)
+        .where(eq(serviceTickets.id, originalServiceTicketId));
+
+      if (!originalTicket) {
+        throw new Error('Original service ticket not found');
+      }
+
+      // Create new service ticket for warranty service
+      const warrantyServiceData: InsertServiceTicket = {
+        ticketNumber: `WS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        customerId: customerId,
+        deviceType: originalTicket.deviceType,
+        deviceBrand: originalTicket.deviceBrand,
+        deviceModel: originalTicket.deviceModel,
+        serialNumber: originalTicket.serialNumber,
+        problem: `Warranty Service - Follow up for ticket: ${originalTicket.ticketNumber}`,
+        status: 'pending',
+        laborCost: '0.00', // Free labor for warranty service
+        estimatedCompletion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+        warrantyDuration: originalTicket.warrantyDuration || 90, // Default 90 days
+        warrantyStartDate: new Date(),
+        warrantyEndDate: new Date(Date.now() + (originalTicket.warrantyDuration || 90) * 24 * 60 * 60 * 1000),
+      };
+
+      await db.insert(serviceTickets).values(warrantyServiceData);
+
+      // Update original service ticket status to indicate warranty claim
+      await db
+        .update(serviceTickets)
+        .set({ 
+          status: 'warranty_claim' as any,
+          updatedAt: new Date(),
+        })
+        .where(eq(serviceTickets.id, originalServiceTicketId));
+
+      // Auto-approve the warranty claim since it's for internal service
+      await this.updateWarrantyClaimStatus(claimId, 'approved');
+
+    } catch (error) {
+      console.error('Error processing service warranty claim:', error);
+      throw error;
+    }
   }
 }
 

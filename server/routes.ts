@@ -35,7 +35,9 @@ import {
   attendanceRecords,
   insertTransactionSchema,
   insertTransactionItemSchema,
-  insertServiceTicketSchema
+  insertServiceTicketSchema,
+  warrantyClaims,
+  insertWarrantyClaimSchema
 } from "@shared/schema";
 import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
 import {
@@ -3805,6 +3807,217 @@ Terima kasih!
     } catch (error) {
       console.error('Error checking subscription expirations:', error);
       res.status(500).json({ message: 'Failed to check expirations' });
+    }
+  });
+
+  // Warranty Claims API Endpoints
+  
+  // GET /api/warranty-claims - List warranty claims with optional filtering
+  app.get('/api/warranty-claims', isAuthenticated, async (req, res) => {
+    try {
+      const { status } = req.query;
+      const claims = await storage.getWarrantyClaims(status as string);
+      res.json(claims);
+    } catch (error) {
+      console.error("Error fetching warranty claims:", error);
+      res.status(500).json({ message: "Failed to fetch warranty claims" });
+    }
+  });
+
+  // GET /api/warranty-claims/:id - Get warranty claim by ID
+  app.get('/api/warranty-claims/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const claim = await storage.getWarrantyClaimById(id);
+      
+      if (!claim) {
+        return res.status(404).json({ message: "Warranty claim not found" });
+      }
+      
+      res.json(claim);
+    } catch (error) {
+      console.error("Error fetching warranty claim:", error);
+      res.status(500).json({ message: "Failed to fetch warranty claim" });
+    }
+  });
+
+  // POST /api/warranty-claims - Create new warranty claim
+  app.post('/api/warranty-claims', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate request data
+      const claimData = insertWarrantyClaimSchema.parse({
+        ...req.body
+      });
+
+      // Validate warranty eligibility
+      const eligibilityCheck = await storage.validateWarrantyEligibility(
+        claimData.originalTransactionId || undefined,
+        claimData.originalServiceTicketId || undefined
+      );
+
+      if (!eligibilityCheck.isValid) {
+        return res.status(400).json({ 
+          message: eligibilityCheck.message,
+          isEligible: false
+        });
+      }
+
+      // Create warranty claim
+      const claim = await storage.createWarrantyClaim(claimData);
+      
+      res.status(201).json({
+        claim,
+        message: "Warranty claim created successfully"
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Validation error",
+          errors: error.errors
+        });
+      }
+      
+      console.error("Error creating warranty claim:", error);
+      res.status(500).json({ message: "Failed to create warranty claim" });
+    }
+  });
+
+  // PUT /api/warranty-claims/:id/process - Process warranty claim (approve/reject)
+  app.put('/api/warranty-claims/:id/process', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const { status, returnCondition } = req.body;
+      const userId = req.session.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate status
+      if (!['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ 
+          message: "Status must be either 'approved' or 'rejected'" 
+        });
+      }
+
+      // Get warranty claim details
+      const existingClaim = await storage.getWarrantyClaimById(id);
+      if (!existingClaim) {
+        return res.status(404).json({ message: "Warranty claim not found" });
+      }
+
+      if (existingClaim.status !== 'pending') {
+        return res.status(400).json({ 
+          message: "Only pending warranty claims can be processed" 
+        });
+      }
+
+      // For sales return claims that are approved, require returnCondition
+      if (existingClaim.claimType === 'sales_return' && status === 'approved') {
+        if (!returnCondition || !['normal_stock', 'damaged_stock'].includes(returnCondition)) {
+          return res.status(400).json({
+            message: "returnCondition is required for approved sales return claims and must be 'normal_stock' or 'damaged_stock'"
+          });
+        }
+      }
+
+      // Process warranty claim
+      const updatedClaim = await storage.processWarrantyClaim(
+        id, 
+        status, 
+        userId, 
+        returnCondition
+      );
+
+      res.json({
+        claim: updatedClaim,
+        message: `Warranty claim ${status} successfully`
+      });
+    } catch (error) {
+      console.error("Error processing warranty claim:", error);
+      res.status(500).json({ message: "Failed to process warranty claim" });
+    }
+  });
+
+  // PUT /api/warranty-claims/:id/complete - Mark warranty claim as completed
+  app.put('/api/warranty-claims/:id/complete', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.session.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Get warranty claim details
+      const existingClaim = await storage.getWarrantyClaimById(id);
+      if (!existingClaim) {
+        return res.status(404).json({ message: "Warranty claim not found" });
+      }
+
+      if (existingClaim.status !== 'approved') {
+        return res.status(400).json({ 
+          message: "Only approved warranty claims can be marked as completed" 
+        });
+      }
+
+      // Mark warranty claim as processed/completed
+      const updatedClaim = await storage.updateWarrantyClaimStatus(
+        id,
+        'processed',
+        userId
+      );
+
+      res.json({
+        claim: updatedClaim,
+        message: "Warranty claim marked as completed successfully"
+      });
+    } catch (error) {
+      console.error("Error completing warranty claim:", error);
+      res.status(500).json({ message: "Failed to complete warranty claim" });
+    }
+  });
+
+  // GET /api/warranty-claims/validate/:type/:id - Validate warranty eligibility
+  app.get('/api/warranty-claims/validate/:type/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { type, id } = req.params;
+      
+      let originalTransactionId: string | undefined;
+      let originalServiceTicketId: string | undefined;
+      
+      if (type === 'sale') {
+        originalTransactionId = id;
+      } else if (type === 'service') {
+        originalServiceTicketId = id;
+      } else {
+        return res.status(400).json({ 
+          message: "Type must be either 'sale' or 'service'" 
+        });
+      }
+
+      const eligibilityCheck = await storage.validateWarrantyEligibility(
+        originalTransactionId,
+        originalServiceTicketId
+      );
+
+      res.json({
+        isEligible: eligibilityCheck.isValid,
+        message: eligibilityCheck.message,
+        type,
+        id
+      });
+    } catch (error) {
+      console.error("Error validating warranty eligibility:", error);
+      res.status(500).json({ 
+        message: "Failed to validate warranty eligibility",
+        isEligible: false
+      });
     }
   });
 
