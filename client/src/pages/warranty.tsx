@@ -174,7 +174,7 @@ export default function WarrantyPage() {
   });
 
   // Fetch warranty claims
-  const { data: warrantyClaims = [] } = useQuery({
+  const { data: warrantyClaims = [] } = useQuery<WarrantyClaim[]>({
     queryKey: ["/api/warranty-claims"],
   });
 
@@ -791,6 +791,23 @@ const createAcceptWarrantySchema = (claimType: string) => z.object({
   notes: z.string().optional(),
 });
 
+// Helper function for status badges
+function getStatusBadge(status: string) {
+  const statusConfig = {
+    'active': { color: 'bg-green-500', label: 'Aktif' },
+    'expired': { color: 'bg-red-500', label: 'Berakhir' },
+    'claimed': { color: 'bg-blue-500', label: 'Diklaim' },
+    'completed': { color: 'bg-gray-500', label: 'Selesai' }
+  };
+  
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.expired;
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium text-white ${config.color}`}>
+      {config.label}
+    </span>
+  );
+}
+
 // Form Components
 function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; warrantyItems: WarrantyItem[] }) {
   const { toast } = useToast();
@@ -888,7 +905,7 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
                           </div>
                         </div>
                         <div className="text-right">
-                          {getStatusBadge(item)}
+                          {getStatusBadge(item.status)}
                         </div>
                       </div>
                     </div>
