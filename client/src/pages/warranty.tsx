@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -794,6 +794,9 @@ const createAcceptWarrantySchema = (claimType: string) => z.object({
 // Form Components
 function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; warrantyItems: WarrantyItem[] }) {
   const { toast } = useToast();
+  const [noteNumber, setNoteNumber] = useState("");
+  const [searchResults, setSearchResults] = useState<WarrantyItem[]>([]);
+
   const form = useForm({
     resolver: zodResolver(createClaimSchema),
     defaultValues: {
@@ -804,12 +807,23 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
     },
   });
 
+  // Search function for warranty items
+  useEffect(() => {
+    if (noteNumber.trim().length >= 3) {
+      const activeWarranties = warrantyItems.filter(item => item.status === 'active');
+      const filtered = activeWarranties.filter(item => 
+        (item.ticketNumber && item.ticketNumber.toLowerCase().includes(noteNumber.toLowerCase())) ||
+        (item.transactionNumber && item.transactionNumber.toLowerCase().includes(noteNumber.toLowerCase()))
+      );
+      setSearchResults(filtered);
+    } else {
+      setSearchResults([]);
+    }
+  }, [noteNumber, warrantyItems]);
+
   const createClaimMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createClaimSchema>) => {
-      return apiRequest("/api/warranty-claims", {
-        method: "POST",
-        body: JSON.stringify(data),
-      });
+      return apiRequest("POST", "/api/warranty-claims", data);
     },
     onSuccess: () => {
       toast({ title: "Klaim garansi berhasil dibuat" });
@@ -831,60 +845,67 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
     <form onSubmit={form.handleSubmit((data) => createClaimMutation.mutate(data))} className="space-y-4">
       <div className="space-y-4">
         <div>
-          <Label htmlFor="warrantyItemId">Item Garansi</Label>
+          <Label htmlFor="warrantyItemId">Nomor Nota/Tiket</Label>
           <div className="text-sm text-muted-foreground mb-2">
-            💡 Pilih item yang ingin diklaim garansinya. Hanya item dengan status aktif yang dapat diklaim.
+            🔍 Masukan nomor nota service atau nomor garansi untuk mencari item yang akan diklaim
           </div>
-          <Select 
-            value={form.watch("warrantyItemId")} 
-            onValueChange={(value) => form.setValue("warrantyItemId", value)}
-          >
-            <SelectTrigger data-testid="select-warranty-item">
-              <SelectValue placeholder="Pilih item garansi yang ingin diklaim" />
-            </SelectTrigger>
-            <SelectContent>
-              {activeWarranties.length === 0 ? (
-                <div className="p-3 text-center text-muted-foreground">
-                  <div className="text-yellow-600 mb-1">⚠️ Tidak ada item garansi aktif</div>
-                  <div className="text-xs">Semua item sudah tidak bergaransi atau sudah diklaim</div>
-                </div>
-              ) : (
-                activeWarranties.map((item) => {
-                  const isExpiringSoon = item.warrantyEndDate && 
-                    new Date(item.warrantyEndDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-                  
-                  return (
-                    <SelectItem key={item.id} value={item.id} className="py-3">
-                      <div className="flex flex-col space-y-1 w-full">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-green-600 text-xs">✅ Aktif</span>
-                          <span className="font-medium">
+          <div className="space-y-3">
+            <Input
+              placeholder="Masukan nomor nota/tiket (contoh: TKT-001, TXN-001)"
+              value={noteNumber}
+              onChange={(e) => setNoteNumber(e.target.value)}
+              data-testid="input-note-number"
+              className="text-base"
+            />
+            
+            {noteNumber && searchResults.length > 0 && (
+              <div className="border rounded-lg p-3 bg-gray-50">
+                <p className="text-sm font-medium mb-2">📋 Item ditemukan:</p>
+                <div className="space-y-2">
+                  {searchResults.map((item) => (
+                    <div 
+                      key={item.id}
+                      className={`p-3 border rounded cursor-pointer transition-colors ${
+                        form.watch("warrantyItemId") === item.id 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      onClick={() => form.setValue("warrantyItemId", item.id)}
+                      data-testid={`search-result-${item.id}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">
                             {item.customerName} - {item.productName || item.deviceInfo}
-                          </span>
-                          {isExpiringSoon && (
-                            <span className="text-orange-500 text-xs bg-orange-50 px-1 rounded">
-                              ⏰ Segera Berakhir
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex space-x-4">
-                          <span>📅 Berakhir: {item.warrantyEndDate ? 
-                            new Date(item.warrantyEndDate).toLocaleDateString('id-ID') : 'Tidak diketahui'
-                          }</span>
-                          <span>🔧 Tipe: {item.type === 'sales' ? 'Garansi Penjualan' : 'Garansi Service'}</span>
-                        </div>
-                        {item.deviceInfo && (
-                          <div className="text-xs text-blue-600">
-                            📱 Info: {item.deviceInfo}
                           </div>
-                        )}
+                          <div className="text-sm text-muted-foreground">
+                            📄 {item.ticketNumber || item.transactionNumber}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            📅 Berakhir: {item.warrantyEndDate ? 
+                              new Date(item.warrantyEndDate).toLocaleDateString('id-ID') : 'Tidak diketahui'
+                            }
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          {getStatusBadge(item)}
+                        </div>
                       </div>
-                    </SelectItem>
-                  )
-                })
-              )}
-            </SelectContent>
-          </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {noteNumber && searchResults.length === 0 && (
+              <div className="border rounded-lg p-3 bg-yellow-50 text-center">
+                <div className="text-yellow-600">⚠️ Tidak ditemukan item garansi</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Pastikan nomor nota/tiket benar dan masih dalam masa garansi
+                </div>
+              </div>
+            )}
+          </div>
           {form.formState.errors.warrantyItemId && (
             <p className="text-sm text-destructive mt-1">
               {form.formState.errors.warrantyItemId.message}
@@ -959,10 +980,7 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
 
   const processClaimMutation = useMutation({
     mutationFn: async (data: z.infer<typeof processClaimSchema>) => {
-      return apiRequest(`/api/warranty-claims/${claim.id}/process`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
+      return apiRequest("PUT", `/api/warranty-claims/${claim.id}/process`, data);
     },
     onSuccess: () => {
       toast({ title: "Klaim berhasil diproses" });
@@ -1043,10 +1061,7 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucc
 
   const acceptWarrantyMutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest(`/api/warranty-claims/${claim.id}/complete`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      });
+      return apiRequest("PUT", `/api/warranty-claims/${claim.id}/complete`, data);
     },
     onSuccess: () => {
       toast({ title: "Garansi berhasil diterima" });
