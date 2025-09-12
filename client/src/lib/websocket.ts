@@ -123,6 +123,7 @@ class WebSocketManager {
       'service-tickets': ['/api/service-tickets'],
       suppliers: ['/api/suppliers'],
       transactions: ['/api/transactions'],
+      'warranty-claims': ['/api/warranty-claims'],
       roles: ['/api/roles'],
       dashboard: ['/api/dashboard/stats'],
       whatsapp: ['/api/whatsapp/status'],
@@ -152,6 +153,7 @@ class WebSocketManager {
         'service-tickets': 'Tiket Servis',
         suppliers: 'Supplier',
         transactions: 'Transaksi',
+        'warranty-claims': 'Garansi',
         roles: 'Role'
       };
       

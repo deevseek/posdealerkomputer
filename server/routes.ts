@@ -3879,6 +3879,14 @@ Terima kasih!
       // Create warranty claim
       const claim = await storage.createWarrantyClaim(claimData);
       
+      // Broadcast warranty claim creation to all clients
+      realtimeService.broadcastToTenant(req.clientId, {
+        resource: 'warranty-claims',
+        action: 'create',
+        data: claim,
+        id: claim.id
+      });
+      
       res.status(201).json({
         claim,
         message: "Warranty claim created successfully"
@@ -3943,6 +3951,14 @@ Terima kasih!
         returnCondition
       );
 
+      // Broadcast warranty claim update to all clients
+      realtimeService.broadcastToTenant(req.clientId, {
+        resource: 'warranty-claims',
+        action: 'update',
+        data: updatedClaim,
+        id: updatedClaim.id
+      });
+
       res.json({
         claim: updatedClaim,
         message: `Warranty claim ${status} successfully`
@@ -3981,6 +3997,14 @@ Terima kasih!
         'processed',
         userId
       );
+
+      // Broadcast warranty claim completion to all clients
+      realtimeService.broadcastToTenant(req.clientId, {
+        resource: 'warranty-claims',
+        action: 'update',
+        data: updatedClaim,
+        id: updatedClaim.id
+      });
 
       res.json({
         claim: updatedClaim,
