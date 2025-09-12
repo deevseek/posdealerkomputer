@@ -60,6 +60,7 @@ interface WarrantyItem {
   daysRemaining?: number;
   ticketNumber?: string;
   transactionNumber?: string;
+  customerId: string; // Add customerId to warranty item
 }
 
 interface WarrantyClaim {
@@ -227,6 +228,7 @@ export default function WarrantyPage() {
           status: warrantyStatus.status,
           daysRemaining: warrantyStatus.daysRemaining,
           ticketNumber: ticket.ticketNumber,
+          customerId: ticket.customerId,
         };
       }),
     
@@ -254,6 +256,7 @@ export default function WarrantyPage() {
           status: warrantyStatus.status,
           daysRemaining: warrantyStatus.daysRemaining,
           transactionNumber: transaction.transactionNumber,
+          customerId: transaction.customerId,
         };
       }),
   ];
@@ -846,17 +849,8 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
         throw new Error("Item garansi tidak ditemukan");
       }
 
-      // Get customerId from the warranty item data
-      // We need to find the original transaction/service ticket to get customerId
-      let customerId: string | undefined;
-      
-      if (selectedItem.type === 'service') {
-        const serviceTicket = serviceTickets.find((t: any) => t.id === selectedItem.id);
-        customerId = serviceTicket?.customerId;
-      } else if (selectedItem.type === 'sale') {
-        const transaction = transactions.find((t: any) => t.id === selectedItem.id);
-        customerId = transaction?.customerId;
-      }
+      // Get customerId directly from the warranty item
+      const customerId = selectedItem.customerId;
       
       if (!customerId) {
         throw new Error("Customer ID tidak ditemukan untuk item garansi ini");
