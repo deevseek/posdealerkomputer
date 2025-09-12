@@ -11,7 +11,7 @@ import {
   ObjectNotFoundError,
 } from "./objectStorage";
 // import htmlPdf from 'html-pdf-node';  // Removed due to Chromium dependencies issues
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx';
 import multer from 'multer';
 import { db } from "./db";
 import { eq, and, gte, lte, lt, desc, count, sql, isNull } from "drizzle-orm";
