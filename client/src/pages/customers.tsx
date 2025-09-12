@@ -142,7 +142,7 @@ export default function Customers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
-      toast({ title: "Success", description: "Customer deleted successfully" });
+      toast({ title: "Berhasil", description: "Pelanggan berhasil dihapus" });
     },
     onError: (error) => {
       if (isUnauthorizedError(error as Error)) {
@@ -156,7 +156,7 @@ export default function Customers() {
         }, 500);
         return;
       }
-      toast({ title: "Error", description: "Failed to delete customer", variant: "destructive" });
+      toast({ title: "Error", description: "Gagal menghapus pelanggan", variant: "destructive" });
     },
   });
 
@@ -186,7 +186,7 @@ export default function Customers() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this customer?")) {
+    if (confirm("Apakah Anda yakin ingin menghapus pelanggan ini?")) {
       deleteMutation.mutate(id);
     }
   };
@@ -203,8 +203,8 @@ export default function Customers() {
       setIsDownloading(true);
       await downloadTemplate('/api/customers/template', 'customer-template.xlsx');
       toast({ 
-        title: "Success", 
-        description: "Template downloaded successfully" 
+        title: "Berhasil", 
+        description: "Template berhasil diunduh" 
       });
     } catch (error) {
       console.error('Download template error:', error);
@@ -298,7 +298,7 @@ export default function Customers() {
                 ) : (
                   <Download className="w-4 h-4 mr-2" />
                 )}
-                {isDownloading ? "Downloading..." : "Download Template"}
+                {isDownloading ? "Mengunduh..." : "Unduh Template"}
               </Button>
               
               <div className="flex items-center space-x-2">
@@ -316,7 +316,7 @@ export default function Customers() {
                   data-testid="button-select-customer-file"
                 >
                   <FileSpreadsheet className="w-4 h-4 mr-2" />
-                  Select File
+                  Pilih File
                 </Button>
                 
                 {selectedFile && (
@@ -330,7 +330,7 @@ export default function Customers() {
                     ) : (
                       <Upload className="w-4 h-4 mr-2" />
                     )}
-                    {isUploading ? "Importing..." : "Import Excel"}
+                    {isUploading ? "Mengimpor..." : "Import Excel"}
                   </Button>
                 )}
               </div>
@@ -350,7 +350,7 @@ export default function Customers() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search customers by name, email, or phone..."
+                    placeholder="Cari pelanggan berdasarkan nama, email, atau telepon..."
                     className="pl-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}

@@ -33,7 +33,7 @@ export default function Landing() {
           </div>
           <h1 className="text-4xl font-bold text-foreground mb-4">{(storeConfig as any)?.name || 'LaptopPOS'}</h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Complete POS System for Laptop Sales & Service Management
+            Sistem POS Lengkap untuk Penjualan & Servis Laptop
           </p>
           <Button 
             onClick={handleLogin} 
@@ -41,7 +41,7 @@ export default function Landing() {
             className="px-8 py-3 text-lg"
             data-testid="button-login"
           >
-            Login to Continue
+            Masuk untuk Melanjutkan
           </Button>
         </div>
 
@@ -51,11 +51,11 @@ export default function Landing() {
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <BarChart3 className="w-6 h-6 text-primary" />
               </div>
-              <CardTitle className="text-lg">Sales Management</CardTitle>
+              <CardTitle className="text-lg">Manajemen Penjualan</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Complete POS system with transaction tracking and reporting
+                Sistem POS lengkap dengan pelacakan transaksi dan pelaporan
               </p>
             </CardContent>
           </Card>
@@ -65,11 +65,11 @@ export default function Landing() {
               <div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <Wrench className="w-6 h-6 text-accent" />
               </div>
-              <CardTitle className="text-lg">Service Tickets</CardTitle>
+              <CardTitle className="text-lg">Tiket Servis</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Track laptop repairs and service requests efficiently
+                Lacak perbaikan laptop dan permintaan servis secara efisien
               </p>
             </CardContent>
           </Card>
@@ -79,11 +79,11 @@ export default function Landing() {
               <div className="w-12 h-12 bg-secondary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <Package className="w-6 h-6 text-secondary" />
               </div>
-              <CardTitle className="text-lg">Inventory Control</CardTitle>
+              <CardTitle className="text-lg">Kontrol Inventori</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Manage stock levels and get low stock alerts
+                Kelola tingkat stok dan dapatkan peringatan stok rendah
               </p>
             </CardContent>
           </Card>
@@ -93,11 +93,11 @@ export default function Landing() {
               <div className="w-12 h-12 bg-destructive/10 rounded-lg flex items-center justify-center mx-auto mb-4">
                 <BarChart3 className="w-6 h-6 text-destructive" />
               </div>
-              <CardTitle className="text-lg">Financial Reports</CardTitle>
+              <CardTitle className="text-lg">Laporan Keuangan</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Track profits, expenses and generate detailed reports
+                Lacak keuntungan, pengeluaran dan buat laporan detail
               </p>
             </CardContent>
           </Card>
@@ -105,26 +105,26 @@ export default function Landing() {
 
         <Card className="max-w-4xl mx-auto">
           <CardHeader>
-            <CardTitle className="text-2xl text-center">Key Features</CardTitle>
+            <CardTitle className="text-2xl text-center">Fitur Utama</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">For Administrators</h3>
+                <h3 className="text-lg font-semibold">Untuk Administrator</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Role-based access control</li>
-                  <li>• Complete system configuration</li>
-                  <li>• User management</li>
-                  <li>• Financial oversight</li>
+                  <li>• Kontrol akses berbasis peran</li>
+                  <li>• Konfigurasi sistem lengkap</li>
+                  <li>• Manajemen pengguna</li>
+                  <li>• Pengawasan keuangan</li>
                 </ul>
               </div>
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">For Staff</h3>
+                <h3 className="text-lg font-semibold">Untuk Staf</h3>
                 <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li>• Easy-to-use POS interface</li>
-                  <li>• Service ticket management</li>
-                  <li>• Customer database</li>
-                  <li>• Real-time inventory updates</li>
+                  <li>• Antarmuka POS yang mudah digunakan</li>
+                  <li>• Manajemen tiket servis</li>
+                  <li>• Database pelanggan</li>
+                  <li>• Pembaruan inventori real-time</li>
                 </ul>
               </div>
             </div>

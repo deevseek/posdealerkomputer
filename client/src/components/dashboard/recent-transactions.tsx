@@ -50,7 +50,7 @@ export default function RecentTransactions() {
                       {transaction.transactionNumber || transaction.id}
                     </td>
                     <td className="py-3">
-                      {transaction.customer?.name || "Walk-in Customer"}
+                      {transaction.customer?.name || "Pelanggan Walk-in"}
                     </td>
                     <td className="py-3">
                       <Badge variant="outline" className="flex items-center w-fit">

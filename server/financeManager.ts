@@ -27,18 +27,29 @@ import {
 } from "@shared/schema";
 import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
 
-// Default Chart of Accounts codes
+// Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
-  CASH: '1111',
-  BANK: '1112',
-  ACCOUNTS_RECEIVABLE: '1120',
-  INVENTORY: '1130',
-  ACCOUNTS_PAYABLE: '2110',
-  SALES_REVENUE: '4110',
-  SERVICE_REVENUE: '4210',
-  COST_OF_GOODS_SOLD: '5110',
-  PAYROLL_EXPENSE: '5210',
-  OTHER_EXPENSE: '5290',
+  // Assets (Aset)
+  CASH: '1111', // Kas
+  BANK: '1112', // Bank
+  ACCOUNTS_RECEIVABLE: '1120', // Piutang Dagang
+  INVENTORY: '1130', // Persediaan Barang
+  DAMAGED_GOODS_INVENTORY: '1135', // Persediaan Barang Rusak
+  
+  // Liabilities (Kewajiban)
+  ACCOUNTS_PAYABLE: '2110', // Hutang Dagang
+  CUSTOMER_DEPOSITS: '2120', // Uang Muka Pelanggan
+  
+  // Revenue (Pendapatan)
+  SALES_REVENUE: '4110', // Pendapatan Penjualan
+  SERVICE_REVENUE: '4210', // Pendapatan Jasa Service
+  
+  // Expenses (Beban)
+  COST_OF_GOODS_SOLD: '5110', // Harga Pokok Penjualan
+  WARRANTY_EXPENSE: '5120', // Beban Garansi
+  DAMAGED_GOODS_LOSS: '5130', // Kerugian Barang Rusak
+  PAYROLL_EXPENSE: '5210', // Beban Gaji
+  OTHER_EXPENSE: '5290', // Beban Lain-lain
 };
 
 export class FinanceManager {

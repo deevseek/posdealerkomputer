@@ -300,14 +300,14 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle>New Transaction</DialogTitle>
+          <DialogTitle>Transaksi Baru</DialogTitle>
         </DialogHeader>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto">
           {/* Customer and Payment */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="customer">Customer</Label>
+              <Label htmlFor="customer">Pelanggan</Label>
               <div className="space-y-2">
                 {selectedCustomer ? (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-md">
@@ -331,7 +331,7 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
                     <div className="relative">
                       <Input
                         id="customer"
-                        placeholder="Search customer by name, phone, or email..."
+                        placeholder="Cari pelanggan berdasarkan nama, telepon, atau email..."
                         value={customerSearch}
                         onChange={(e) => setCustomerSearch(e.target.value)}
                         data-testid="input-customer-search"
@@ -403,16 +403,16 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
             </div>
 
             <div>
-              <Label htmlFor="payment">Payment Method</Label>
+              <Label htmlFor="payment">Metode Pembayaran</Label>
               <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                 <SelectTrigger data-testid="select-payment-method">
-                  <SelectValue placeholder="Select payment method" />
+                  <SelectValue placeholder="Pilih metode pembayaran" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="transfer">Bank Transfer</SelectItem>
-                  <SelectItem value="credit">Credit Card</SelectItem>
-                  <SelectItem value="debit">Debit Card</SelectItem>
+                  <SelectItem value="cash">Tunai</SelectItem>
+                  <SelectItem value="transfer">Transfer Bank</SelectItem>
+                  <SelectItem value="credit">Kartu Kredit</SelectItem>
+                  <SelectItem value="debit">Kartu Debit</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -421,11 +421,11 @@ export default function TransactionModal({ open, onClose, onComplete }: Transact
           {/* Product Selection */}
           <div className="space-y-4">
             <div>
-              <Label htmlFor="product">Add Products</Label>
+              <Label htmlFor="product">Tambah Produk</Label>
               <div className="relative">
                 <Input
                   id="product"
-                  placeholder="Scan barcode or search product..."
+                  placeholder="Pindai barcode atau cari produk..."
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   data-testid="input-product-search"

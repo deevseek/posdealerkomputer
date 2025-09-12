@@ -180,7 +180,7 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      toast({ title: "Success", description: "Produk berhasil ditambahkan!" });
+      toast({ title: "Berhasil", description: "Produk berhasil ditambahkan!" });
       form.reset();
       onSuccess();
     },
@@ -377,7 +377,7 @@ function AddProductForm({ onSuccess }: { onSuccess: () => void }) {
             disabled={addProductMutation.isPending}
             data-testid="button-add-product-submit"
           >
-            {addProductMutation.isPending ? "Adding..." : "Tambah Produk"}
+            {addProductMutation.isPending ? "Menambah..." : "Tambah Produk"}
           </Button>
         </div>
       </form>
@@ -487,7 +487,7 @@ export default function Inventory() {
       setIsDownloading(true);
       await downloadTemplate('/api/products/template', 'product-template.xlsx');
       toast({ 
-        title: "Success", 
+        title: "Berhasil", 
         description: "Template downloaded successfully" 
       });
     } catch (error) {
@@ -509,7 +509,7 @@ export default function Inventory() {
     const validation = validateExcelFile(file);
     if (!validation.isValid) {
       toast({ 
-        title: "Invalid File", 
+        title: "File Tidak Valid", 
         description: validation.error, 
         variant: "destructive" 
       });
@@ -545,14 +545,14 @@ export default function Inventory() {
       
       if (result.successCount > 0) {
         toast({ 
-          title: "Import Completed", 
+          title: "Import Selesai", 
           description: `Successfully imported ${result.successCount} products` 
         });
       }
     } catch (error) {
       console.error('Import error:', error);
       toast({ 
-        title: "Import Failed", 
+        title: "Import Gagal", 
         description: error instanceof Error ? error.message : "Failed to import file", 
         variant: "destructive" 
       });
@@ -600,12 +600,12 @@ export default function Inventory() {
     const minStock = product.minStock || 5;
     
     if (stock <= 0) {
-      return { text: "Out of Stock", variant: "destructive" as const, color: "text-red-600" };
+      return { text: "Stok Habis", variant: "destructive" as const, color: "text-red-600" };
     }
     if (stock <= minStock) {
-      return { text: "Low Stock", variant: "secondary" as const, color: "text-orange-600" };
+      return { text: "Stok Rendah", variant: "secondary" as const, color: "text-orange-600" };
     }
-    return { text: "In Stock", variant: "default" as const, color: "text-green-600" };
+    return { text: "Tersedia", variant: "default" as const, color: "text-green-600" };
   };
 
   const filteredProducts = products.filter((product: any) =>
@@ -628,7 +628,7 @@ export default function Inventory() {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header 
-          title="Inventory Management" 
+          title="Manajemen Inventaris" 
           breadcrumb="Home / Inventory"
           action={
             <div className="flex items-center space-x-2">

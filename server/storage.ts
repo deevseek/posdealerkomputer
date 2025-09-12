@@ -72,6 +72,7 @@ import {
   createJakartaTimestamp,
   createDatabaseTimestamp
 } from "@shared/utils/timezone";
+import { FinanceManager } from "./financeManager";
 
 export interface IStorage {
   // User operations
@@ -1499,7 +1500,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createServiceTicket(ticketData: InsertServiceTicket): Promise<ServiceTicket> {
-    const [ticket] = await db.insert(serviceTickets).values(ticketData).returning();
+    const [ticket] = await db.insert(serviceTickets).values(ticketData as any).returning();
     return ticket;
   }
 
@@ -2362,7 +2363,7 @@ export class DatabaseStorage implements IStorage {
         warrantyEndDate: new Date(Date.now() + (originalTicket.warrantyDuration || 90) * 24 * 60 * 60 * 1000),
       };
 
-      await db.insert(serviceTickets).values(warrantyServiceData);
+      await db.insert(serviceTickets).values(warrantyServiceData as any);
 
       // Update original service ticket status to indicate warranty claim
       await db
@@ -2427,35 +2428,105 @@ export class DatabaseStorage implements IStorage {
             referenceType: 'warranty_return',
             quantity: quantity,
             referenceId: originalTransactionId,
-            notes: `Warranty return - normal stock condition`,
+            notes: `Retur garansi - kondisi barang normal, dapat dijual kembali`,
             userId: userId
           });
 
-          // Post finance entry for inventory increase
-          await db.insert(financialRecords).values({
-            type: 'income',
-            category: 'inventory_adjustment',
-            description: `Warranty return - inventory increase for product ID ${productId}`,
-            amount: (parseFloat(item.unitPrice) * quantity).toString(),
+          // Create proper journal entries for normal stock return
+          const financeManager = new FinanceManager();
+          const itemValue = parseFloat(item.unitPrice) * quantity;
+          
+          // Journal Entry: Restore inventory value
+          // Debit: Persediaan (Inventory), Credit: Beban Garansi (Warranty Expense)
+          const journalResult = await financeManager.createJournalEntry({
+            description: `Retur garansi - penambahan stok normal (${quantity} unit)`,
             reference: originalTransactionId,
             referenceType: 'warranty_return',
+            lines: [
+              {
+                accountCode: '1130', // INVENTORY - Persediaan Barang
+                description: `Penambahan persediaan dari retur garansi - Produk ID ${productId}`,
+                debitAmount: itemValue.toString()
+              },
+              {
+                accountCode: '5120', // WARRANTY_EXPENSE - Beban Garansi
+                description: `Pemulihan beban garansi dari retur normal - Produk ID ${productId}`,
+                creditAmount: itemValue.toString()
+              }
+            ],
             userId: userId
           });
+          
+          if (!journalResult.success) {
+            console.warn(`Failed to create journal entry for normal warranty return: ${journalResult.error}`);
+            
+            // Fallback: Create financial record entry if journal entry fails
+            await db.insert(financialRecords).values({
+              type: 'income',
+              category: 'Pemulihan Garansi',
+              subcategory: 'Retur Normal',
+              description: `Retur garansi - penambahan persediaan normal (${quantity} unit, Produk ID ${productId})`,
+              amount: itemValue.toString(),
+              reference: originalTransactionId,
+              referenceType: 'warranty_return',
+              userId: userId
+            });
+          }
         
         } else if (returnCondition === 'damaged_stock') {
-          // Handle damaged stock - record stock movement only, NO financial expense
+          // Handle damaged stock with proper accounting principles
+          
+          // Create stock movement record for damaged goods tracking
           await db.insert(stockMovements).values({
             productId: productId,
             movementType: 'adjustment',
             referenceType: 'warranty_return_damaged',
-            quantity: quantity, // Record damaged quantity for tracking
+            quantity: quantity,
             referenceId: originalTransactionId,
-            notes: `Warranty return - damaged stock condition`,
+            notes: `Retur garansi - barang rusak tidak dapat dijual kembali`,
             userId: userId
           });
 
-          // NO financial record - damaged goods should not be recorded as expense
-          // They will be tracked separately in damaged goods inventory
+          // Create proper journal entries for damaged goods
+          const financeManager = new FinanceManager();
+          const itemValue = parseFloat(item.unitPrice) * quantity;
+          
+          // Journal Entry: Record damaged goods inventory and write-off
+          // Debit: Kerugian Barang Rusak (Loss), Credit: Persediaan (Inventory)
+          const journalResult = await financeManager.createJournalEntry({
+            description: `Retur garansi - kerugian barang rusak (${quantity} unit)`,
+            reference: originalTransactionId,
+            referenceType: 'warranty_return_damaged',
+            lines: [
+              {
+                accountCode: '5130', // DAMAGED_GOODS_LOSS - Kerugian Barang Rusak
+                description: `Kerugian barang rusak dari retur garansi - Produk ID ${productId}`,
+                debitAmount: itemValue.toString()
+              },
+              {
+                accountCode: '1130', // INVENTORY - Persediaan Barang
+                description: `Pengurangan persediaan akibat barang rusak - Produk ID ${productId}`,
+                creditAmount: itemValue.toString()
+              }
+            ],
+            userId: userId
+          });
+          
+          if (!journalResult.success) {
+            console.warn(`Failed to create journal entry for damaged goods: ${journalResult.error}`);
+            
+            // Fallback: Create financial record entry if journal entry fails
+            await db.insert(financialRecords).values({
+              type: 'expense',
+              category: 'Kerugian Barang Rusak',
+              subcategory: 'Retur Garansi',
+              description: `Retur garansi - kerugian barang rusak (${quantity} unit, Produk ID ${productId})`,
+              amount: itemValue.toString(),
+              reference: originalTransactionId,
+              referenceType: 'warranty_return_damaged',
+              userId: userId
+            });
+          }
         }
       }
 
