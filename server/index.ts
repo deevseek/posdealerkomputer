@@ -1,6 +1,9 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { tenantMiddleware } from "./middleware/tenant";
+import saasRoutes from "./routes/saas";
+import adminRoutes from "./routes/admin";
 
 const app = express();
 app.use(express.json());
@@ -37,8 +40,26 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await registerRoutes(app);
-  const server = app;
+  // Register SaaS routes first (no tenant middleware needed)
+  app.use('/api/saas', saasRoutes);
+  app.use('/api/admin', adminRoutes);
+  
+  // Register comprehensive SaaS management routes
+  const saasCompleteRoutes = await import('./routes/saas-complete');
+  app.use('/api/admin', saasCompleteRoutes.default);
+  
+  // Register Stripe payment and billing routes
+  const stripeRoutes = await import('./routes/stripe-integration');
+  app.use('/api/admin', stripeRoutes.default);
+  
+  // Register client onboarding routes
+  const clientRoutes = await import('./routes/client');
+  app.use('/api/client', clientRoutes.default);
+
+  // Apply tenant middleware to remaining routes
+  app.use(tenantMiddleware);
+
+  const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -58,11 +79,15 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
+  // Other ports are firewalled. Default to 3000 for ngrok tunnel.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  app.listen(port, "0.0.0.0", () => {
+  const port = parseInt(process.env.PORT || '3000', 10);
+  server.listen({
+    port,
+    host: "0.0.0.0",
+    reusePort: true,
+  }, () => {
     log(`serving on port ${port}`);
   });
 })();

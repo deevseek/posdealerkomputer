@@ -63,24 +63,11 @@ interface WarrantyItem {
   customerId: string; // Add customerId to warranty item
 }
 
-// Define WarrantyClaim interface locally since it's not in shared schema yet
-interface WarrantyClaimBase {
-  id: string;
-  claimNumber: string;
-  claimType: 'service' | 'sales_return';
-  status: 'pending' | 'approved' | 'rejected' | 'processed';
-  customerId: string;
-  claimReason: string;
-  claimDate: string;
-  returnCondition?: 'normal_stock' | 'damaged_stock';
-  originalTransactionId?: string;
-  originalServiceTicketId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+// Import specific schema types with aliasing
+import { WarrantyClaim as SharedWarrantyClaim } from "@shared/schema";
 
 // Extended WarrantyClaim interface with joined reference fields (type-safe)
-type EnhancedWarrantyClaim = WarrantyClaimBase & {
+type EnhancedWarrantyClaim = SharedWarrantyClaim & {
   customerName?: string;
   transactionNumber?: string;
   serviceTicketNumber?: string;
@@ -361,7 +348,7 @@ export default function WarrantyPage() {
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header title="Management Garansi" subtitle="Beranda / Management Garansi" />
+        <Header title="Management Garansi" breadcrumb="Beranda / Management Garansi" />
         
         <main className="flex-1 overflow-y-auto p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
