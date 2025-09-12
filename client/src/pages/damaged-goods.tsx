@@ -79,14 +79,11 @@ export default function DamagedGoodsPage() {
 
   // Filter claims based on search and filters
   const filteredClaims = damagedClaims.filter((claim) => {
-    const searchLower = searchTerm.toLowerCase();
-    const phoneSearch = (claim.customerPhone || "").toLowerCase();
-    
     const matchesSearch = 
-      claim.claimNumber.toLowerCase().includes(searchLower) ||
-      claim.customerName.toLowerCase().includes(searchLower) ||
-      claim.productName.toLowerCase().includes(searchLower) ||
-      phoneSearch.includes(searchLower);
+      claim.claimNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      claim.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      claim.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      claim.customerPhone?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = !statusFilter || claim.refundStatus === statusFilter;
     
