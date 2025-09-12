@@ -610,6 +610,7 @@ export default function WarrantyPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>No. Klaim</TableHead>
+                          <TableHead>Referensi</TableHead>
                           <TableHead>Tipe</TableHead>
                           <TableHead>Customer</TableHead>
                           <TableHead>Produk/Device</TableHead>
@@ -621,7 +622,7 @@ export default function WarrantyPage() {
                       <TableBody>
                         {enhancedClaims.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="text-center py-8">
+                            <TableCell colSpan={8} className="text-center py-8">
                               Belum ada klaim garansi
                             </TableCell>
                           </TableRow>
@@ -632,6 +633,24 @@ export default function WarrantyPage() {
                                 <code className="text-sm bg-muted px-1 py-0.5 rounded">
                                   {claim.claimNumber}
                                 </code>
+                              </TableCell>
+                              
+                              <TableCell>
+                                <div className="space-y-1">
+                                  {claim.transactionNumber && (
+                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 text-xs">
+                                      📋 {claim.transactionNumber}
+                                    </Badge>
+                                  )}
+                                  {claim.serviceTicketNumber && (
+                                    <Badge variant="outline" className="bg-green-50 text-green-700 text-xs">
+                                      🔧 {claim.serviceTicketNumber}
+                                    </Badge>
+                                  )}
+                                  {!claim.transactionNumber && !claim.serviceTicketNumber && (
+                                    <span className="text-gray-400 text-xs">N/A</span>
+                                  )}
+                                </div>
                               </TableCell>
                               
                               <TableCell>
@@ -1071,7 +1090,7 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
             onValueChange={(value) => {
               const newAction = value as 'approve' | 'reject';
               setAction(newAction);
-              form.setValue("action", newAction);
+              form.setValue("action", newAction as any);
             }}
           >
             <SelectTrigger data-testid="select-process-action">

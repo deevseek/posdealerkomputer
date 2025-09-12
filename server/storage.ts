@@ -2147,17 +2147,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Warranty Claims
-  async getWarrantyClaims(status?: string): Promise<WarrantyClaim[]> {
+  async getWarrantyClaims(status?: string): Promise<any[]> {
+    // Join with transactions and service tickets to get reference numbers
+    const query = db
+      .select({
+        // Warranty claim fields
+        id: warrantyClaims.id,
+        claimNumber: warrantyClaims.claimNumber,
+        claimType: warrantyClaims.claimType,
+        status: warrantyClaims.status,
+        claimReason: warrantyClaims.claimReason,
+        claimDate: warrantyClaims.claimDate,
+        processedDate: warrantyClaims.processedDate,
+        returnCondition: warrantyClaims.returnCondition,
+        notes: warrantyClaims.notes,
+        createdAt: warrantyClaims.createdAt,
+        updatedAt: warrantyClaims.updatedAt,
+        
+        // Reference information
+        originalTransactionId: warrantyClaims.originalTransactionId,
+        originalServiceTicketId: warrantyClaims.originalServiceTicketId,
+        
+        // Customer info
+        customerId: warrantyClaims.customerId,
+        customerName: customers.name,
+        
+        // Transaction reference (if applicable)
+        transactionNumber: transactions.transactionNumber,
+        
+        // Service ticket reference (if applicable)
+        serviceTicketNumber: serviceTickets.ticketNumber,
+      })
+      .from(warrantyClaims)
+      .leftJoin(customers, eq(warrantyClaims.customerId, customers.id))
+      .leftJoin(transactions, eq(warrantyClaims.originalTransactionId, transactions.id))
+      .leftJoin(serviceTickets, eq(warrantyClaims.originalServiceTicketId, serviceTickets.id));
+    
     if (status) {
-      return await db.select()
-        .from(warrantyClaims)
-        .where(eq(warrantyClaims.status, status as any))
-        .orderBy(desc(warrantyClaims.claimDate));
+      query.where(eq(warrantyClaims.status, status as any));
     }
     
-    return await db.select()
-      .from(warrantyClaims)
-      .orderBy(desc(warrantyClaims.claimDate));
+    return await query.orderBy(desc(warrantyClaims.claimDate));
   }
 
   async getWarrantyClaimById(id: string): Promise<WarrantyClaim | undefined> {
