@@ -840,7 +840,24 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
 
   const createClaimMutation = useMutation({
     mutationFn: async (data: z.infer<typeof createClaimSchema>) => {
-      return apiRequest("POST", "/api/warranty-claims", data);
+      // Find the selected warranty item to get the correct mapping
+      const selectedItem = warrantyItems.find(item => item.id === data.warrantyItemId);
+      if (!selectedItem) {
+        throw new Error("Item garansi tidak ditemukan");
+      }
+
+      // Transform data to match backend schema
+      // The warranty item ID is actually the direct ticket/transaction ID
+      const payload = {
+        claimType: data.claimType,
+        claimReason: data.claimReason,
+        notes: data.notes,
+        // Map based on warranty item type
+        originalTransactionId: selectedItem.type === 'sale' ? selectedItem.id : undefined,
+        originalServiceTicketId: selectedItem.type === 'service' ? selectedItem.id : undefined,
+      };
+
+      return apiRequest("POST", "/api/warranty-claims", payload);
     },
     onSuccess: () => {
       toast({ title: "Klaim garansi berhasil dibuat" });
@@ -934,7 +951,9 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
           <Label htmlFor="claimType">Tipe Klaim</Label>
           <Select 
             value={form.watch("claimType")} 
-            onValueChange={(value: 'service' | 'sales_return') => form.setValue("claimType", value)}
+            onValueChange={(value) => {
+              form.setValue("claimType", value as 'service' | 'sales_return');
+            }}
           >
             <SelectTrigger data-testid="select-claim-type">
               <SelectValue />
@@ -1020,7 +1039,7 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
         <p className="text-sm"><strong>No:</strong> {claim.claimNumber}</p>
         <p className="text-sm"><strong>Customer:</strong> {claim.customerName}</p>
         <p className="text-sm"><strong>Tipe:</strong> {claim.claimType === 'service' ? 'Service' : 'Retur Penjualan'}</p>
-        <p className="text-sm"><strong>Deskripsi:</strong> {claim.description}</p>
+        <p className="text-sm"><strong>Deskripsi:</strong> {claim.claimReason}</p>
       </div>
 
       <form onSubmit={form.handleSubmit((data) => processClaimMutation.mutate(data))} className="space-y-4">
@@ -1028,7 +1047,9 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSucces
           <Label>Keputusan</Label>
           <Select 
             value={form.watch("action")} 
-            onValueChange={(value: 'approve' | 'reject') => form.setValue("action", value)}
+            onValueChange={(value) => {
+              form.setValue("action", value as 'approve' | 'reject');
+            }}
           >
             <SelectTrigger data-testid="select-process-action">
               <SelectValue />
