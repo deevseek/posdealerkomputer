@@ -2353,6 +2353,97 @@ export class DatabaseStorage implements IStorage {
       throw error;
     }
   }
+
+  // Process sales return warranty - handle inventory and finance integration
+  async processSalesReturnWarranty(
+    originalTransactionId: string, 
+    returnCondition: 'normal_stock' | 'damaged_stock',
+    userId: string
+  ): Promise<void> {
+    try {
+      // Get original transaction details
+      const [originalTransaction] = await db
+        .select()
+        .from(transactions)
+        .where(eq(transactions.id, originalTransactionId));
+
+      if (!originalTransaction) {
+        throw new Error('Original transaction not found');
+      }
+
+      // Get transaction items that were sold
+      const soldItems = await db
+        .select()
+        .from(transactionItems)
+        .where(eq(transactionItems.transactionId, originalTransactionId));
+
+      // Process each item return
+      for (const item of soldItems) {
+        const productId = item.productId;
+        const quantity = item.quantity;
+        
+        if (returnCondition === 'normal_stock') {
+          // Add back to normal inventory
+          await db
+            .update(products)
+            .set({ 
+              stock: sql`${products.stock} + ${quantity}`,
+              updatedAt: new Date()
+            })
+            .where(eq(products.id, productId));
+
+          // Create stock movement record
+          await db.insert(stockMovements).values({
+            productId: productId,
+            movementType: 'adjustment',
+            referenceType: 'warranty_return',
+            quantity: quantity,
+            referenceId: originalTransactionId,
+            notes: `Warranty return - normal stock condition`,
+            userId: userId
+          });
+
+          // Post finance entry for inventory increase
+          await db.insert(financialRecords).values({
+            type: 'income',
+            category: 'inventory_adjustment',
+            description: `Warranty return - inventory increase for product ID ${productId}`,
+            amount: (parseFloat(item.unitPrice) * quantity).toString(),
+            reference: originalTransactionId,
+            referenceType: 'warranty_return',
+            userId: userId
+          });
+        
+        } else if (returnCondition === 'damaged_stock') {
+          // Handle damaged stock - record as loss/expense
+          await db.insert(stockMovements).values({
+            productId: productId,
+            movementType: 'adjustment',
+            referenceType: 'warranty_return_damaged',
+            quantity: -quantity, // Negative quantity for expense
+            referenceId: originalTransactionId,
+            notes: `Warranty return - damaged stock condition`,
+            userId: userId
+          });
+
+          // Post expense entry for damaged goods
+          await db.insert(financialRecords).values({
+            type: 'expense',
+            category: 'damaged_goods',
+            description: `Warranty return - damaged goods write-off for product ID ${productId}`,
+            amount: (parseFloat(item.unitPrice) * quantity).toString(),
+            reference: originalTransactionId,
+            referenceType: 'warranty_return_damaged',
+            userId: userId
+          });
+        }
+      }
+
+    } catch (error) {
+      console.error('Error processing sales return warranty:', error);
+      throw error;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();

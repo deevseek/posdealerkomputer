@@ -4022,6 +4022,15 @@ Terima kasih!
         });
       }
 
+      // Handle sales return inventory and finance integration
+      if (existingClaim.claimType === 'sales_return' && existingClaim.originalTransactionId) {
+        await storage.processSalesReturnWarranty(
+          existingClaim.originalTransactionId,
+          existingClaim.returnCondition || 'normal_stock',
+          userId
+        );
+      }
+
       // Mark warranty claim as processed/completed
       const updatedClaim = await storage.updateWarrantyClaimStatus(
         id,

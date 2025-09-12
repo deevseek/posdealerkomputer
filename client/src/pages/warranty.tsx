@@ -42,6 +42,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 interface WarrantyItem {
   id: string;
@@ -171,13 +174,8 @@ export default function WarrantyPage() {
   });
 
   // Fetch warranty claims
-  const { data: warrantyClaims = [], refetch: refetchClaims } = useQuery({
+  const { data: warrantyClaims = [] } = useQuery({
     queryKey: ["/api/warranty-claims"],
-    queryFn: async () => {
-      const response = await fetch("/api/warranty-claims", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch warranty claims");
-      return response.json();
-    },
   });
 
   // Enhance warranty claims with customer data
@@ -679,8 +677,387 @@ export default function WarrantyPage() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Create Warranty Claim Dialog */}
+          <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Buat Klaim Garansi</DialogTitle>
+              </DialogHeader>
+              <CreateClaimForm 
+                onSuccess={() => {
+                  setClaimDialogOpen(false);
+                }}
+                warrantyItems={sortedWarranties}
+              />
+            </DialogContent>
+          </Dialog>
+
+          {/* Process Warranty Claim Dialog */}
+          <Dialog open={processDialogOpen} onOpenChange={setProcessDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Proses Klaim Garansi</DialogTitle>
+              </DialogHeader>
+              {selectedClaim && (
+                <ProcessClaimForm 
+                  claim={selectedClaim}
+                  onSuccess={() => {
+                    setProcessDialogOpen(false);
+                    setSelectedClaim(null);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Accept Warranty Dialog */}
+          <Dialog open={acceptDialogOpen} onOpenChange={setAcceptDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Terima Garansi</DialogTitle>
+              </DialogHeader>
+              {selectedClaim && (
+                <AcceptWarrantyForm 
+                  claim={selectedClaim}
+                  onSuccess={() => {
+                    setAcceptDialogOpen(false);
+                    setSelectedClaim(null);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
         </main>
       </div>
+    </div>
+  );
+}
+
+// Form schemas - aligned with shared/schema.ts
+const createClaimSchema = z.object({
+  warrantyItemId: z.string().min(1, "Pilih item garansi"),
+  claimType: z.enum(['service', 'sales_return']),
+  claimReason: z.string().min(1, "Deskripsi diperlukan"),
+  notes: z.string().optional(),
+});
+
+const processClaimSchema = z.object({
+  action: z.enum(['approve', 'reject']),
+  adminNotes: z.string().optional(),
+});
+
+// Dynamic schema validation for accept warranty - returnCondition required for sales_return
+const createAcceptWarrantySchema = (claimType: string) => z.object({
+  returnCondition: claimType === 'sales_return' 
+    ? z.enum(['normal_stock', 'damaged_stock'], { 
+        required_error: "Pilih kondisi barang untuk sales return" 
+      })
+    : z.enum(['normal_stock', 'damaged_stock']).optional(),
+  notes: z.string().optional(),
+});
+
+// Form Components
+function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; warrantyItems: WarrantyItem[] }) {
+  const { toast } = useToast();
+  const form = useForm({
+    resolver: zodResolver(createClaimSchema),
+    defaultValues: {
+      warrantyItemId: "",
+      claimType: "service" as const,
+      claimReason: "",
+      notes: "",
+    },
+  });
+
+  const createClaimMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof createClaimSchema>) => {
+      return apiRequest("/api/warranty-claims", {
+        method: "POST",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Klaim garansi berhasil dibuat" });
+      queryClient.invalidateQueries({ queryKey: ["/api/warranty-claims"] });
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Gagal membuat klaim",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const activeWarranties = warrantyItems.filter(item => item.status === 'active');
+
+  return (
+    <form onSubmit={form.handleSubmit((data) => createClaimMutation.mutate(data))} className="space-y-4">
+      <div className="space-y-4">
+        <div>
+          <Label htmlFor="warrantyItemId">Item Garansi</Label>
+          <Select 
+            value={form.watch("warrantyItemId")} 
+            onValueChange={(value) => form.setValue("warrantyItemId", value)}
+          >
+            <SelectTrigger data-testid="select-warranty-item">
+              <SelectValue placeholder="Pilih item garansi" />
+            </SelectTrigger>
+            <SelectContent>
+              {activeWarranties.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.customerName} - {item.productName || item.deviceInfo}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {form.formState.errors.warrantyItemId && (
+            <p className="text-sm text-destructive mt-1">
+              {form.formState.errors.warrantyItemId.message}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <Label htmlFor="claimType">Tipe Klaim</Label>
+          <Select 
+            value={form.watch("claimType")} 
+            onValueChange={(value: 'service' | 'sales_return') => form.setValue("claimType", value)}
+          >
+            <SelectTrigger data-testid="select-claim-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="service">Service Warranty</SelectItem>
+              <SelectItem value="sales_return">Sales Return</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="claimReason">Deskripsi Masalah</Label>
+          <Textarea
+            {...form.register("claimReason")}
+            placeholder="Jelaskan masalah yang dialami..."
+            rows={3}
+            data-testid="textarea-claim-reason"
+          />
+          {form.formState.errors.claimReason && (
+            <p className="text-sm text-destructive mt-1">
+              {form.formState.errors.claimReason.message}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <Label htmlFor="notes">Catatan (Opsional)</Label>
+          <Textarea
+            {...form.register("notes")}
+            placeholder="Catatan tambahan..."
+            rows={2}
+            data-testid="textarea-notes"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button 
+          type="submit" 
+          disabled={createClaimMutation.isPending}
+          data-testid="button-submit-claim"
+        >
+          {createClaimMutation.isPending ? "Membuat..." : "Buat Klaim"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function ProcessClaimForm({ claim, onSuccess }: { claim: WarrantyClaim; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const form = useForm({
+    resolver: zodResolver(processClaimSchema),
+    defaultValues: {
+      action: "approve" as const,
+      adminNotes: "",
+    },
+  });
+
+  const processClaimMutation = useMutation({
+    mutationFn: async (data: z.infer<typeof processClaimSchema>) => {
+      return apiRequest(`/api/warranty-claims/${claim.id}/process`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Klaim berhasil diproses" });
+      queryClient.invalidateQueries({ queryKey: ["/api/warranty-claims"] });
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Gagal memproses klaim",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h4 className="font-medium">Detail Klaim:</h4>
+        <p className="text-sm"><strong>No:</strong> {claim.claimNumber}</p>
+        <p className="text-sm"><strong>Customer:</strong> {claim.customerName}</p>
+        <p className="text-sm"><strong>Tipe:</strong> {claim.claimType === 'service' ? 'Service' : 'Retur Penjualan'}</p>
+        <p className="text-sm"><strong>Deskripsi:</strong> {claim.description}</p>
+      </div>
+
+      <form onSubmit={form.handleSubmit((data) => processClaimMutation.mutate(data))} className="space-y-4">
+        <div>
+          <Label>Keputusan</Label>
+          <Select 
+            value={form.watch("action")} 
+            onValueChange={(value: 'approve' | 'reject') => form.setValue("action", value)}
+          >
+            <SelectTrigger data-testid="select-process-action">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="approve">Setujui</SelectItem>
+              <SelectItem value="reject">Tolak</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor="adminNotes">Catatan Admin (Opsional)</Label>
+          <Textarea
+            {...form.register("adminNotes")}
+            placeholder="Catatan untuk keputusan ini..."
+            rows={2}
+            data-testid="textarea-admin-notes"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button 
+            type="submit" 
+            disabled={processClaimMutation.isPending}
+            data-testid="button-submit-process"
+          >
+            {processClaimMutation.isPending ? "Memproses..." : "Simpan Keputusan"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function AcceptWarrantyForm({ claim, onSuccess }: { claim: WarrantyClaim; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const acceptWarrantySchema = createAcceptWarrantySchema(claim.claimType);
+  
+  const form = useForm({
+    resolver: zodResolver(acceptWarrantySchema),
+    defaultValues: {
+      returnCondition: claim.claimType === 'sales_return' ? 'normal_stock' as const : undefined,
+      notes: "",
+    },
+  });
+
+  const acceptWarrantyMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest(`/api/warranty-claims/${claim.id}/complete`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Garansi berhasil diterima" });
+      queryClient.invalidateQueries({ queryKey: ["/api/warranty-claims"] });
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Gagal menerima garansi",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <h4 className="font-medium">Terima Garansi:</h4>
+        <p className="text-sm"><strong>No:</strong> {claim.claimNumber}</p>
+        <p className="text-sm"><strong>Customer:</strong> {claim.customerName}</p>
+        <p className="text-sm"><strong>Tipe:</strong> {claim.claimType === 'service' ? 'Service' : 'Retur Penjualan'}</p>
+        
+        {claim.claimType === 'service' && (
+          <div className="bg-blue-50 p-3 rounded text-sm">
+            <strong>Service Warranty:</strong> Item akan dikembalikan ke proses service tanpa update stok atau keuangan.
+          </div>
+        )}
+        
+        {claim.claimType === 'sale' && (
+          <div className="bg-green-50 p-3 rounded text-sm">
+            <strong>Sales Return:</strong> Pilih kondisi barang untuk update stok dan keuangan yang sesuai.
+          </div>
+        )}
+      </div>
+
+      <form onSubmit={form.handleSubmit((data) => acceptWarrantyMutation.mutate(data))} className="space-y-4">
+        {claim.claimType === 'sales_return' && (
+          <div>
+            <Label>Kondisi Barang</Label>
+            <Select 
+              value={form.watch("returnCondition") || ''} 
+              onValueChange={(value: 'normal_stock' | 'damaged_stock') => form.setValue("returnCondition", value)}
+            >
+              <SelectTrigger data-testid="select-return-condition">
+                <SelectValue placeholder="Pilih kondisi barang" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal_stock">Normal (Asset)</SelectItem>
+                <SelectItem value="damaged_stock">Rusak (Penyesuaian)</SelectItem>
+              </SelectContent>
+            </Select>
+            {form.formState.errors.returnCondition && (
+              <p className="text-sm text-destructive mt-1">
+                {form.formState.errors.returnCondition.message}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-1">
+              Normal: Stok bertambah sebagai aset. Rusak: Stok bertambah dengan penyesuaian keuangan.
+            </p>
+          </div>
+        )}
+
+        <div>
+          <Label htmlFor="notes">Catatan (Opsional)</Label>
+          <Textarea
+            {...form.register("notes")}
+            placeholder="Catatan penerimaan garansi..."
+            rows={2}
+            data-testid="textarea-accept-notes"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button 
+            type="submit" 
+            disabled={acceptWarrantyMutation.isPending}
+            data-testid="button-submit-accept"
+          >
+            {acceptWarrantyMutation.isPending ? "Memproses..." : "Terima Garansi"}
+          </Button>
+        </div>
+      </form>
     </div>
   );
 }
