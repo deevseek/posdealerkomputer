@@ -715,13 +715,13 @@ export default function Inventory() {
           )}
           
           <Tabs defaultValue="overview" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-6">
-              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-              <TabsTrigger value="products" data-testid="tab-products">Products</TabsTrigger>
-              <TabsTrigger value="pricing" data-testid="tab-pricing">HPP & Pricing</TabsTrigger>
-              <TabsTrigger value="movements" data-testid="tab-movements">Stock Movements</TabsTrigger>
-              <TabsTrigger value="incoming" data-testid="tab-incoming">Incoming Stock</TabsTrigger>
-              <TabsTrigger value="damaged" data-testid="tab-damaged">Barang Rusak</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs md:text-sm">Overview</TabsTrigger>
+              <TabsTrigger value="products" data-testid="tab-products" className="text-xs md:text-sm">Products</TabsTrigger>
+              <TabsTrigger value="pricing" data-testid="tab-pricing" className="text-xs md:text-sm">HPP & Pricing</TabsTrigger>
+              <TabsTrigger value="movements" data-testid="tab-movements" className="text-xs md:text-sm">Stock Movements</TabsTrigger>
+              <TabsTrigger value="incoming" data-testid="tab-incoming" className="text-xs md:text-sm">Incoming Stock</TabsTrigger>
+              <TabsTrigger value="damaged" data-testid="tab-damaged" className="text-xs md:text-sm">Barang Rusak</TabsTrigger>
             </TabsList>
 
             {/* Overview Tab */}
@@ -1238,6 +1238,15 @@ function DamagedGoodsView() {
   
   const { data: damagedGoodsData, isLoading: isDamagedLoading, error: damagedError } = useQuery({
     queryKey: ["/api/reports/damaged-goods"],
+    queryFn: async () => {
+      const response = await fetch('/api/reports/damaged-goods', {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch damaged goods: ${response.status}`);
+      }
+      return response.json();
+    },
     retry: 1,
     refetchInterval: 30000, // Refresh every 30 seconds
   });
@@ -1268,9 +1277,9 @@ function DamagedGoodsView() {
     );
   }
 
-  const damagedGoods = damagedGoodsData?.damagedGoods || [];
-  const totalDamagedValue = damagedGoodsData?.totalDamagedValue || 0;
-  const totalItems = damagedGoodsData?.totalItems || 0;
+  const damagedGoods = (damagedGoodsData as any)?.damagedGoods || [];
+  const totalDamagedValue = (damagedGoodsData as any)?.totalDamagedValue || 0;
+  const totalItems = (damagedGoodsData as any)?.totalItems || 0;
 
   return (
     <>
