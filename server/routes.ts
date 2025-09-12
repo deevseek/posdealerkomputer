@@ -375,6 +375,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
       console.log('🐛 Stock movements API DEBUG - clientId:', clientId, 'type:', typeof clientId, 'tenant:', req.tenant, 'user clientId:', req.session?.user?.clientId);
       
+      // DEBUG: Check request query params
+      console.log('🐛 Query params DEBUG:', req.query);
+      console.log('🐛 Raw startDate:', req.query.startDate);
+      console.log('🐛 Raw endDate:', req.query.endDate);
+      
       // Parse optional date filters
       const startDate = req.query.startDate ? parseWithTimezone(req.query.startDate as string, false) : undefined;
       const endDate = req.query.endDate ? parseWithTimezone(req.query.endDate as string, false) : undefined;
