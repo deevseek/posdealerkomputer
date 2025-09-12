@@ -2174,10 +2174,8 @@ export class DatabaseStorage implements IStorage {
       .values({
         ...claimData,
         claimNumber,
-        claimDate: createDatabaseTimestamp(),
-        createdAt: createDatabaseTimestamp(),
-        updatedAt: createDatabaseTimestamp(),
-      } as any)
+        // Let database use default timestamps
+      })
       .returning();
 
     // For service warranty claims, auto-approve and create new service ticket
@@ -2191,12 +2189,12 @@ export class DatabaseStorage implements IStorage {
   async updateWarrantyClaimStatus(id: string, status: string, processedBy?: string): Promise<WarrantyClaim> {
     const updateData: any = {
       status,
-      updatedAt: createDatabaseTimestamp(),
+      // Let database handle updatedAt timestamp
     };
 
     if (processedBy) {
       updateData.processedBy = processedBy;
-      updateData.processedDate = createDatabaseTimestamp();
+      updateData.processedDate = new Date(); // Use Date object for timestamp
     }
 
     const [claim] = await db
@@ -2212,8 +2210,8 @@ export class DatabaseStorage implements IStorage {
     const updateData: any = {
       status,
       processedBy,
-      processedDate: createDatabaseTimestamp(),
-      updatedAt: createDatabaseTimestamp(),
+      processedDate: new Date(), // Use Date object for timestamp
+      // Let database handle updatedAt timestamp
     };
 
     if (returnCondition) {
