@@ -832,8 +832,12 @@ export const insertStoreConfigSchema = createInsertSchema(storeConfig).omit({
   updatedAt: true,
 }).extend({
   taxRate: transformNumericField("11.00"),
-  defaultDiscount: transformNumericField("0.00"),
-  databasePort: transformIntegerField(5432),
+  defaultDiscount: transformNumericField("0.00").optional(),
+  databasePort: transformIntegerField(5432).optional(),
+}).partial().extend({
+  // Keep essential fields required
+  name: z.string().min(1, "Store name is required"),
+  taxRate: transformNumericField("11.00"),
 });
 
 export const insertCategorySchema = createInsertSchema(categories).omit({
