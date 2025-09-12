@@ -35,9 +35,12 @@ export const sessions = pgTable(
 export const userRoleEnum = pgEnum('user_role', ['admin', 'kasir', 'teknisi', 'purchasing', 'finance', 'owner']);
 export const transactionTypeEnum = pgEnum('transaction_type', ['sale', 'service', 'purchase', 'return']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'transfer', 'qris', 'installment']);
-export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts', 'completed', 'delivered', 'cancelled']);
+export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts', 'completed', 'delivered', 'cancelled', 'warranty_claim']);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
 export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
+export const warrantyClaimTypeEnum = pgEnum('warranty_claim_type', ['service', 'sales_return']);
+export const warrantyClaimStatusEnum = pgEnum('warranty_claim_status', ['pending', 'approved', 'rejected', 'processed']);
+export const returnConditionEnum = pgEnum('return_condition', ['normal_stock', 'damaged_stock']);
 
 // User storage table (multi-tenant aware)
 export const users = pgTable("users", {
@@ -289,6 +292,38 @@ export const serviceTicketParts = pgTable("service_ticket_parts", {
   unitPrice: decimal("unit_price", { precision: 12, scale: 2 }).notNull(),
   totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+});
+
+// Warranty Claims - Track warranty claims for both sales and service
+export const warrantyClaims = pgTable("warranty_claims", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
+  claimNumber: varchar("claim_number").notNull().unique(),
+  
+  // Reference to original transaction/service
+  originalTransactionId: varchar("original_transaction_id").references(() => transactions.id),
+  originalServiceTicketId: varchar("original_service_ticket_id").references(() => serviceTickets.id),
+  
+  // Claim details
+  claimType: warrantyClaimTypeEnum("claim_type").notNull(), // 'service' | 'sales_return'
+  status: warrantyClaimStatusEnum("status").default('pending'), // 'pending' | 'approved' | 'rejected' | 'processed'
+  customerId: varchar("customer_id").references(() => customers.id).notNull(),
+  claimReason: text("claim_reason").notNull(),
+  
+  // Dates and processing
+  claimDate: timestamp("claim_date", { withTimezone: true }).default(sql`now()`),
+  processedDate: timestamp("processed_date", { withTimezone: true }),
+  processedBy: varchar("processed_by").references(() => users.id),
+  
+  // Return condition (for sales returns)
+  returnCondition: returnConditionEnum("return_condition"), // 'normal_stock' | 'damaged_stock'
+  
+  // Additional information
+  notes: text("notes"),
+  
+  // Timestamps
+  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
 
 // Product Locations - Warehouse/Location management
@@ -964,6 +999,13 @@ export const insertServiceTicketPartSchema = createInsertSchema(serviceTicketPar
   totalPrice: transformNumericField("0.00"),
 });
 
+export const insertWarrantyClaimSchema = createInsertSchema(warrantyClaims).omit({
+  id: true,
+  claimNumber: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertFinancialRecordSchema = createInsertSchema(financialRecords).omit({
   id: true,
   createdAt: true,
@@ -1086,6 +1128,8 @@ export type InsertStockMovement = z.infer<typeof insertStockMovementSchema>;
 export type StockMovement = typeof stockMovements.$inferSelect;
 export type InsertServiceTicketPart = z.infer<typeof insertServiceTicketPartSchema>;
 export type ServiceTicketPart = typeof serviceTicketParts.$inferSelect;
+export type InsertWarrantyClaim = z.infer<typeof insertWarrantyClaimSchema>;
+export type WarrantyClaim = typeof warrantyClaims.$inferSelect;
 export type InsertFinancialRecord = z.infer<typeof insertFinancialRecordSchema>;
 export type FinancialRecord = typeof financialRecords.$inferSelect;
 export type InsertAccount = z.infer<typeof insertAccountSchema>;
