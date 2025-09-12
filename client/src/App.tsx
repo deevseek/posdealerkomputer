@@ -62,15 +62,12 @@ function Router() {
     });
   }
 
-  // Allow login access even if setup is not completed
+  // Show setup if not completed (regardless of auth status)
   if (needsSetup || isSetupLoading) {
     return (
       <Switch>
-        <Route path="/login" component={Login} />
         <Route path="/setup" component={Setup} />
-        <Route path="/service-status" component={ServiceStatus} />
-        <Route path="/client-onboarding" component={ClientOnboarding} />
-        <Route path="*" component={Setup} /> {/* Redirect other routes to setup */}
+        <Route path="*" component={Setup} /> {/* Redirect all routes to setup */}
       </Switch>
     );
   }

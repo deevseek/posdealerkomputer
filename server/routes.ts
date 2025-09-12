@@ -3007,11 +3007,20 @@ Terima kasih!
         console.log('Users table not found - fresh installation');
       }
       
+      // Check if all required steps are completed
+      const setupSteps = config?.setupSteps ? JSON.parse(config.setupSteps || '{}') : {};
+      const allStepsCompleted = Boolean(
+        setupSteps.store && 
+        setupSteps.database && 
+        setupSteps.admin && 
+        setupSteps.initialData
+      );
+      
       const isSetupCompleted = Boolean(
         config && 
         config.name && 
-        config.setupCompleted !== false &&
-        userCount > 0
+        userCount > 0 &&
+        (config.setupCompleted === true || allStepsCompleted)
       );
       
       res.json({
