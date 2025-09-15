@@ -1045,9 +1045,24 @@ export class FinanceManager {
     userId: string,
     tx?: any
   ): Promise<{ success: boolean; error?: string }> {
+    const dbClient = tx || db;
     try {
-      // Record cancellation fee using proper journal entries
+      // Record cancellation fee using proper financial record + journal entries
       if (Number(cancellationFee) > 0) {
+        // First create financial record (for finance page)
+        await dbClient.insert(financialRecords).values({
+          type: 'income',
+          category: 'Service Revenue',
+          amount: cancellationFee,
+          description: `Service cancellation fee - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+
+        // Then create journal entry (for accounting)
         const journalResult = await this.createJournalEntry({
           description: `Service Cancellation Fee - ${reason}`,
           reference: serviceId,
@@ -1087,7 +1102,23 @@ export class FinanceManager {
     userId: string,
     tx?: any
   ): Promise<{ success: boolean; error?: string }> {
+    const dbClient = tx || db;
     try {
+      // First create financial record for cancellation fee (for finance page)
+      if (Number(cancellationFee) > 0) {
+        await dbClient.insert(financialRecords).values({
+          type: 'income',
+          category: 'Service Revenue',
+          amount: cancellationFee,
+          description: `Service cancellation fee (after completion) - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation_after_completed',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+      }
+
       const journalLines = [];
       
       // Record cancellation fee as income
@@ -1174,7 +1205,23 @@ export class FinanceManager {
     userId: string,
     tx?: any
   ): Promise<{ success: boolean; error?: string }> {
+    const dbClient = tx || db;
     try {
+      // First create financial record for cancellation fee (for finance page)
+      if (Number(cancellationFee) > 0) {
+        await dbClient.insert(financialRecords).values({
+          type: 'income',
+          category: 'Service Revenue',
+          amount: cancellationFee,
+          description: `Warranty cancellation fee - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation_warranty_refund',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+      }
+
       const journalLines = [];
       
       // Record cancellation fee as income (if any)
