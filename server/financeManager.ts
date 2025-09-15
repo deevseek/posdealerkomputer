@@ -58,6 +58,54 @@ export class FinanceManager {
     const [account] = await db.select().from(accounts).where(eq(accounts.code, code)).limit(1);
     return account || null;
   }
+
+  // Initialize default chart of accounts
+  async initializeDefaultAccounts(): Promise<{ success: boolean; message: string; accountsCreated: number }> {
+    try {
+      const { defaultAccounts } = await import('./defaultAccounts');
+      
+      let accountsCreated = 0;
+      
+      for (const account of defaultAccounts) {
+        try {
+          // Check if account already exists
+          const existing = await this.getAccountByCode(account.code);
+          
+          if (!existing) {
+            // Insert new account
+            await db.insert(accounts).values({
+              code: account.code,
+              name: account.name,
+              type: account.type,
+              subtype: account.subtype,
+              normalBalance: account.normalBalance,
+              parentCode: account.parentCode || null,
+              description: account.description,
+              balance: '0'
+            });
+            accountsCreated++;
+            console.log(`✅ Created account: ${account.code} - ${account.name}`);
+          }
+        } catch (error) {
+          console.error(`❌ Error creating account ${account.code}:`, error);
+          // Continue with other accounts
+        }
+      }
+      
+      return {
+        success: true,
+        message: `Successfully initialized chart of accounts. Created ${accountsCreated} new accounts.`,
+        accountsCreated
+      };
+    } catch (error) {
+      console.error('Error initializing default accounts:', error);
+      return {
+        success: false,
+        message: `Failed to initialize default accounts: ${(error as Error).message}`,
+        accountsCreated: 0
+      };
+    }
+  }
   
   // Create Journal Entry with double-entry bookkeeping
   async createJournalEntry(

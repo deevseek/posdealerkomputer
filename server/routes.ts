@@ -3418,8 +3418,12 @@ Terima kasih!
       const financeManager = new FinanceManager();
       
       try {
-        // Note: initializeDefaultAccounts method needs to be implemented in FinanceManager
-        console.log('✅ Default chart of accounts setup (placeholder)');
+        const accountsResult = await financeManager.initializeDefaultAccounts();
+        if (accountsResult.success) {
+          console.log(`✅ ${accountsResult.message}`);
+        } else {
+          console.error(`❌ ${accountsResult.message}`);
+        }
       } catch (error) {
         console.error('Error initializing accounts:', error);
       }
