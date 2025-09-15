@@ -4,3 +4,14 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Security: Never commit cookie files or session data
+cookies*.txt
+auth_cookies.txt
+test_cookies*.txt
+*.cookies
+session*.txt
+*.session
+auth_info_*
+.env.local
+.env.*.local
