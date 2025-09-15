@@ -388,8 +388,11 @@ export default function ServiceTickets() {
   };
 
   const canCancelTicket = (ticket: ServiceTicket): boolean => {
+    console.log('Checking cancellation eligibility for ticket:', ticket.id, 'status:', ticket.status);
+    
     // Cannot cancel already cancelled tickets
     if (ticket.status === 'cancelled') {
+      console.log('Cannot cancel - already cancelled');
       return false;
     }
     
@@ -406,7 +409,10 @@ export default function ServiceTickets() {
       'delivered'
     ];
     
-    return cancellableStatuses.includes(ticket.status || 'pending');
+    const canCancel = cancellableStatuses.includes(ticket.status || 'pending');
+    console.log('Can cancel ticket:', canCancel, 'Status in cancellable list:', cancellableStatuses.includes(ticket.status || 'pending'));
+    
+    return canCancel;
   };
 
   const handleSubmit = (data: any) => {
