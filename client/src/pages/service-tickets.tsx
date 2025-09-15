@@ -36,7 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText, CreditCard } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText, CreditCard, XCircle } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -53,6 +53,7 @@ import ServiceReceiptNew from "@/components/ServiceReceiptNew";
 import ServicePaymentReceipt from "@/components/ServicePaymentReceipt";
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 import CustomerCreateModal from "@/components/customers/customer-create-modal";
+import ServiceCancellationModal from "@/components/ServiceCancellationModal";
 
 const serviceTicketFormSchema = createInsertSchema(serviceTickets).omit({
   id: true,
@@ -144,6 +145,8 @@ export default function ServiceTickets() {
   const [showStatusTracker, setShowStatusTracker] = useState(false);
   const [statusTrackerData, setStatusTrackerData] = useState<ServiceTicket | null>(null);
   const [showCustomerCreateModal, setShowCustomerCreateModal] = useState(false);
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [cancellationTicketData, setCancellationTicketData] = useState<ServiceTicket | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -372,6 +375,38 @@ export default function ServiceTickets() {
   const handleCustomerCreated = (newCustomer: any) => {
     // Select the newly created customer
     form.setValue("customerId", newCustomer.id);
+  };
+
+  const handleCancelService = (ticket: ServiceTicket) => {
+    setCancellationTicketData(ticket);
+    setShowCancellationModal(true);
+  };
+
+  const handleCancellationSuccess = () => {
+    setCancellationTicketData(null);
+    setShowCancellationModal(false);
+  };
+
+  const canCancelTicket = (ticket: ServiceTicket): boolean => {
+    // Cannot cancel already cancelled tickets
+    if (ticket.status === 'cancelled') {
+      return false;
+    }
+    
+    // Can cancel tickets in these statuses
+    const cancellableStatuses = [
+      'pending',
+      'checking', 
+      'in-progress',
+      'waiting-technician',
+      'testing',
+      'waiting-confirmation',
+      'waiting-parts',
+      'completed',
+      'delivered'
+    ];
+    
+    return cancellableStatuses.includes(ticket.status || 'pending');
   };
 
   const handleSubmit = (data: any) => {
@@ -721,6 +756,19 @@ export default function ServiceTickets() {
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
+                              {/* Cancel Button - Only show for cancellable tickets */}
+                              {canCancelTicket(ticket) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCancelService(ticket)}
+                                  data-testid={`button-cancel-ticket-${ticket.id}`}
+                                  title="Batalkan Service"
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  <XCircle className="w-4 h-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -1234,6 +1282,16 @@ export default function ServiceTickets() {
         onClose={() => setShowCustomerCreateModal(false)}
         onCustomerCreated={handleCustomerCreated}
       />
+
+      {/* Service Cancellation Modal */}
+      {cancellationTicketData && (
+        <ServiceCancellationModal
+          open={showCancellationModal}
+          onOpenChange={setShowCancellationModal}
+          serviceTicket={cancellationTicketData}
+          onSuccess={handleCancellationSuccess}
+        />
+      )}
     </div>
   );
 }
