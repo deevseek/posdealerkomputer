@@ -2460,17 +2460,10 @@ export class DatabaseStorage implements IStorage {
           if (!journalResult.success) {
             console.warn(`Failed to create journal entry for normal warranty return: ${journalResult.error}`);
             
-            // Fallback: Create financial record entry if journal entry fails
-            await db.insert(financialRecords).values({
-              type: 'income',
-              category: 'Pemulihan Garansi',
-              subcategory: 'Retur Normal',
-              description: `Retur garansi - penambahan persediaan normal (${quantity} unit, Produk ID ${productId})`,
-              amount: itemValue.toString(),
-              reference: originalTransactionId,
-              referenceType: 'warranty_return',
-              userId: userId
-            });
+            // For normal stock returns, we should NOT create any financial record
+            // as it should be financially neutral - only restore inventory
+            // The warranty return does not generate new revenue/income
+            console.log(`Normal warranty return processed without financial impact - only inventory restored`);
           }
         
         } else if (returnCondition === 'damaged_stock') {
