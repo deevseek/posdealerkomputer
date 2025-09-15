@@ -183,6 +183,12 @@ export interface IStorage {
   createServiceTicket(ticket: InsertServiceTicket): Promise<ServiceTicket>;
   updateServiceTicket(id: string, ticket: Partial<InsertServiceTicket>, parts?: InsertServiceTicketPart[], userId?: string): Promise<ServiceTicket>;
   deleteServiceTicket(id: string): Promise<void>;
+  cancelServiceTicket(id: string, data: {
+    cancellationFee: string;
+    cancellationReason: string;
+    cancellationType: 'before_completed' | 'after_completed' | 'warranty_refund';
+    userId: string;
+  }): Promise<{ success: boolean; message?: string }>;
   
   // Stock Movements
   getStockMovements(productId?: string): Promise<StockMovement[]>;
@@ -1435,6 +1441,12 @@ export class DatabaseStorage implements IStorage {
         warrantyDuration: serviceTickets.warrantyDuration,
         warrantyStartDate: serviceTickets.warrantyStartDate,
         warrantyEndDate: serviceTickets.warrantyEndDate,
+        // Cancellation fields
+        cancellationFee: serviceTickets.cancellationFee,
+        cancellationReason: serviceTickets.cancellationReason,
+        cancelledAt: serviceTickets.cancelledAt,
+        cancelledBy: serviceTickets.cancelledBy,
+        cancellationType: serviceTickets.cancellationType,
 
         ticketNumber: serviceTickets.ticketNumber,
         completedAt: serviceTickets.completedAt,
@@ -1482,6 +1494,12 @@ export class DatabaseStorage implements IStorage {
         warrantyDuration: serviceTickets.warrantyDuration,
         warrantyStartDate: serviceTickets.warrantyStartDate,
         warrantyEndDate: serviceTickets.warrantyEndDate,
+        // Cancellation fields
+        cancellationFee: serviceTickets.cancellationFee,
+        cancellationReason: serviceTickets.cancellationReason,
+        cancelledAt: serviceTickets.cancelledAt,
+        cancelledBy: serviceTickets.cancelledBy,
+        cancellationType: serviceTickets.cancellationType,
 
         ticketNumber: serviceTickets.ticketNumber,
         completedAt: serviceTickets.completedAt,
@@ -1658,6 +1676,203 @@ export class DatabaseStorage implements IStorage {
       // Delete the service ticket
       await tx.delete(serviceTickets).where(eq(serviceTickets.id, id));
     });
+  }
+
+  async cancelServiceTicket(id: string, data: {
+    cancellationFee: string;
+    cancellationReason: string;
+    cancellationType: 'before_completed' | 'after_completed' | 'warranty_refund';
+    userId: string;
+  }): Promise<{ success: boolean; message?: string }> {
+    try {
+      return await db.transaction(async (tx) => {
+        // Get the service ticket
+        const [ticket] = await tx.select().from(serviceTickets).where(eq(serviceTickets.id, id));
+        
+        if (!ticket) {
+          return { success: false, message: 'Service ticket not found' };
+        }
+
+        if (ticket.status === 'cancelled') {
+          return { success: false, message: 'Service ticket is already cancelled' };
+        }
+
+        // Get service ticket parts for stock operations
+        const serviceParts = await tx.select({
+          id: serviceTicketParts.id,
+          productId: serviceTicketParts.productId,
+          quantity: serviceTicketParts.quantity,
+          unitPrice: serviceTicketParts.unitPrice,
+          productName: products.name
+        })
+        .from(serviceTicketParts)
+        .innerJoin(products, eq(serviceTicketParts.productId, products.id))
+        .where(eq(serviceTicketParts.serviceTicketId, id));
+
+        const now = getCurrentJakartaTime();
+        
+        // Update service ticket with cancellation data
+        await tx.update(serviceTickets).set({
+          status: 'cancelled',
+          cancellationFee: data.cancellationFee,
+          cancellationReason: data.cancellationReason,
+          cancellationType: data.cancellationType,
+          cancelledAt: now,
+          cancelledBy: data.userId,
+          updatedAt: now
+        }).where(eq(serviceTickets.id, id));
+
+        // Import finance manager for accounting
+        const { financeManager } = await import('./financeManager');
+
+        // Handle different cancellation scenarios
+        switch (data.cancellationType) {
+          case 'before_completed':
+            // Scenario 1: Cancel Before Completed
+            const beforeResult = await financeManager.recordServiceCancellationBeforeCompleted(
+              id,
+              data.cancellationFee,
+              data.cancellationReason,
+              data.userId,
+              tx
+            );
+            
+            if (!beforeResult.success) {
+              return { success: false, message: beforeResult.error };
+            }
+            break;
+
+          case 'after_completed':
+            // Scenario 2: Cancel After Completed
+            // Return parts to stock and reverse stock movements
+            for (const part of serviceParts) {
+              // Get current product stock
+              const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
+              if (product) {
+                // Return parts to stock
+                const newStock = (product.stock || 0) + part.quantity;
+                await tx.update(products).set({
+                  stock: newStock,
+                  updatedAt: now
+                }).where(eq(products.id, part.productId));
+
+                // Get cost basis for proper stock movement tracking
+                const avgCost = await this.getAveragePurchasePrice(part.productId);
+                
+                // Record stock movement for return with cost
+                await tx.insert(stockMovements).values({
+                  productId: part.productId,
+                  movementType: 'in',
+                  quantity: part.quantity,
+                  unitCost: avgCost.toString(),
+                  referenceId: id,
+                  referenceType: 'service',
+                  notes: `Dikembalikan dari pembatalan servis ${ticket.ticketNumber}`,
+                  userId: data.userId
+                });
+              }
+            }
+
+            // Record financial transactions with cost basis
+            const partsForFinance = [];
+            for (const part of serviceParts) {
+              const avgCost = await this.getAveragePurchasePrice(part.productId);
+              partsForFinance.push({
+                name: part.productName,
+                quantity: part.quantity,
+                sellingPrice: part.unitPrice,
+                costPrice: avgCost.toString()
+              });
+            }
+
+            const afterResult = await financeManager.recordServiceCancellationAfterCompleted(
+              id,
+              data.cancellationFee,
+              data.cancellationReason,
+              partsForFinance,
+              data.userId,
+              tx
+            );
+            
+            if (!afterResult.success) {
+              return { success: false, message: afterResult.error };
+            }
+            break;
+
+          case 'warranty_refund':
+            // Scenario 3: Cancel Warranty Service (Full Refund)
+            // Move parts to damaged goods stock with proper cost tracking
+            for (const part of serviceParts) {
+              const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
+              if (product) {
+                // Get cost basis for proper loss calculation
+                const avgCost = await this.getAveragePurchasePrice(part.productId);
+                
+                // Reduce normal stock (parts moved to damaged)
+                const newStock = Math.max(0, (product.stock || 0) - part.quantity);
+                await tx.update(products).set({
+                  stock: newStock,
+                  updatedAt: now
+                }).where(eq(products.id, part.productId));
+
+                // Record movement to damaged goods with cost
+                await tx.insert(stockMovements).values({
+                  productId: part.productId,
+                  movementType: 'out',
+                  quantity: part.quantity,
+                  unitCost: avgCost.toString(),
+                  referenceId: id,
+                  referenceType: 'service',
+                  notes: `Dipindahkan ke barang rusak - warranty refund ${ticket.ticketNumber}`,
+                  userId: data.userId
+                });
+              }
+            }
+
+            // Record financial transactions with full refund and proper cost basis
+            const partsForWarrantyFinance = [];
+            for (const part of serviceParts) {
+              const avgCost = await this.getAveragePurchasePrice(part.productId);
+              partsForWarrantyFinance.push({
+                name: part.productName,
+                quantity: part.quantity,
+                sellingPrice: part.unitPrice,
+                costPrice: avgCost.toString()
+              });
+            }
+
+            const warrantyResult = await financeManager.recordServiceCancellationWarrantyRefund(
+              id,
+              data.cancellationFee,
+              ticket.laborCost || '0',
+              ticket.partsCost || '0',
+              data.cancellationReason,
+              partsForWarrantyFinance,
+              data.userId,
+              tx
+            );
+            
+            if (!warrantyResult.success) {
+              return { success: false, message: warrantyResult.error };
+            }
+            break;
+
+          default:
+            return { success: false, message: 'Invalid cancellation type' };
+        }
+
+        return { 
+          success: true, 
+          message: `Service ticket cancelled successfully with ${data.cancellationType} scenario` 
+        };
+      });
+    } catch (error) {
+      console.error('Error cancelling service ticket:', error);
+      return { 
+        success: false, 
+        message: `Failed to cancel service ticket: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      };
+    }
   }
 
   // Service Ticket Parts

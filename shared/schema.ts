@@ -41,6 +41,7 @@ export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 's
 export const warrantyClaimTypeEnum = pgEnum('warranty_claim_type', ['service', 'sales_return']);
 export const warrantyClaimStatusEnum = pgEnum('warranty_claim_status', ['pending', 'approved', 'rejected', 'processed']);
 export const returnConditionEnum = pgEnum('return_condition', ['normal_stock', 'damaged_stock']);
+export const cancellationTypeEnum = pgEnum('cancellation_type', ['before_completed', 'after_completed', 'warranty_refund']);
 
 // User storage table (multi-tenant aware)
 export const users = pgTable("users", {
@@ -278,6 +279,14 @@ export const serviceTickets = pgTable("service_tickets", {
   warrantyDuration: integer("warranty_duration"), // Duration in days
   warrantyStartDate: timestamp("warranty_start_date", { withTimezone: true }).default(sql`now()`),
   warrantyEndDate: timestamp("warranty_end_date", { withTimezone: true }).default(sql`now()`),
+  
+  // Cancellation fields
+  cancellationFee: decimal("cancellation_fee", { precision: 12, scale: 2 }),
+  cancellationReason: text("cancellation_reason"),
+  cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancellationType: cancellationTypeEnum("cancellation_type"),
+  
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });

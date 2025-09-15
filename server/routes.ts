@@ -199,6 +199,12 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 
+// Import service cancellation validation
+import { 
+  serviceCancellationSchema, 
+  validateCancellationBusinessRules 
+} from "@shared/service-cancellation-schema";
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure multer for file uploads
   const upload = multer({
@@ -2082,6 +2088,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting service ticket:", error);
       res.status(500).json({ message: "Failed to delete service ticket" });
+    }
+  });
+
+  // Cancel service ticket with 3 different scenarios - Enhanced with Zod validation
+  app.post('/api/service-tickets/:id/cancel', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Zod validation for request body
+      const validationResult = serviceCancellationSchema.safeParse({
+        ...req.body,
+        userId: req.session.user.id
+      });
+      
+      if (!validationResult.success) {
+        const errorMessages = validationResult.error.errors.map(err => err.message);
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: errorMessages 
+        });
+      }
+      
+      const { cancellationFee, cancellationReason, cancellationType } = validationResult.data;
+
+      // Get service ticket for business rule validation
+      const existingTicket = await storage.getServiceTicketById(id);
+      if (!existingTicket) {
+        return res.status(404).json({ message: "Service ticket not found" });
+      }
+
+      // Business rule validation
+      const ticketValidation = await validateCancellationBusinessRules.validateTicketEligibility(id, existingTicket);
+      if (!ticketValidation.isValid) {
+        return res.status(400).json({ 
+          message: "Business rule validation failed", 
+          errors: ticketValidation.errors 
+        });
+      }
+
+      // Warranty specific validation
+      if (cancellationType === 'warranty_refund') {
+        const warrantyValidation = await validateCancellationBusinessRules.validateWarrantyEligibility(id, existingTicket);
+        if (!warrantyValidation.isValid) {
+          return res.status(400).json({ 
+            message: "Warranty validation failed", 
+            errors: warrantyValidation.errors 
+          });
+        }
+      }
+
+      // Status-specific validation based on cancellation type  
+      if (cancellationType === 'after_completed' && existingTicket.status !== 'completed' && existingTicket.status !== 'delivered') {
+        return res.status(400).json({ 
+          message: "Cannot cancel with 'after_completed' type - service ticket is not completed" 
+        });
+      }
+      
+      if (cancellationType === 'warranty_refund' && existingTicket.status !== 'warranty_claim') {
+        if (existingTicket.status !== 'completed' && existingTicket.status !== 'delivered') {
+          return res.status(400).json({ 
+            message: "Cannot cancel with 'warranty_refund' type - service ticket must be completed or under warranty claim" 
+          });
+        }
+      }
+
+      // Execute cancellation
+      const result = await storage.cancelServiceTicket(id, {
+        cancellationFee: cancellationFee,
+        cancellationReason: cancellationReason,
+        cancellationType,
+        userId: req.session.user.id
+      });
+
+      if (!result.success) {
+        return res.status(400).json({ message: result.message || "Failed to cancel service ticket" });
+      }
+
+      // Broadcast realtime update
+      realtimeService.broadcastToTenant(undefined, {
+        resource: 'service-tickets',
+        action: 'update',
+        data: { id, cancellationType, reason: cancellationReason },
+        id: id
+      });
+
+      res.json({ 
+        message: result.message || "Service ticket cancelled successfully",
+        success: true,
+        cancellationType,
+        cancellationFee: parseFloat(cancellationFee)
+      });
+
+    } catch (error) {
+      console.error("Error cancelling service ticket:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to cancel service ticket" 
+      });
     }
   });
 

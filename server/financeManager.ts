@@ -60,18 +60,22 @@ export class FinanceManager {
   }
   
   // Create Journal Entry with double-entry bookkeeping
-  async createJournalEntry(data: {
-    description: string;
-    reference?: string;
-    referenceType?: string;
-    lines: {
-      accountCode: string;
+  async createJournalEntry(
+    data: {
       description: string;
-      debitAmount?: string;
-      creditAmount?: string;
-    }[];
-    userId: string;
-  }): Promise<{ success: boolean; journalEntry?: JournalEntry; error?: string }> {
+      reference?: string;
+      referenceType?: string;
+      lines: {
+        accountCode: string;
+        description: string;
+        debitAmount?: string;
+        creditAmount?: string;
+      }[];
+      userId: string;
+    },
+    tx?: any
+  ): Promise<{ success: boolean; journalEntry?: JournalEntry; error?: string }> {
+    const dbClient = tx || db;
     try {
       // Validate that debits equal credits
       const totalDebits = data.lines.reduce((sum, line) => sum + Number(line.debitAmount || 0), 0);
@@ -88,7 +92,7 @@ export class FinanceManager {
       const journalNumber = `JE-${Date.now()}`;
       
       // Create journal entry
-      const [journalEntry] = await db.insert(journalEntries).values({
+      const [journalEntry] = await dbClient.insert(journalEntries).values({
         journalNumber,
         date: new Date(),
         description: data.description,
@@ -110,7 +114,7 @@ export class FinanceManager {
         }
         
         // Create journal entry line
-        await db.insert(journalEntryLines).values({
+        await dbClient.insert(journalEntryLines).values({
           journalEntryId: journalEntry.id,
           accountId: account.id,
           description: lineData.description,
@@ -129,7 +133,7 @@ export class FinanceManager {
           balanceChange = creditAmount - debitAmount;
         }
         
-        await db.update(accounts)
+        await dbClient.update(accounts)
           .set({ 
             balance: sql`${accounts.balance} + ${balanceChange}`,
             updatedAt: new Date()
@@ -149,21 +153,25 @@ export class FinanceManager {
   }
   
   // Enhanced transaction creation with automatic journal entries
-  async createTransactionWithJournal(data: {
-    type: 'income' | 'expense' | 'transfer';
-    category: string;
-    subcategory?: string;
-    amount: string;
-    description: string;
-    referenceType?: string;
-    reference?: string;
-    paymentMethod?: string;
-    tags?: string[];
-    userId: string;
-  }): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
+  async createTransactionWithJournal(
+    data: {
+      type: 'income' | 'expense' | 'transfer';
+      category: string;
+      subcategory?: string;
+      amount: string;
+      description: string;
+      referenceType?: string;
+      reference?: string;
+      paymentMethod?: string;
+      tags?: string[];
+      userId: string;
+    },
+    tx?: any
+  ): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
+    const dbClient = tx || db;
     try {
       // Create the financial record
-      const [transaction] = await db.insert(financialRecords).values({
+      const [transaction] = await dbClient.insert(financialRecords).values({
         type: data.type,
         category: data.category,
         subcategory: data.subcategory,
@@ -231,13 +239,13 @@ export class FinanceManager {
           referenceType: 'financial_transaction',
           lines: journalLines,
           userId: data.userId
-        });
+        }, tx);
         
         if (!journalResult.success) {
           console.warn('Failed to create journal entry:', journalResult.error);
         } else {
           // Link the journal entry to the financial record
-          await db.update(financialRecords)
+          await dbClient.update(financialRecords)
             .set({ journalEntryId: journalResult.journalEntry?.id })
             .where(eq(financialRecords.id, transaction.id));
         }
@@ -451,20 +459,23 @@ export class FinanceManager {
   }
   
   // Financial Transactions (Enhanced)
-  async createTransaction(data: {
-    type: 'income' | 'expense' | 'transfer';
-    category: string;
-    subcategory?: string;
-    amount: string;
-    description: string;
-    referenceType?: string;
-    reference?: string;
-    paymentMethod?: string;
-    tags?: string[];
-    userId: string;
-  }): Promise<FinancialRecord> {
+  async createTransaction(
+    data: {
+      type: 'income' | 'expense' | 'transfer';
+      category: string;
+      subcategory?: string;
+      amount: string;
+      description: string;
+      referenceType?: string;
+      reference?: string;
+      paymentMethod?: string;
+      tags?: string[];
+      userId: string;
+    },
+    tx?: any
+  ): Promise<FinancialRecord> {
     // Use the enhanced method that creates journal entries
-    const result = await this.createTransactionWithJournal(data);
+    const result = await this.createTransactionWithJournal(data, tx);
     
     if (!result.success || !result.transaction) {
       throw new Error(result.error || 'Failed to create transaction');
@@ -1024,6 +1035,235 @@ export class FinanceManager {
       incomeCategories: Array.from(incomeSet),
       expenseCategories: Array.from(expenseSet)
     };
+  }
+
+  // Service Cancellation Methods - Updated with proper journal entries and transaction support
+  async recordServiceCancellationBeforeCompleted(
+    serviceId: string, 
+    cancellationFee: string, 
+    reason: string, 
+    userId: string,
+    tx?: any
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Record cancellation fee using proper journal entries
+      if (Number(cancellationFee) > 0) {
+        const journalResult = await this.createJournalEntry({
+          description: `Service Cancellation Fee - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation',
+          lines: [
+            {
+              accountCode: ACCOUNT_CODES.CASH,
+              description: `Cancellation fee received - ${reason}`,
+              debitAmount: cancellationFee
+            },
+            {
+              accountCode: ACCOUNT_CODES.SERVICE_REVENUE,
+              description: `Service cancellation fee - ${reason}`,
+              creditAmount: cancellationFee
+            }
+          ],
+          userId
+        }, tx);
+        
+        if (!journalResult.success) {
+          return { success: false, error: journalResult.error };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error recording cancellation before completed:', error);
+      return { success: false, error: 'Failed to record cancellation fee' };
+    }
+  }
+
+  async recordServiceCancellationAfterCompleted(
+    serviceId: string, 
+    cancellationFee: string, 
+    reason: string, 
+    partsUsed: Array<{ name: string; quantity: number; sellingPrice: string; costPrice?: string }>,
+    userId: string,
+    tx?: any
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const journalLines = [];
+      
+      // Record cancellation fee as income
+      if (Number(cancellationFee) > 0) {
+        journalLines.push(
+          {
+            accountCode: ACCOUNT_CODES.CASH,
+            description: `Cancellation fee received - ${reason}`,
+            debitAmount: cancellationFee
+          },
+          {
+            accountCode: ACCOUNT_CODES.SERVICE_REVENUE,
+            description: `Service cancellation fee - ${reason}`,
+            creditAmount: cancellationFee
+          }
+        );
+      }
+
+      // Reverse parts revenue using proper sales returns contra account
+      for (const part of partsUsed) {
+        const partRevenue = (Number(part.sellingPrice) * part.quantity).toString();
+        const costPrice = part.costPrice || '0';
+        const partCost = (Number(costPrice) * part.quantity).toString();
+        
+        // Reverse the sales revenue
+        journalLines.push(
+          {
+            accountCode: ACCOUNT_CODES.SALES_REVENUE, // Debit to reduce revenue
+            description: `Sales return reversal - ${part.name} (${part.quantity}x)`,
+            debitAmount: partRevenue
+          },
+          {
+            accountCode: ACCOUNT_CODES.CASH, // Credit cash refund
+            description: `Cash refund for returned parts - ${part.name}`,
+            creditAmount: partRevenue
+          }
+        );
+        
+        // Return inventory at cost
+        if (Number(partCost) > 0) {
+          journalLines.push(
+            {
+              accountCode: ACCOUNT_CODES.INVENTORY,
+              description: `Inventory returned - ${part.name} (${part.quantity}x)`,
+              debitAmount: partCost
+            },
+            {
+              accountCode: ACCOUNT_CODES.COST_OF_GOODS_SOLD,
+              description: `COGS reversal - ${part.name}`,
+              creditAmount: partCost
+            }
+          );
+        }
+      }
+
+      if (journalLines.length > 0) {
+        const journalResult = await this.createJournalEntry({
+          description: `Service Cancellation After Completion - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation_after_completed',
+          lines: journalLines,
+          userId
+        }, tx);
+        
+        if (!journalResult.success) {
+          return { success: false, error: journalResult.error };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error recording cancellation after completed:', error);
+      return { success: false, error: 'Failed to record cancellation with parts reversal' };
+    }
+  }
+
+  async recordServiceCancellationWarrantyRefund(
+    serviceId: string, 
+    cancellationFee: string, 
+    originalLaborCost: string,
+    originalPartsCost: string,
+    reason: string, 
+    partsUsed: Array<{ name: string; quantity: number; sellingPrice: string; costPrice?: string }>,
+    userId: string,
+    tx?: any
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const journalLines = [];
+      
+      // Record cancellation fee as income (if any)
+      if (Number(cancellationFee) > 0) {
+        journalLines.push(
+          {
+            accountCode: ACCOUNT_CODES.CASH,
+            description: `Warranty cancellation fee - ${reason}`,
+            debitAmount: cancellationFee
+          },
+          {
+            accountCode: ACCOUNT_CODES.SERVICE_REVENUE,
+            description: `Warranty cancellation fee - ${reason}`,
+            creditAmount: cancellationFee
+          }
+        );
+      }
+
+      // Refund original labor cost
+      if (Number(originalLaborCost) > 0) {
+        journalLines.push(
+          {
+            accountCode: ACCOUNT_CODES.WARRANTY_EXPENSE,
+            description: `Warranty labor refund - ${reason}`,
+            debitAmount: originalLaborCost
+          },
+          {
+            accountCode: ACCOUNT_CODES.CASH,
+            description: `Cash refund for labor - ${reason}`,
+            creditAmount: originalLaborCost
+          }
+        );
+      }
+
+      // Handle parts refund and damaged goods
+      if (Number(originalPartsCost) > 0) {
+        // Refund parts cost to customer
+        journalLines.push(
+          {
+            accountCode: ACCOUNT_CODES.WARRANTY_EXPENSE,
+            description: `Warranty parts refund - ${reason}`,
+            debitAmount: originalPartsCost
+          },
+          {
+            accountCode: ACCOUNT_CODES.CASH,
+            description: `Cash refund for parts - ${reason}`,
+            creditAmount: originalPartsCost
+          }
+        );
+
+        // Record damaged goods loss for parts
+        for (const part of partsUsed) {
+          const costPrice = part.costPrice || part.sellingPrice; // Fallback to selling price if cost not available
+          const partCostValue = (Number(costPrice) * part.quantity).toString();
+          
+          journalLines.push(
+            {
+              accountCode: ACCOUNT_CODES.DAMAGED_GOODS_LOSS,
+              description: `Damaged goods loss - ${part.name} (${part.quantity}x)`,
+              debitAmount: partCostValue
+            },
+            {
+              accountCode: ACCOUNT_CODES.DAMAGED_GOODS_INVENTORY,
+              description: `Transfer to damaged goods inventory - ${part.name}`,
+              creditAmount: partCostValue
+            }
+          );
+        }
+      }
+
+      if (journalLines.length > 0) {
+        const journalResult = await this.createJournalEntry({
+          description: `Service Warranty Refund - ${reason}`,
+          reference: serviceId,
+          referenceType: 'warranty_refund',
+          lines: journalLines,
+          userId
+        }, tx);
+        
+        if (!journalResult.success) {
+          return { success: false, error: journalResult.error };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error recording warranty cancellation refund:', error);
+      return { success: false, error: 'Failed to record warranty refund' };
+    }
   }
 }
 
