@@ -138,8 +138,8 @@ export default function ServiceCancellationModal({
     defaultValues: {
       cancellationFee: '',
       cancellationReason: '',
-      cancellationType: undefined,
-      userId: '', // Will be set from user session
+      cancellationType: 'before_completed', // Set default
+      userId: 'current-user', // Set default user ID
     },
     mode: 'onChange',
   });
@@ -196,8 +196,6 @@ export default function ServiceCancellationModal({
     const submitData = {
       ...data,
       cancellationFee: parsedFee,
-      cancellationType: selectedScenario,
-      userId: 'current-user', // This should be replaced with actual user ID from auth context
     };
 
     console.log('Final submit data:', submitData);
@@ -293,7 +291,10 @@ export default function ServiceCancellationModal({
                         ? 'border-primary bg-primary/5' 
                         : 'border-border hover:border-primary/50'
                     }`}
-                    onClick={() => setSelectedScenario(scenario)}
+                    onClick={() => {
+                      setSelectedScenario(scenario);
+                      form.setValue('cancellationType', scenario);
+                    }}
                     data-testid={`card-scenario-${scenario}`}
                   >
                     <CardContent className="p-4">
