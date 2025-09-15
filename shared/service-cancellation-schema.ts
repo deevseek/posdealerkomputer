@@ -7,11 +7,14 @@ export const cancellationTypeEnum = z.enum(['before_completed', 'after_completed
 export const serviceCancellationSchema = z.object({
   cancellationFee: z.string()
     .min(1, "Biaya pembatalan diperlukan")
-    .regex(/^\d+(\.\d{1,2})?$/, "Format biaya pembatalan tidak valid")
+    .regex(/^\d+$/, "Format biaya pembatalan tidak valid") // Allow only digits (no decimal required)
     .transform(val => {
       const num = parseFloat(val);
       if (isNaN(num) || num < 0) {
         throw new Error("Biaya pembatalan harus berupa angka positif");
+      }
+      if (num === 0) {
+        throw new Error("Biaya pembatalan harus lebih dari 0");
       }
       return val;
     }),

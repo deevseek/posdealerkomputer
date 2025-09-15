@@ -176,6 +176,11 @@ export default function ServiceCancellationModal({
   });
 
   const handleSubmit = (data: ServiceCancellationRequest) => {
+    console.log('Form submit triggered, data:', data);
+    console.log('Selected scenario:', selectedScenario);
+    console.log('Form errors:', form.formState.errors);
+    console.log('Form valid:', form.formState.isValid);
+    
     if (!selectedScenario) {
       toast({
         title: "Error",
@@ -195,6 +200,7 @@ export default function ServiceCancellationModal({
       userId: 'current-user', // This should be replaced with actual user ID from auth context
     };
 
+    console.log('Final submit data:', submitData);
     cancelMutation.mutate(submitData);
   };
 
