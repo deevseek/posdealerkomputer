@@ -1104,7 +1104,7 @@ export class FinanceManager {
   ): Promise<{ success: boolean; error?: string }> {
     const dbClient = tx || db;
     try {
-      // First create financial record for cancellation fee (for finance page)
+      // 1. Create financial record for cancellation fee as income (ONLY income for this transaction)
       if (Number(cancellationFee) > 0) {
         await dbClient.insert(financialRecords).values({
           type: 'income',
@@ -1113,6 +1113,48 @@ export class FinanceManager {
           description: `Service cancellation fee (after completion) - ${reason}`,
           reference: serviceId,
           referenceType: 'service_cancellation_after_completed',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+      }
+
+      // 2. Get original service ticket to find service revenue that needs to be reversed
+      const [serviceTicket] = await dbClient
+        .select()
+        .from(serviceTickets)
+        .where(eq(serviceTickets.id, serviceId));
+      
+      if (serviceTicket) {
+        // Create financial record to REVERSE original service revenue (labor cost)
+        const originalServiceRevenue = serviceTicket.laborCost || '0';
+        if (Number(originalServiceRevenue) > 0) {
+          await dbClient.insert(financialRecords).values({
+            type: 'refund_recovery',
+            category: 'Returns and Allowances',
+            amount: originalServiceRevenue,
+            description: `Service revenue reversal (labor cost) - ${reason}`,
+            reference: serviceId,
+            referenceType: 'service_cancellation_service_reversal',
+            paymentMethod: 'cash',
+            status: 'confirmed',
+            userId: userId
+          });
+        }
+      }
+
+      // 3. Create financial records to REVERSE parts revenue (as refund/expense)
+      for (const part of partsUsed) {
+        const partRevenue = (Number(part.sellingPrice) * part.quantity).toString();
+        
+        // Create financial record to reverse parts revenue
+        await dbClient.insert(financialRecords).values({
+          type: 'refund_recovery',
+          category: 'Returns and Allowances',
+          amount: partRevenue,
+          description: `Parts revenue reversal - ${part.name} (${part.quantity}x) - ${reason}`,
+          reference: serviceId,
+          referenceType: 'service_cancellation_parts_reversal',
           paymentMethod: 'cash',
           status: 'confirmed',
           userId: userId
