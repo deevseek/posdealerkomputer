@@ -390,6 +390,14 @@ export default function ServiceCancellationModal({
                       variant="destructive"
                       disabled={cancelMutation.isPending}
                       data-testid="button-confirm-cancellation"
+                      onClick={(e) => {
+                        console.log('Submit button clicked!');
+                        console.log('Form values:', form.getValues());
+                        console.log('Form errors:', form.formState.errors);
+                        console.log('Form isValid:', form.formState.isValid);
+                        console.log('Selected scenario:', selectedScenario);
+                        console.log('Is pending:', cancelMutation.isPending);
+                      }}
                     >
                       {cancelMutation.isPending ? (
                         <>
