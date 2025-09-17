@@ -1174,12 +1174,12 @@ export class FinanceManager {
         .where(eq(serviceTickets.id, serviceId));
       
       if (serviceTicket) {
-        // Create financial record to REVERSE original service revenue (labor cost)
+        // Create EXPENSE record to PROPERLY REVERSE original service revenue (labor cost)
         const originalServiceRevenue = serviceTicket.laborCost || '0';
         if (Number(originalServiceRevenue) > 0) {
           await dbClient.insert(financialRecords).values({
-            type: 'refund_recovery',
-            category: 'Returns and Allowances',
+            type: 'expense',
+            category: 'Service Cancellation',
             amount: originalServiceRevenue,
             description: `Service revenue reversal (labor cost) - ${reason}`,
             reference: serviceId,
@@ -1191,14 +1191,14 @@ export class FinanceManager {
         }
       }
 
-      // 3. Create financial records to REVERSE parts revenue (as refund/expense)
+      // 3. Create EXPENSE records to PROPERLY REVERSE parts revenue
       for (const part of partsUsed) {
         const partRevenue = (Number(part.sellingPrice) * part.quantity).toString();
         
-        // Create financial record to reverse parts revenue
+        // Create EXPENSE record to properly reverse parts revenue
         await dbClient.insert(financialRecords).values({
-          type: 'refund_recovery',
-          category: 'Returns and Allowances',
+          type: 'expense',
+          category: 'Service Cancellation',
           amount: partRevenue,
           description: `Parts revenue reversal - ${part.name} (${part.quantity}x) - ${reason}`,
           reference: serviceId,
@@ -1306,6 +1306,36 @@ export class FinanceManager {
           description: `Warranty cancellation fee - ${reason}`,
           reference: serviceId,
           referenceType: 'service_cancellation_warranty_refund',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+      }
+
+      // Create EXPENSE records to PROPERLY REVERSE original service revenue
+      if (Number(originalLaborCost) > 0) {
+        await dbClient.insert(financialRecords).values({
+          type: 'expense',
+          category: 'Warranty Refund',
+          amount: originalLaborCost,
+          description: `Warranty labor cost reversal - ${reason}`,
+          reference: serviceId,
+          referenceType: 'warranty_labor_reversal',
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          userId: userId
+        });
+      }
+
+      // Create EXPENSE records to PROPERLY REVERSE original parts revenue  
+      if (Number(originalPartsCost) > 0) {
+        await dbClient.insert(financialRecords).values({
+          type: 'expense',
+          category: 'Warranty Refund',
+          amount: originalPartsCost,
+          description: `Warranty parts cost reversal - ${reason}`,
+          reference: serviceId,
+          referenceType: 'warranty_parts_reversal',
           paymentMethod: 'cash',
           status: 'confirmed',
           userId: userId
