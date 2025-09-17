@@ -593,6 +593,16 @@ export class FinanceManager {
         sql`${financialRecords.description} NOT LIKE '%Refund%'`,
         whereClause
       ));
+
+    // Get service cancellation expenses to subtract from revenue for accurate NET revenue calculation
+    const [cancellationExpenseResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.type, 'expense'),
+        sql`${financialRecords.category} IN ('Service Cancellation', 'Warranty Refund')`,
+        whereClause
+      ));
     
     // Total expense - calculate properly excluding asset purchases
     const allExpenses = await db
@@ -603,9 +613,12 @@ export class FinanceManager {
       .from(financialRecords)
       .where(and(eq(financialRecords.type, 'expense'), whereClause));
     
-    // Exclude inventory purchases from expense calculation for profit
+    // Exclude inventory purchases AND cancellation expenses from expense calculation 
+    // (cancellation expenses are already netted from revenue above)
     const actualExpenses = allExpenses.filter(expense => 
       expense.category !== 'Inventory Purchase' &&
+      expense.category !== 'Service Cancellation' &&
+      expense.category !== 'Warranty Refund' &&
       !expense.category?.toLowerCase().includes('purchase') &&
       !expense.category?.toLowerCase().includes('asset')
     );
@@ -688,7 +701,9 @@ export class FinanceManager {
         whereClause
       ));
     
-    const totalIncome = Number(incomeResult.total || 0);
+    const grossIncome = Number(incomeResult.total || 0);
+    const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
+    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
     const totalExpense = totalExpenseAmount;
     const totalRefunds = Number(refundResult.total || 0);
 
