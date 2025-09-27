@@ -39,7 +39,7 @@ import {
   warrantyClaims,
   insertWarrantyClaimSchema
 } from "@shared/schema";
-import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
+import { plans, clients, subscriptions, payments, PLAN_CODE_VALUES, SubscriptionPlan } from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -52,6 +52,60 @@ import {
   createJakartaTimestamp,
   createDatabaseTimestamp
 } from "@shared/utils/timezone";
+
+const PLAN_CODE_SET = new Set<SubscriptionPlan>(PLAN_CODE_VALUES);
+
+const isPlanCode = (value: unknown): value is SubscriptionPlan =>
+  typeof value === 'string' && PLAN_CODE_SET.has(value as SubscriptionPlan);
+
+const derivePlanCode = (planName: string): SubscriptionPlan => {
+  const normalized = planName.trim().toLowerCase();
+
+  if (normalized.includes('premium') || normalized.includes('enterprise') || normalized.includes('ultimate')) {
+    return 'premium';
+  }
+
+  if (normalized.includes('pro') || normalized.includes('professional') || normalized.includes('growth')) {
+    return 'pro';
+  }
+
+  return 'basic';
+};
+
+const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+const extractPlanCodeFromLimits = (limits: string | null | undefined): SubscriptionPlan | undefined => {
+  const parsed = safeParseJson<Record<string, unknown>>(limits);
+
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const candidate = (parsed as Record<string, unknown>).planCode;
+
+    if (isPlanCode(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+};
+
+const sanitizeOptionalText = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : undefined;
+};
 
 // HTML template generator for PDF reports
 function generateReportHTML(reportData: any, startDate: string, endDate: string): string {
@@ -3680,14 +3734,34 @@ Terima kasih!
   // Create new client
   app.post('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
     try {
-      const { name, subdomain, email, planId, trialDays = 7 } = req.body;
+      const {
+        name: rawName,
+        subdomain: rawSubdomain,
+        email: rawEmail,
+        planId,
+        trialDays = 7,
+        phone: rawPhone,
+        address: rawAddress,
+      } = req.body ?? {};
 
-      // Validate required fields
-      if (!name || !subdomain || !email || !planId) {
+      const name = typeof rawName === 'string' ? rawName.trim() : '';
+      const subdomain = typeof rawSubdomain === 'string' ? rawSubdomain.trim().toLowerCase() : '';
+      const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
+      const selectedPlanId = typeof planId === 'string' ? planId.trim() : '';
+      const phone = sanitizeOptionalText(rawPhone);
+      const address = sanitizeOptionalText(rawAddress);
+
+      if (!name || !subdomain || !email || !selectedPlanId) {
         return res.status(400).json({ message: 'All fields are required' });
       }
 
-      // Check if subdomain already exists
+      // Validate subdomain pattern (letters, numbers, hyphen)
+      const subdomainPattern = /^[a-z0-9-]+$/;
+      if (!subdomainPattern.test(subdomain)) {
+        return res.status(400).json({ message: 'Subdomain hanya boleh berisi huruf, angka, dan tanda hubung' });
+      }
+
+      // Check for duplicates
       const [existingClient] = await db
         .select()
         .from(clients)
@@ -3698,64 +3772,109 @@ Terima kasih!
         return res.status(400).json({ message: 'Subdomain already exists' });
       }
 
+      const [existingEmail] = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(eq(clients.email, email))
+        .limit(1);
+
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
       // Get plan details
       const [plan] = await db
         .select()
         .from(plans)
-        .where(eq(plans.id, planId))
+        .where(eq(plans.id, selectedPlanId))
         .limit(1);
 
       if (!plan) {
         return res.status(400).json({ message: 'Plan not found' });
       }
 
-      // Calculate trial end date
-      const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+      const parsedTrialDays =
+        typeof trialDays === 'number'
+          ? trialDays
+          : Number.parseInt(typeof trialDays === 'string' ? trialDays : '', 10);
 
-      // Create client
+      const boundedTrialDays = Number.isFinite(parsedTrialDays)
+        ? Math.min(Math.max(Math.trunc(parsedTrialDays), 0), 90)
+        : 7;
+
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + boundedTrialDays);
+
+      const fullDomain = `${subdomain}.profesionalservis.my.id`;
+      const planCode = extractPlanCodeFromLimits(plan.limits) ?? derivePlanCode(plan.name);
+      const planFeatures = safeParseJson<unknown>(plan.features);
+      const planLimits = safeParseJson<unknown>(plan.limits);
+
+      const settingsPayload: Record<string, unknown> = {
+        planId: plan.id,
+        planName: plan.name,
+        planCode,
+        maxUsers: plan.maxUsers ?? undefined,
+        maxStorage: plan.maxStorageGB ?? undefined,
+        domain: fullDomain,
+      };
+
+      if (planFeatures !== undefined) {
+        settingsPayload.features = planFeatures;
+      } else if (plan.features) {
+        settingsPayload.features = plan.features;
+      }
+
+      if (planLimits !== undefined) {
+        settingsPayload.limits = planLimits;
+      } else if (plan.limits) {
+        settingsPayload.limits = plan.limits;
+      }
+
       const [newClient] = await db
         .insert(clients)
         .values({
           name,
           subdomain,
           email,
+          phone: phone ?? null,
+          address: address ?? null,
+          customDomain: fullDomain,
           status: 'trial',
           trialEndsAt,
-          settings: JSON.stringify({
-            planId: plan.id,
-            planName: plan.name,
-            maxUsers: plan.maxUsers || 10,
-            maxStorage: plan.maxStorageGB || 1
-          })
+          settings: JSON.stringify(settingsPayload),
         })
         .returning();
 
-      // Create trial subscription
+      const subscriptionStart = new Date();
+      const subscriptionEnd = new Date(subscriptionStart);
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
+
       await db
         .insert(subscriptions)
         .values({
           clientId: newClient.id,
           planId: plan.id,
           planName: plan.name,
-          plan: plan.name.toLowerCase() as any,
-          amount: '0',
-          paymentStatus: 'paid',
-          startDate: new Date(),
-          endDate: trialEndsAt
+          plan: planCode,
+          amount: typeof plan.price === 'number' ? plan.price.toString() : '0',
+          currency: plan.currency ?? 'IDR',
+          paymentStatus: 'pending',
+          startDate: subscriptionStart,
+          endDate: subscriptionEnd,
+          trialEndDate: trialEndsAt,
         });
 
-      // Broadcast real-time update
       realtimeService.broadcast({
         resource: 'saas-clients',
         action: 'create',
-        data: newClient
+        data: newClient,
       });
 
       res.json({
         message: 'Client created successfully',
         client: newClient,
-        trialUrl: `https://${subdomain}.profesionalservis.my.id`
+        trialUrl: `https://${fullDomain}`,
       });
     } catch (error) {
       console.error('Error creating SaaS client:', error);
