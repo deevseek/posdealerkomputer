@@ -9,6 +9,80 @@ export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'f
 export const PLAN_CODE_VALUES = ['basic', 'pro', 'premium'] as const;
 export type SubscriptionPlan = (typeof PLAN_CODE_VALUES)[number];
 
+const PLAN_CODE_ALIAS_MAP: Record<string, SubscriptionPlan> = {
+  basic: 'basic',
+  starter: 'basic',
+  standard: 'basic',
+  entry: 'basic',
+  lite: 'basic',
+  core: 'basic',
+  pro: 'pro',
+  professional: 'pro',
+  bisnis: 'pro',
+  business: 'pro',
+  growth: 'pro',
+  advanced: 'pro',
+  premium: 'premium',
+  enterprise: 'premium',
+  ultimate: 'premium',
+  elite: 'premium',
+  unlimited: 'premium',
+};
+
+export const normalizePlanCode = (value: unknown): SubscriptionPlan | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return PLAN_CODE_ALIAS_MAP[normalized];
+};
+
+export const derivePlanCodeFromName = (
+  planName: string,
+  fallback: SubscriptionPlan = 'basic',
+): SubscriptionPlan => {
+  const normalized = planName.trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const directMatch = normalizePlanCode(normalized);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  for (const [keyword, code] of Object.entries(PLAN_CODE_ALIAS_MAP)) {
+    if (normalized.includes(keyword)) {
+      return code;
+    }
+  }
+
+  return fallback;
+};
+
+export const ensurePlanCode = (
+  candidate: unknown,
+  options: { fallbackName?: string; defaultCode?: SubscriptionPlan } = {},
+): SubscriptionPlan => {
+  const direct = normalizePlanCode(candidate);
+  if (direct) {
+    return direct;
+  }
+
+  const { fallbackName, defaultCode = 'basic' } = options;
+
+  if (typeof fallbackName === 'string') {
+    return derivePlanCodeFromName(fallbackName, defaultCode);
+  }
+
+  return defaultCode;
+};
+
 // Clients table - Each tenant/customer
 export const clients = pgTable('clients', {
   id: uuid('id').primaryKey().defaultRandom(),

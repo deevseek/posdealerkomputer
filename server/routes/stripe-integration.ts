@@ -1,12 +1,24 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { clients, subscriptions, plans, payments, ensurePlanCode } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
 
 const router = Router();
+
+const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+};
 
 // Super admin middleware
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -147,6 +159,9 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
+        const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
+        const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+
         // Create new active subscription
         const [newSubscription] = await db
           .insert(subscriptions)
@@ -154,7 +169,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
             clientId: client.id,
             planId: plan.id,
             planName: plan.name,
-            plan: plan.name.toLowerCase() as 'basic' | 'pro' | 'premium',
+            plan: planCode,
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),

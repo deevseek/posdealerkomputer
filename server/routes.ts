@@ -39,7 +39,15 @@ import {
   warrantyClaims,
   insertWarrantyClaimSchema
 } from "@shared/schema";
-import { plans, clients, subscriptions, payments, PLAN_CODE_VALUES, SubscriptionPlan } from "@shared/saas-schema";
+import {
+  plans,
+  clients,
+  subscriptions,
+  payments,
+  SubscriptionPlan,
+  normalizePlanCode,
+  ensurePlanCode,
+} from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -53,25 +61,6 @@ import {
   createDatabaseTimestamp
 } from "@shared/utils/timezone";
 
-const PLAN_CODE_SET = new Set<SubscriptionPlan>(PLAN_CODE_VALUES);
-
-const isPlanCode = (value: unknown): value is SubscriptionPlan =>
-  typeof value === 'string' && PLAN_CODE_SET.has(value as SubscriptionPlan);
-
-const derivePlanCode = (planName: string): SubscriptionPlan => {
-  const normalized = planName.trim().toLowerCase();
-
-  if (normalized.includes('premium') || normalized.includes('enterprise') || normalized.includes('ultimate')) {
-    return 'premium';
-  }
-
-  if (normalized.includes('pro') || normalized.includes('professional') || normalized.includes('growth')) {
-    return 'pro';
-  }
-
-  return 'basic';
-};
-
 const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
   if (!value) {
     return undefined;
@@ -84,18 +73,43 @@ const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
   }
 };
 
-const extractPlanCodeFromLimits = (limits: string | null | undefined): SubscriptionPlan | undefined => {
-  const parsed = safeParseJson<Record<string, unknown>>(limits);
-
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    const candidate = (parsed as Record<string, unknown>).planCode;
-
-    if (isPlanCode(candidate)) {
-      return candidate;
-    }
+const normalizePlanLimits = (
+  input: unknown,
+): Record<string, unknown> | undefined => {
+  if (!input) {
+    return undefined;
   }
 
-  return undefined;
+  let parsed: Record<string, unknown> | undefined;
+
+  if (typeof input === 'string') {
+    const decoded = safeParseJson<Record<string, unknown>>(input);
+    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
+      parsed = { ...decoded };
+    }
+  } else if (typeof input === 'object' && !Array.isArray(input)) {
+    parsed = { ...(input as Record<string, unknown>) };
+  }
+
+  if (!parsed) {
+    return undefined;
+  }
+
+  const normalizedPlanCode = normalizePlanCode(parsed.planCode);
+  if (normalizedPlanCode) {
+    parsed.planCode = normalizedPlanCode;
+  } else {
+    delete parsed.planCode;
+  }
+
+  return parsed;
+};
+
+const extractPlanCodeFromLimits = (limits: string | null | undefined): SubscriptionPlan | undefined => {
+  const normalized = normalizePlanLimits(limits);
+  const planCode = normalized?.planCode;
+
+  return normalizePlanCode(planCode);
 };
 
 const sanitizeOptionalText = (value: unknown): string | undefined => {
@@ -3806,9 +3820,11 @@ Terima kasih!
       trialEndsAt.setDate(trialEndsAt.getDate() + boundedTrialDays);
 
       const fullDomain = `${subdomain}.profesionalservis.my.id`;
-      const planCode = extractPlanCodeFromLimits(plan.limits) ?? derivePlanCode(plan.name);
+      const normalizedPlanLimits = normalizePlanLimits(plan.limits);
+      const planCode = ensurePlanCode(normalizedPlanLimits?.planCode, {
+        fallbackName: plan.name,
+      });
       const planFeatures = safeParseJson<unknown>(plan.features);
-      const planLimits = safeParseJson<unknown>(plan.limits);
 
       const settingsPayload: Record<string, unknown> = {
         planId: plan.id,
@@ -3825,8 +3841,8 @@ Terima kasih!
         settingsPayload.features = plan.features;
       }
 
-      if (planLimits !== undefined) {
-        settingsPayload.limits = planLimits;
+      if (normalizedPlanLimits !== undefined) {
+        settingsPayload.limits = normalizedPlanLimits;
       } else if (plan.limits) {
         settingsPayload.limits = plan.limits;
       }

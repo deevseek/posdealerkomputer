@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { clients, subscriptions, plans, payments, ensurePlanCode } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -32,6 +32,18 @@ router.use(requireSuperAdmin);
 // ===========================
 
 // Route moved to admin.ts to fix routing conflicts
+
+const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+};
 
 // Create new client with trial period
 const MAIN_DOMAIN = 'profesionalservis.my.id';
@@ -76,6 +88,9 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
+    const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
+    const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+
     // Map plan name for display
     let displayName = plan.name;
     if (plan.name === 'basic') displayName = 'Basic';
@@ -97,6 +112,7 @@ router.post('/clients', async (req, res) => {
         settings: JSON.stringify({
           planId: plan.id,
           planName: displayName,
+          planCode,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
           features: JSON.parse(plan.features || '[]')
@@ -111,7 +127,7 @@ router.post('/clients', async (req, res) => {
         clientId: newClient.id,
         planId: plan.id,
         planName: displayName,
-        plan: plan.name === 'basic' ? 'basic' : plan.name === 'pro' ? 'pro' : 'premium',
+        plan: planCode,
         amount: '0', // Trial is free
         paymentStatus: 'paid',
         startDate: new Date(),
@@ -439,6 +455,9 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         eq(subscriptions.paymentStatus, 'paid')
       ));
 
+    const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
+    const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+
     // Create new subscription
     const [newSubscription] = await db
       .insert(subscriptions)
@@ -446,7 +465,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         clientId: id,
         planId: plan.id,
         planName: plan.name,
-        plan: plan.name.toLowerCase() as 'basic' | 'pro' | 'premium',
+        plan: planCode,
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
@@ -458,12 +477,12 @@ router.post('/clients/:id/upgrade', async (req, res) => {
     // Update client status to active
     await db
       .update(clients)
-      .set({ 
+      .set({
         status: 'active',
         settings: sql`jsonb_set(
-          settings::jsonb, 
-          '{planName}', 
-          '"${plan.name}"'
+          jsonb_set(settings::jsonb, '{planName}', '"${plan.name}"'),
+          '{planCode}',
+          '"${planCode}"'
         )`,
         updatedAt: new Date()
       })
