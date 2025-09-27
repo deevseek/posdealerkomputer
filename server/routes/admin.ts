@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans } from '../../shared/saas-schema';
+import { clients, subscriptions, plans, PLAN_CODE_VALUES as SHARED_PLAN_CODES, SubscriptionPlan } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -41,8 +41,8 @@ const router = Router();
 // All admin routes require super admin access
 router.use(requireSuperAdmin);
 
-const PLAN_CODE_VALUES = ['basic', 'pro', 'premium'] as const;
-type PlanCode = (typeof PLAN_CODE_VALUES)[number];
+const PLAN_CODE_VALUES = SHARED_PLAN_CODES;
+type PlanCode = SubscriptionPlan;
 
 const isPlanCode = (value: unknown): value is PlanCode =>
   typeof value === 'string' && PLAN_CODE_VALUES.includes(value as PlanCode);

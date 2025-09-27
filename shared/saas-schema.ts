@@ -4,8 +4,10 @@ import { z } from 'zod';
 
 // Enums for SaaS system
 export const clientStatusEnum = pgEnum('client_status', ['active', 'suspended', 'expired', 'trial']);
-export const subscriptionPlanEnum = pgEnum('subscription_plan', ['basic', 'pro', 'premium']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'failed', 'cancelled']);
+
+export const PLAN_CODE_VALUES = ['basic', 'pro', 'premium'] as const;
+export type SubscriptionPlan = (typeof PLAN_CODE_VALUES)[number];
 
 // Clients table - Each tenant/customer
 export const clients = pgTable('clients', {
@@ -30,7 +32,7 @@ export const subscriptions = pgTable('subscriptions', {
   clientId: uuid('client_id').references(() => clients.id).notNull(),
   planId: uuid('plan_id').references(() => plans.id),
   planName: text('plan_name').notNull(),
-  plan: subscriptionPlanEnum('plan').notNull(),
+  plan: text('plan').notNull().$type<SubscriptionPlan>(),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date').notNull(),
   paymentStatus: paymentStatusEnum('payment_status').notNull().default('pending'),
@@ -84,7 +86,7 @@ export const plans = pgTable('plans', {
 // Plan features table - Define what each plan includes (legacy, keeping for compatibility)
 export const planFeatures = pgTable('plan_features', {
   id: uuid('id').primaryKey().defaultRandom(),
-  plan: subscriptionPlanEnum('plan').notNull(),
+  plan: text('plan').notNull().$type<SubscriptionPlan>(),
   featureName: text('feature_name').notNull(),
   featureValue: text('feature_value'), // Can be boolean, number, or text
   maxUsers: integer('max_users').default(5),
