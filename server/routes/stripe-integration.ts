@@ -1,24 +1,19 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans, payments, ensurePlanCode } from '../../shared/saas-schema';
+import {
+  clients,
+  subscriptions,
+  plans,
+  payments,
+  resolvePlanConfiguration,
+  safeParseJson,
+} from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
 
 const router = Router();
-
-const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return undefined;
-  }
-};
 
 // Super admin middleware
 const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
@@ -159,8 +154,21 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
-        const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
-        const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+        const {
+          planCode,
+          normalizedLimits,
+          normalizedLimitsJson,
+          shouldPersistNormalizedLimits,
+        } = resolvePlanConfiguration(plan);
+
+        if (shouldPersistNormalizedLimits) {
+          await db
+            .update(plans)
+            .set({ limits: normalizedLimitsJson })
+            .where(eq(plans.id, plan.id));
+        }
+
+        const parsedPlanFeatures = safeParseJson<unknown>(plan.features);
 
         // Create new active subscription
         const [newSubscription] = await db
@@ -184,11 +192,27 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           .set({ subscriptionId: newSubscription.id })
           .where(eq(payments.id, paymentId));
 
+        const existingSettings = safeParseJson<Record<string, unknown>>(client.settings);
+        const updatedSettings: Record<string, unknown> = {
+          ...(existingSettings ?? {}),
+          planId: plan.id,
+          planName: plan.name,
+          planCode,
+          limits: normalizedLimits,
+        };
+
+        if (parsedPlanFeatures !== undefined) {
+          updatedSettings.features = parsedPlanFeatures;
+        } else if (plan.features) {
+          updatedSettings.features = plan.features;
+        }
+
         // Update client status to active
         await db
           .update(clients)
-          .set({ 
+          .set({
             status: 'active',
+            settings: JSON.stringify(updatedSettings),
             updatedAt: new Date()
           })
           .where(eq(clients.id, client.id));

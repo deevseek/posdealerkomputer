@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans, payments, ensurePlanCode } from '../../shared/saas-schema';
+import {
+  clients,
+  subscriptions,
+  plans,
+  payments,
+  resolvePlanConfiguration,
+  safeParseJson,
+} from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -32,18 +39,6 @@ router.use(requireSuperAdmin);
 // ===========================
 
 // Route moved to admin.ts to fix routing conflicts
-
-const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return undefined;
-  }
-};
 
 // Create new client with trial period
 const MAIN_DOMAIN = 'profesionalservis.my.id';
@@ -88,8 +83,23 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
-    const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
-    const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+    const {
+      planCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+      shouldPersistNormalizedLimits,
+    } = resolvePlanConfiguration(plan);
+
+    if (shouldPersistNormalizedLimits) {
+      await db
+        .update(plans)
+        .set({ limits: normalizedLimitsJson })
+        .where(eq(plans.id, plan.id));
+    }
+
+    const normalizedLimitsJsonForSettings = JSON.stringify(normalizedLimits);
+
+    const parsedFeatures = safeParseJson<unknown>(plan.features);
 
     // Map plan name for display
     let displayName = plan.name;
@@ -115,7 +125,8 @@ router.post('/clients', async (req, res) => {
           planCode,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
-          features: JSON.parse(plan.features || '[]')
+          limits: normalizedLimits,
+          features: parsedFeatures ?? (plan.features ?? []),
         })
       })
       .returning();
@@ -455,8 +466,19 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         eq(subscriptions.paymentStatus, 'paid')
       ));
 
-    const normalizedLimits = safeParseJson<Record<string, unknown>>(plan.limits);
-    const planCode = ensurePlanCode(normalizedLimits?.planCode, { fallbackName: plan.name });
+    const {
+      planCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+      shouldPersistNormalizedLimits,
+    } = resolvePlanConfiguration(plan);
+
+    if (shouldPersistNormalizedLimits) {
+      await db
+        .update(plans)
+        .set({ limits: normalizedLimitsJson })
+        .where(eq(plans.id, plan.id));
+    }
 
     // Create new subscription
     const [newSubscription] = await db
@@ -474,15 +496,21 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       })
       .returning();
 
+    const normalizedLimitsJsonForSettings = JSON.stringify(normalizedLimits);
+
     // Update client status to active
     await db
       .update(clients)
       .set({
         status: 'active',
         settings: sql`jsonb_set(
-          jsonb_set(settings::jsonb, '{planName}', '"${plan.name}"'),
-          '{planCode}',
-          '"${planCode}"'
+          jsonb_set(
+            jsonb_set(settings::jsonb, '{planName}', to_jsonb(${plan.name})),
+            '{planCode}',
+            to_jsonb(${planCode})
+          ),
+          '{limits}',
+          ${normalizedLimitsJsonForSettings}::jsonb
         )`,
         updatedAt: new Date()
       })

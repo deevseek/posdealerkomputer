@@ -83,6 +83,71 @@ export const ensurePlanCode = (
   return defaultCode;
 };
 
+const PLAN_LIMIT_CODE_KEYS = ['planCode', 'plan_code', 'plan', 'code', 'tier', 'level'] as const;
+const PLAN_LIMIT_CODE_KEY_SET = new Set<string>(PLAN_LIMIT_CODE_KEYS);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+const coerceLimitsRecord = (input: unknown): Record<string, unknown> | undefined => {
+  if (!input) {
+    return undefined;
+  }
+
+  if (typeof input === 'string') {
+    const parsed = safeParseJson<Record<string, unknown>>(input);
+    return parsed ? { ...parsed } : undefined;
+  }
+
+  if (isPlainObject(input)) {
+    return { ...(input as Record<string, unknown>) };
+  }
+
+  return undefined;
+};
+
+const sanitizeLimitsRecord = (
+  record: Record<string, unknown> | undefined,
+  planCode: SubscriptionPlan,
+): Record<string, unknown> => {
+  const sanitized: Record<string, unknown> = {};
+
+  if (record) {
+    for (const [key, value] of Object.entries(record)) {
+      if (PLAN_LIMIT_CODE_KEY_SET.has(key)) {
+        continue;
+      }
+
+      if (value !== undefined) {
+        sanitized[key] = value;
+      }
+    }
+  }
+
+  sanitized.planCode = planCode;
+  return sanitized;
+};
+
+const stableStringify = (value: Record<string, unknown>): string =>
+  JSON.stringify(value, Object.keys(value).sort());
+
 // Clients table - Each tenant/customer
 export const clients = pgTable('clients', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -156,6 +221,120 @@ export const plans = pgTable('plans', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+type PlanRow = typeof plans.$inferSelect;
+
+const collectPlanCodeCandidates = (
+  record: Record<string, unknown> | undefined,
+  plan: Partial<Record<string, unknown>>,
+): string[] => {
+  const candidates: string[] = [];
+
+  if (record) {
+    for (const key of PLAN_LIMIT_CODE_KEYS) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        candidates.push(value);
+      }
+    }
+  }
+
+  for (const key of PLAN_LIMIT_CODE_KEYS) {
+    const value = plan[key];
+    if (typeof value === 'string' && value.trim()) {
+      candidates.push(value);
+    }
+  }
+
+  return candidates;
+};
+
+const findFirstPlanCodeAlias = (
+  record: Record<string, unknown> | undefined,
+  plan: Partial<Record<string, unknown>>,
+): string | undefined => {
+  if (record) {
+    for (const key of PLAN_LIMIT_CODE_KEYS) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value;
+      }
+    }
+  }
+
+  for (const key of PLAN_LIMIT_CODE_KEYS) {
+    const value = plan[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+type PlanConfigurationInput = {
+  name: string;
+  limits?: PlanRow['limits'] | Record<string, unknown> | null;
+} & Partial<Record<string, unknown>>;
+
+export const resolvePlanConfiguration = (
+  plan: PlanConfigurationInput,
+  options: { fallbackCode?: SubscriptionPlan } = {},
+) => {
+  const rawLimits = coerceLimitsRecord(plan.limits);
+  const planRecord = plan as Partial<Record<string, unknown>>;
+  const planCodeCandidates = collectPlanCodeCandidates(rawLimits, planRecord);
+
+  const planCode =
+    planCodeCandidates.reduce<SubscriptionPlan | undefined>((resolved, candidate) => {
+      if (resolved) {
+        return resolved;
+      }
+
+      return normalizePlanCode(candidate);
+    }, undefined) ?? derivePlanCodeFromName(plan.name, options.fallbackCode ?? 'basic');
+
+  const normalizedLimits = sanitizeLimitsRecord(rawLimits, planCode);
+  const normalizedLimitsJson = stableStringify(normalizedLimits);
+
+  let shouldPersistNormalizedLimits = false;
+
+  if (plan.limits == null) {
+    shouldPersistNormalizedLimits = Object.keys(normalizedLimits).length > 0;
+  } else if (typeof plan.limits === 'string') {
+    const parsed = safeParseJson<Record<string, unknown>>(plan.limits);
+    if (!parsed) {
+      shouldPersistNormalizedLimits = true;
+    } else {
+      const existingNormalized = sanitizeLimitsRecord(parsed, planCode);
+      const existingJson = stableStringify(existingNormalized);
+      shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
+    }
+  } else if (isPlainObject(plan.limits)) {
+    const existingNormalized = sanitizeLimitsRecord(plan.limits as Record<string, unknown>, planCode);
+    const existingJson = stableStringify(existingNormalized);
+    shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
+  } else {
+    shouldPersistNormalizedLimits = true;
+  }
+
+  const aliasSource = findFirstPlanCodeAlias(rawLimits, planRecord);
+  if (typeof aliasSource === 'string') {
+    const normalizedAlias = normalizePlanCode(aliasSource);
+    const aliasLower = aliasSource.trim().toLowerCase();
+
+    if (!normalizedAlias || normalizedAlias !== aliasLower) {
+      shouldPersistNormalizedLimits = true;
+    }
+  }
+
+  return {
+    planCode,
+    normalizedLimits,
+    normalizedLimitsJson,
+    shouldPersistNormalizedLimits,
+  };
+};
 
 // Plan features table - Define what each plan includes (legacy, keeping for compatibility)
 export const planFeatures = pgTable('plan_features', {

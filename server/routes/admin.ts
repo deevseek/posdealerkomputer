@@ -6,9 +6,8 @@ import {
   subscriptions,
   plans,
   PLAN_CODE_VALUES as SHARED_PLAN_CODES,
-  SubscriptionPlan,
-  normalizePlanCode,
-  ensurePlanCode,
+  resolvePlanConfiguration,
+  safeParseJson,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
@@ -50,48 +49,22 @@ const router = Router();
 router.use(requireSuperAdmin);
 
 const PLAN_CODE_VALUES = SHARED_PLAN_CODES;
-type PlanCode = SubscriptionPlan;
 
-const safeParseJson = <T = Record<string, unknown>>(value: string | null | undefined): T | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return undefined;
-  }
-};
-
-const normalizeLimitsInput = (input: unknown): Record<string, unknown> => {
+const coerceLimitsPayload = (input: unknown): Record<string, unknown> | undefined => {
   if (!input) {
-    return {};
+    return undefined;
   }
-
-  let parsed: Record<string, unknown> | undefined;
 
   if (typeof input === 'string') {
-    const decoded = safeParseJson<Record<string, unknown>>(input);
-    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
-      parsed = { ...decoded };
-    }
-  } else if (typeof input === 'object' && !Array.isArray(input)) {
-    parsed = { ...(input as Record<string, unknown>) };
+    const parsed = safeParseJson<Record<string, unknown>>(input);
+    return parsed ? { ...parsed } : undefined;
   }
 
-  if (!parsed) {
-    return {};
+  if (typeof input === 'object' && !Array.isArray(input)) {
+    return { ...(input as Record<string, unknown>) };
   }
 
-  const normalizedPlanCode = normalizePlanCode(parsed.planCode);
-  if (normalizedPlanCode) {
-    parsed.planCode = normalizedPlanCode;
-  } else {
-    delete parsed.planCode;
-  }
-
-  return parsed;
+  return undefined;
 };
 
 // Dashboard stats
@@ -252,10 +225,19 @@ router.post('/clients', async (req, res) => {
       return res.status(404).json({ message: 'Plan not found' });
     }
 
-    const parsedPlanLimits = normalizeLimitsInput(plan.limits);
-    const planCode: PlanCode = ensurePlanCode(parsedPlanLimits.planCode, {
-      fallbackName: plan.name,
-    });
+    const {
+      planCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+      shouldPersistNormalizedLimits,
+    } = resolvePlanConfiguration(plan);
+
+    if (shouldPersistNormalizedLimits) {
+      await db
+        .update(plans)
+        .set({ limits: normalizedLimitsJson })
+        .where(eq(plans.id, plan.id));
+    }
 
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
@@ -270,17 +252,12 @@ router.post('/clients', async (req, res) => {
     };
 
     if (plan.features) {
-      try {
-        settingsPayload.features = JSON.parse(plan.features);
-      } catch {
-        settingsPayload.features = plan.features;
-      }
+      const parsedFeatures = safeParseJson<unknown>(plan.features);
+      settingsPayload.features = parsedFeatures ?? plan.features;
     }
 
-    if (Object.keys(parsedPlanLimits).length > 0) {
-      settingsPayload.limits = parsedPlanLimits;
-    } else if (plan.limits) {
-      settingsPayload.limits = plan.limits;
+    if (Object.keys(normalizedLimits).length > 0) {
+      settingsPayload.limits = normalizedLimits;
     }
 
     const [newClient] = await db
@@ -405,14 +382,18 @@ router.post('/plans', async (req, res) => {
       ...coreData
     } = validatedData;
 
-    const parsedLimits = normalizeLimitsInput(limits);
-    const effectivePlanCode = ensurePlanCode(requestedPlanCode ?? parsedLimits.planCode, {
-      fallbackName: coreData.name,
-    });
-    const { planCode: _ignoredPlanCode, ...otherLimits } = parsedLimits;
-    const normalizedLimits = JSON.stringify({
-      ...otherLimits,
+    const planConfigurationInput = {
+      name: coreData.name,
+      limits: limits ?? null,
+      ...(requestedPlanCode ? { planCode: requestedPlanCode } : {}),
+    };
+
+    const {
       planCode: effectivePlanCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+    } = resolvePlanConfiguration(planConfigurationInput, {
+      fallbackCode: requestedPlanCode,
     });
 
     const normalizedFeatures =
@@ -439,13 +420,18 @@ router.post('/plans', async (req, res) => {
         prioritySupport: prioritySupport ?? false,
         isActive: isActive ?? true,
         features: normalizedFeatures,
-        limits: normalizedLimits,
+        limits: normalizedLimitsJson,
       })
       .returning();
 
     res.status(201).json({
       message: 'Plan created successfully',
-      plan: newPlan,
+      plan: {
+        ...newPlan,
+        planCode: effectivePlanCode,
+        limits: normalizedLimitsJson,
+        normalizedLimits,
+      },
     });
   } catch (error) {
     console.error('Error creating plan:', error);
@@ -511,26 +497,37 @@ router.put('/plans/:id', async (req, res) => {
       return res.status(404).json({ message: 'Plan not found' });
     }
 
-    // Normalize limits and plan code
-    const existingLimits = normalizeLimitsInput(existingPlan.limits);
-    const { planCode: existingPlanCode, ...existingLimitValues } = existingLimits;
-    const incomingLimits = normalizeLimitsInput(limits);
-    const { planCode: incomingPlanCode, ...incomingLimitValues } = incomingLimits;
+    const existingConfiguration = resolvePlanConfiguration(existingPlan);
+    const incomingLimitsRecord = coerceLimitsPayload(limits);
 
-    if (limits !== undefined || requestedPlanCode !== undefined || !existingPlan.limits) {
-      const mergedLimits = {
-        ...existingLimitValues,
-        ...incomingLimitValues,
+    let mergedLimitsSource: Record<string, unknown> | undefined;
+
+    if (incomingLimitsRecord) {
+      mergedLimitsSource = {
+        ...existingConfiguration.normalizedLimits,
+        ...incomingLimitsRecord,
       };
+    } else if (limits !== undefined) {
+      mergedLimitsSource = { ...existingConfiguration.normalizedLimits };
+    }
 
-      const effectivePlanCode = ensurePlanCode(
-        requestedPlanCode ?? incomingPlanCode ?? existingPlanCode,
-        { fallbackName: existingPlan.name },
-      );
+    const planConfigurationInput = {
+      name: existingPlan.name,
+      limits: mergedLimitsSource ?? existingPlan.limits,
+      ...(requestedPlanCode ? { planCode: requestedPlanCode } : {}),
+    };
 
-      mergedLimits.planCode = effectivePlanCode;
+    const canonicalConfiguration = resolvePlanConfiguration(planConfigurationInput, {
+      fallbackCode: requestedPlanCode ?? existingConfiguration.planCode,
+    });
 
-      updatePayload.limits = JSON.stringify(mergedLimits);
+    if (
+      limits !== undefined ||
+      requestedPlanCode !== undefined ||
+      existingConfiguration.shouldPersistNormalizedLimits ||
+      canonicalConfiguration.shouldPersistNormalizedLimits
+    ) {
+      updatePayload.limits = canonicalConfiguration.normalizedLimitsJson;
     }
 
     // Update plan
@@ -542,7 +539,11 @@ router.put('/plans/:id', async (req, res) => {
 
     res.json({
       message: 'Plan updated successfully',
-      plan: updatedPlan
+      plan: {
+        ...updatedPlan,
+        planCode: canonicalConfiguration.planCode,
+        normalizedLimits: canonicalConfiguration.normalizedLimits,
+      }
     });
   } catch (error) {
     console.error('Error updating plan:', error);

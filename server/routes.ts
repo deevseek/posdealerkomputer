@@ -44,9 +44,8 @@ import {
   clients,
   subscriptions,
   payments,
-  SubscriptionPlan,
-  normalizePlanCode,
-  ensurePlanCode,
+  resolvePlanConfiguration,
+  safeParseJson,
 } from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
@@ -60,57 +59,6 @@ import {
   createJakartaTimestamp,
   createDatabaseTimestamp
 } from "@shared/utils/timezone";
-
-const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return undefined;
-  }
-};
-
-const normalizePlanLimits = (
-  input: unknown,
-): Record<string, unknown> | undefined => {
-  if (!input) {
-    return undefined;
-  }
-
-  let parsed: Record<string, unknown> | undefined;
-
-  if (typeof input === 'string') {
-    const decoded = safeParseJson<Record<string, unknown>>(input);
-    if (decoded && typeof decoded === 'object' && !Array.isArray(decoded)) {
-      parsed = { ...decoded };
-    }
-  } else if (typeof input === 'object' && !Array.isArray(input)) {
-    parsed = { ...(input as Record<string, unknown>) };
-  }
-
-  if (!parsed) {
-    return undefined;
-  }
-
-  const normalizedPlanCode = normalizePlanCode(parsed.planCode);
-  if (normalizedPlanCode) {
-    parsed.planCode = normalizedPlanCode;
-  } else {
-    delete parsed.planCode;
-  }
-
-  return parsed;
-};
-
-const extractPlanCodeFromLimits = (limits: string | null | undefined): SubscriptionPlan | undefined => {
-  const normalized = normalizePlanLimits(limits);
-  const planCode = normalized?.planCode;
-
-  return normalizePlanCode(planCode);
-};
 
 const sanitizeOptionalText = (value: unknown): string | undefined => {
   if (typeof value !== 'string') {
@@ -3820,10 +3768,20 @@ Terima kasih!
       trialEndsAt.setDate(trialEndsAt.getDate() + boundedTrialDays);
 
       const fullDomain = `${subdomain}.profesionalservis.my.id`;
-      const normalizedPlanLimits = normalizePlanLimits(plan.limits);
-      const planCode = ensurePlanCode(normalizedPlanLimits?.planCode, {
-        fallbackName: plan.name,
-      });
+      const {
+        planCode,
+        normalizedLimits,
+        normalizedLimitsJson,
+        shouldPersistNormalizedLimits,
+      } = resolvePlanConfiguration(plan);
+
+      if (shouldPersistNormalizedLimits) {
+        await db
+          .update(plans)
+          .set({ limits: normalizedLimitsJson })
+          .where(eq(plans.id, plan.id));
+      }
+
       const planFeatures = safeParseJson<unknown>(plan.features);
 
       const settingsPayload: Record<string, unknown> = {
@@ -3841,10 +3799,8 @@ Terima kasih!
         settingsPayload.features = plan.features;
       }
 
-      if (normalizedPlanLimits !== undefined) {
-        settingsPayload.limits = normalizedPlanLimits;
-      } else if (plan.limits) {
-        settingsPayload.limits = plan.limits;
+      if (Object.keys(normalizedLimits).length > 0) {
+        settingsPayload.limits = normalizedLimits;
       }
 
       const [newClient] = await db
