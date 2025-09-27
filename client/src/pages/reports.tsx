@@ -28,9 +28,84 @@ import {
 } from "@/components/ui/select";
 import { Calendar, DollarSign, TrendingUp, TrendingDown, BarChart3, Package, FileText, Download } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useRef } from "react";
+
+interface StoreConfigSummary {
+  name?: string | null;
+}
+
+interface SalesTransactionSummary {
+  id: string;
+  transactionNumber?: string | null;
+  createdAt: string;
+  total: string | number;
+  customer?: {
+    name?: string | null;
+  } | null;
+}
+
+interface SalesReportSummary {
+  totalSales: string;
+  transactions: SalesTransactionSummary[];
+}
+
+interface ServiceTicketSummary {
+  id: string;
+  ticketNumber?: string | null;
+  customer?: {
+    name?: string | null;
+  } | null;
+  deviceType?: string | null;
+  deviceBrand?: string | null;
+  deviceModel?: string | null;
+  problem?: string | null;
+  status: string;
+  laborCost?: string | number | null;
+  partsCost?: string | number | null;
+}
+
+interface ServiceReportSummary {
+  totalServices: number;
+  totalRevenue: string;
+  totalCost: string;
+  totalProfit: string;
+  revenueBreakdown: {
+    laborRevenue?: string;
+    partsRevenue?: string;
+  };
+  tickets: ServiceTicketSummary[];
+}
+
+interface FinancialRecordSummary {
+  id: string;
+  createdAt: string;
+  type: string;
+  category?: string | null;
+  description?: string | null;
+  amount: string | number;
+}
+
+interface FinancialReportSummary {
+  totalIncome: string;
+  totalExpense: string;
+  profit: string;
+  records: FinancialRecordSummary[];
+}
+
+interface InventoryProductSummary {
+  id: string;
+  name: string;
+  stock: number | null;
+  minStock?: number | null;
+}
+
+interface InventoryReportSummary {
+  lowStockCount: number;
+  lowStockProducts: InventoryProductSummary[];
+  totalProducts: number;
+  totalAssetValue: string;
+  totalStockQuantity: number;
+}
 
 export default function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState("this-month");
@@ -42,12 +117,12 @@ export default function Reports() {
   );
   
   // Get store config for app name - WITH BETTER CACHING
-  const { data: storeConfig } = useQuery({
+  const { data: storeConfig } = useQuery<StoreConfigSummary | null>({
     queryKey: ['store-config-reports'],
     queryFn: async () => {
       const response = await fetch('/api/store-config', { credentials: 'include' });
       if (!response.ok) return { name: 'LaptopPOS' };
-      return response.json();
+      return response.json() as Promise<StoreConfigSummary>;
     },
     staleTime: Infinity,
     refetchInterval: false,
@@ -56,25 +131,29 @@ export default function Reports() {
   });
 
   // API queries untuk data reports
-  const { data: salesReport, isLoading: salesLoading } = useQuery({
+  const { data: salesReport, isLoading: salesLoading } = useQuery<SalesReportSummary | null>({
     queryKey: [`/api/reports/sales/${startDate}/${endDate}`],
     retry: false,
   });
 
-  const { data: serviceReport, isLoading: serviceLoading } = useQuery({
+  const { data: serviceReport, isLoading: serviceLoading } = useQuery<ServiceReportSummary | null>({
     queryKey: [`/api/reports/services/${startDate}/${endDate}`],
     retry: false,
   });
 
-  const { data: financialReport, isLoading: financialLoading } = useQuery({
+  const { data: financialReport, isLoading: financialLoading } = useQuery<FinancialReportSummary | null>({
     queryKey: [`/api/reports/financial/${startDate}/${endDate}`],
     retry: false,
   });
 
-  const { data: inventoryReport, isLoading: inventoryLoading } = useQuery({
+  const { data: inventoryReport, isLoading: inventoryLoading } = useQuery<InventoryReportSummary | null>({
     queryKey: ["/api/reports/inventory"],
     retry: false,
   });
+
+  const salesTransactions = salesReport?.transactions ?? [];
+  const serviceTicketsList = serviceReport?.tickets ?? [];
+  const financialRecords = financialReport?.records ?? [];
 
   const { toast } = useToast();
 
@@ -90,7 +169,7 @@ export default function Reports() {
         // Add header
         doc.setFontSize(20);
         doc.setTextColor(79, 70, 229);
-        doc.text(`${(storeConfig as any)?.name || 'LaptopPOS'} - Laporan Bisnis`, 20, 30);
+        doc.text(`${storeConfig?.name || 'LaptopPOS'} - Laporan Bisnis`, 20, 30);
         
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
@@ -156,7 +235,7 @@ export default function Reports() {
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text(`Generated on ${new Date().toLocaleString('id-ID')}`, 20, 280);
-        doc.text(`© 2025 ${(storeConfig as any)?.name || 'LaptopPOS'} - Sistem Manajemen Bisnis Laptop`, 20, 290);
+        doc.text(`© 2025 ${storeConfig?.name || 'LaptopPOS'} - Sistem Manajemen Bisnis Laptop`, 20, 290);
         
         // Save PDF
         doc.save(`laporan-bisnis-${startDate}-${endDate}.pdf`);
@@ -426,7 +505,7 @@ export default function Reports() {
                 <CardContent>
                   {salesLoading ? (
                     <div className="text-center py-8">Loading...</div>
-                  ) : !salesReport?.transactions || salesReport.transactions.length === 0 ? (
+                  ) : salesTransactions.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       Tidak ada data penjualan untuk periode ini
                     </div>
@@ -442,7 +521,7 @@ export default function Reports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {salesReport.transactions.map((transaction: any) => (
+                        {salesTransactions.map((transaction) => (
                           <TableRow key={transaction.id}>
                             <TableCell>{transaction.transactionNumber}</TableCell>
                             <TableCell>{new Date(transaction.createdAt).toLocaleDateString('id-ID')}</TableCell>
@@ -509,7 +588,7 @@ export default function Reports() {
                 <CardContent>
                   {serviceLoading ? (
                     <div className="text-center py-8">Loading...</div>
-                  ) : !serviceReport?.tickets || serviceReport.tickets.length === 0 ? (
+                  ) : serviceTicketsList.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       Tidak ada data servis untuk periode ini
                     </div>
@@ -526,7 +605,7 @@ export default function Reports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {serviceReport.tickets.map((ticket: any) => (
+                        {serviceTicketsList.map((ticket) => (
                           <TableRow key={ticket.id}>
                             <TableCell>{ticket.ticketNumber}</TableCell>
                             <TableCell>{ticket.customer?.name}</TableCell>
@@ -596,7 +675,7 @@ export default function Reports() {
                 <CardContent>
                   {financialLoading ? (
                     <div className="text-center py-8">Loading...</div>
-                  ) : !financialReport?.records || financialReport.records.length === 0 ? (
+                  ) : financialRecords.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       Tidak ada data keuangan untuk periode ini
                     </div>
@@ -612,7 +691,7 @@ export default function Reports() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {financialReport.records.map((record: any) => (
+                        {financialRecords.map((record) => (
                           <TableRow key={record.id}>
                             <TableCell>{new Date(record.createdAt).toLocaleDateString('id-ID')}</TableCell>
                             <TableCell>

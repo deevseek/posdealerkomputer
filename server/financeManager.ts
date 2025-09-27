@@ -445,9 +445,9 @@ export class FinanceManager {
       // Filter only 'confirmed' financial records for this account
       // ...existing code...
       let periodActivity = 0;
-      activityQuery.forEach((line: { debitAmount: string; creditAmount: string }) => {
-        const debit = Number(line.debitAmount);
-        const credit = Number(line.creditAmount);
+      activityQuery.forEach((line) => {
+        const debit = Number(line.debitAmount ?? 0);
+        const credit = Number(line.creditAmount ?? 0);
         if (account.normalBalance === 'credit') {
           periodActivity += credit - debit;
         } else {
@@ -691,8 +691,25 @@ export class FinanceManager {
       .from(products)
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
-  const totalInventoryValue = inventoryBreakdown.reduce((total: number, item: { totalValue: number }) => total + Number(item.totalValue), 0);
-  const totalInventoryCount = inventoryBreakdown.reduce((total: number, item: { stock: number }) => total + (item.stock || 0), 0);
+    type InventoryBreakdownRow = {
+      name: string | null;
+      stock: number | null;
+      averageCost: string | null;
+      sellingPrice: string | null;
+      totalValue: number | null;
+    };
+
+    const inventoryBreakdownRows = inventoryBreakdown as InventoryBreakdownRow[];
+
+    const totalInventoryValue = inventoryBreakdownRows.reduce(
+      (total, item) => total + Number(item.totalValue ?? 0),
+      0
+    );
+
+    const totalInventoryCount = inventoryBreakdownRows.reduce(
+      (total, item) => total + Number(item.stock ?? 0),
+      0
+    );
 
     // Get total refunds separately for proper accounting
     const [refundResult] = await db
@@ -711,24 +728,28 @@ export class FinanceManager {
 
     // Process category breakdown
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
-    categoryBreakdown.forEach((item: { category: string; type: string; total: string; count: number }) => {
+    categoryBreakdown.forEach((item) => {
+      if (!item.category) {
+        return;
+      }
+
       if (!categories[item.category]) {
         categories[item.category] = { income: 0, expense: 0, count: 0 };
       }
       if (item.type === 'income') {
-        categories[item.category].income = Number(item.total);
+        categories[item.category].income = Number(item.total ?? 0);
       } else {
-        categories[item.category].expense = Number(item.total);
+        categories[item.category].expense = Number(item.total ?? 0);
       }
       categories[item.category].count += item.count;
     });
 
     // Process subcategory breakdown
     const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
-    subcategoryBreakdown.forEach((item: { subcategory: string; type: string; total: string; count: number }) => {
+    subcategoryBreakdown.forEach((item) => {
       if (item.subcategory) {
         subcategories[item.subcategory] = {
-          amount: Number(item.total),
+          amount: Number(item.total ?? 0),
           type: item.type,
           count: item.count
         };
@@ -737,18 +758,18 @@ export class FinanceManager {
 
     // Process payment method breakdown
     const paymentMethods: { [key: string]: number } = {};
-    paymentBreakdown.forEach((item: { paymentMethod: string; total: string }) => {
+    paymentBreakdown.forEach((item) => {
       if (item.paymentMethod) {
-        paymentMethods[item.paymentMethod] = Number(item.total);
+        paymentMethods[item.paymentMethod] = Number(item.total ?? 0);
       }
     });
 
     // Process source breakdown
     const sources: { [key: string]: { amount: number; count: number } } = {};
-    sourceBreakdown.forEach((item: { referenceType: string; total: string; count: number }) => {
+    sourceBreakdown.forEach((item) => {
       if (item.referenceType) {
         sources[item.referenceType] = {
-          amount: Number(item.total),
+          amount: Number(item.total ?? 0),
           count: item.count
         };
       }
@@ -756,14 +777,16 @@ export class FinanceManager {
 
     // Process inventory breakdown
     const inventory: { [key: string]: { value: number; stock: number; avgCost: number } } = {};
-    inventoryBreakdown.forEach((item: { name: string; totalValue: number; stock: number; averageCost: number }) => {
-      if (item.name) {
-        inventory[item.name] = {
-          value: Number(item.totalValue),
-          stock: item.stock || 0,
-          avgCost: Number(item.averageCost || 0)
-        };
+    inventoryBreakdownRows.forEach((item) => {
+      if (!item.name) {
+        return;
       }
+
+      inventory[item.name] = {
+        value: Number(item.totalValue ?? 0),
+        stock: Number(item.stock ?? 0),
+        avgCost: Number(item.averageCost ?? 0)
+      };
     });
 
     return {

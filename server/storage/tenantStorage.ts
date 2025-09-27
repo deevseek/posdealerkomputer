@@ -2,6 +2,15 @@ import { DatabaseStorage } from '../storage';
 import { Request } from 'express';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../../shared/schema';
+import type {
+  InsertUser,
+  InsertProduct,
+  InsertTransaction,
+  InsertTransactionItem,
+  InsertCustomer,
+  InsertServiceTicket,
+  InsertStoreConfig,
+} from '../../shared/schema';
 
 // Tenant-aware storage wrapper that adds client_id filtering to all operations
 export class TenantStorage extends DatabaseStorage {
@@ -43,14 +52,8 @@ export class TenantStorage extends DatabaseStorage {
     return users[0] || null;
   }
 
-  async createUser(data: any) {
-    return await this.db
-      .insert(schema.users)
-      .values({
-        ...data,
-        clientId: this.clientId
-      })
-      .returning();
+  async createUser(data: InsertUser) {
+    return super.createUser(data, this.clientId);
   }
 
   async getUsers() {
@@ -83,14 +86,8 @@ export class TenantStorage extends DatabaseStorage {
     return products[0] || null;
   }
 
-  async createProduct(data: any) {
-    return await this.db
-      .insert(schema.products)
-      .values({
-        ...data,
-        clientId: this.clientId
-      })
-      .returning();
+  async createProduct(data: InsertProduct) {
+    return super.createProduct({ ...data, clientId: this.clientId });
   }
 
   // Override transaction operations to include tenant filtering
@@ -101,14 +98,18 @@ export class TenantStorage extends DatabaseStorage {
       .where(eq(schema.transactions.clientId, this.clientId));
   }
 
-  async createTransaction(data: any) {
-    return await this.db
-      .insert(schema.transactions)
-      .values({
-        ...data,
-        clientId: this.clientId
-      })
-      .returning();
+  async createTransaction(data: InsertTransaction, items: InsertTransactionItem[]) {
+    const transactionWithClient: InsertTransaction = {
+      ...data,
+      clientId: this.clientId,
+    };
+
+    const itemsWithClient = items.map(item => ({
+      ...item,
+      clientId: this.clientId,
+    }));
+
+    return super.createTransaction(transactionWithClient, itemsWithClient);
   }
 
   // Override customer operations to include tenant filtering
@@ -119,14 +120,8 @@ export class TenantStorage extends DatabaseStorage {
       .where(eq(schema.customers.clientId, this.clientId));
   }
 
-  async createCustomer(data: any) {
-    return await this.db
-      .insert(schema.customers)
-      .values({
-        ...data,
-        clientId: this.clientId
-      })
-      .returning();
+  async createCustomer(data: InsertCustomer) {
+    return super.createCustomer({ ...data, clientId: this.clientId });
   }
 
   // Override service operations to include tenant filtering
@@ -137,14 +132,8 @@ export class TenantStorage extends DatabaseStorage {
       .where(eq(schema.serviceTickets.clientId, this.clientId));
   }
 
-  async createServiceTicket(data: any) {
-    return await this.db
-      .insert(schema.serviceTickets)
-      .values({
-        ...data,
-        clientId: this.clientId
-      })
-      .returning();
+  async createServiceTicket(data: InsertServiceTicket) {
+    return super.createServiceTicket({ ...data, clientId: this.clientId });
   }
 
   // Get store config (tenant-specific)
@@ -158,28 +147,8 @@ export class TenantStorage extends DatabaseStorage {
     return configs[0] || null;
   }
 
-  async upsertStoreConfig(data: any) {
-    const existing = await this.getStoreConfig();
-    
-    if (existing) {
-      return await this.db
-        .update(schema.storeConfig)
-        .set({
-          ...data,
-          clientId: this.clientId,
-          updatedAt: new Date()
-        })
-        .where(eq(schema.storeConfig.id, existing.id))
-        .returning();
-    } else {
-      return await this.db
-        .insert(schema.storeConfig)
-        .values({
-          ...data,
-          clientId: this.clientId
-        })
-        .returning();
-    }
+  async upsertStoreConfig(data: InsertStoreConfig) {
+    return super.upsertStoreConfig(data, this.clientId);
   }
 }
 

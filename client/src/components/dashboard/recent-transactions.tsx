@@ -4,8 +4,21 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, ShoppingCart, Wrench, CheckCircle, Clock } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+type TransactionType = 'sale' | 'service' | string;
+
+interface TransactionSummary {
+  id: string;
+  transactionNumber?: string | null;
+  type: TransactionType;
+  total: string | number;
+  createdAt: string;
+  customer?: {
+    name?: string | null;
+  } | null;
+}
+
 export default function RecentTransactions() {
-  const { data: transactions, isLoading } = useQuery({
+  const { data: transactions = [], isLoading } = useQuery<TransactionSummary[]>({
     queryKey: ["/api/transactions"],
     retry: false,
   });
@@ -27,7 +40,7 @@ export default function RecentTransactions() {
               <div key={i} className="h-16 bg-muted rounded animate-pulse" />
             ))}
           </div>
-        ) : !transactions || transactions.length === 0 ? (
+        ) : transactions.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
             Tidak ada transaksi. Mulai dengan membuat transaksi baru.
           </p>
@@ -44,7 +57,7 @@ export default function RecentTransactions() {
                 </tr>
               </thead>
               <tbody className="text-foreground">
-                {transactions.slice(0, 5).map((transaction: any) => (
+                {transactions.slice(0, 5).map((transaction) => (
                   <tr key={transaction.id} className="border-b hover:bg-muted/50 transition-colors">
                     <td className="py-3 font-medium" data-testid={`transaction-id-${transaction.id}`}>
                       {transaction.transactionNumber || transaction.id}
