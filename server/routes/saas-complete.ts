@@ -8,6 +8,8 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
+  stableStringify,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
@@ -84,20 +86,33 @@ router.post('/clients', async (req, res) => {
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
     const {
-      planCode,
+      planCode: resolvedPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
-    if (shouldPersistNormalizedLimits) {
+    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
+      fallbackName: plan.name,
+      defaultCode: resolvedPlanCode,
+    });
+
+    const normalizedPlanLimits = {
+      ...normalizedLimits,
+      planCode: canonicalPlanCode,
+    };
+
+    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
+      const canonicalLimitsJson =
+        canonicalPlanCode === resolvedPlanCode
+          ? normalizedLimitsJson
+          : stableStringify(normalizedPlanLimits);
+
       await db
         .update(plans)
-        .set({ limits: normalizedLimitsJson })
+        .set({ limits: canonicalLimitsJson })
         .where(eq(plans.id, plan.id));
     }
-
-    const normalizedLimitsJsonForSettings = JSON.stringify(normalizedLimits);
 
     const parsedFeatures = safeParseJson<unknown>(plan.features);
 
@@ -122,10 +137,10 @@ router.post('/clients', async (req, res) => {
         settings: JSON.stringify({
           planId: plan.id,
           planName: displayName,
-          planCode,
+          planCode: canonicalPlanCode,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
-          limits: normalizedLimits,
+          limits: normalizedPlanLimits,
           features: parsedFeatures ?? (plan.features ?? []),
         })
       })
@@ -134,13 +149,13 @@ router.post('/clients', async (req, res) => {
     // Create initial subscription (trial)
     await db
       .insert(subscriptions)
-      .values({
-        clientId: newClient.id,
-        planId: plan.id,
-        planName: displayName,
-        plan: planCode,
-        amount: '0', // Trial is free
-        paymentStatus: 'paid',
+        .values({
+          clientId: newClient.id,
+          planId: plan.id,
+          planName: displayName,
+          plan: canonicalPlanCode,
+          amount: '0', // Trial is free
+          paymentStatus: 'paid',
         startDate: new Date(),
         endDate: trialEndsAt,
         trialEndDate: trialEndsAt,
@@ -467,16 +482,31 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       ));
 
     const {
-      planCode,
+      planCode: resolvedPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
-    if (shouldPersistNormalizedLimits) {
+    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
+      fallbackName: plan.name,
+      defaultCode: resolvedPlanCode,
+    });
+
+    const normalizedPlanLimits = {
+      ...normalizedLimits,
+      planCode: canonicalPlanCode,
+    };
+
+    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
+      const canonicalLimitsJson =
+        canonicalPlanCode === resolvedPlanCode
+          ? normalizedLimitsJson
+          : stableStringify(normalizedPlanLimits);
+
       await db
         .update(plans)
-        .set({ limits: normalizedLimitsJson })
+        .set({ limits: canonicalLimitsJson })
         .where(eq(plans.id, plan.id));
     }
 
@@ -487,7 +517,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         clientId: id,
         planId: plan.id,
         planName: plan.name,
-        plan: planCode,
+        plan: canonicalPlanCode,
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
@@ -496,7 +526,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       })
       .returning();
 
-    const normalizedLimitsJsonForSettings = JSON.stringify(normalizedLimits);
+    const normalizedLimitsJsonForSettings = stableStringify(normalizedPlanLimits);
 
     // Update client status to active
     await db
@@ -507,7 +537,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
           jsonb_set(
             jsonb_set(settings::jsonb, '{planName}', to_jsonb(${plan.name})),
             '{planCode}',
-            to_jsonb(${planCode})
+            to_jsonb(${canonicalPlanCode})
           ),
           '{limits}',
           ${normalizedLimitsJsonForSettings}::jsonb

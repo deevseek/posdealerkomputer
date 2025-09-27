@@ -145,7 +145,7 @@ const sanitizeLimitsRecord = (
   return sanitized;
 };
 
-const stableStringify = (value: Record<string, unknown>): string =>
+export const stableStringify = (value: Record<string, unknown>): string =>
   JSON.stringify(value, Object.keys(value).sort());
 
 // Clients table - Each tenant/customer

@@ -8,6 +8,8 @@ import {
   PLAN_CODE_VALUES as SHARED_PLAN_CODES,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
+  stableStringify,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
@@ -226,16 +228,31 @@ router.post('/clients', async (req, res) => {
     }
 
     const {
-      planCode,
+      planCode: resolvedPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
-    if (shouldPersistNormalizedLimits) {
+    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
+      fallbackName: plan.name,
+      defaultCode: resolvedPlanCode,
+    });
+
+    const normalizedPlanLimits = {
+      ...normalizedLimits,
+      planCode: canonicalPlanCode,
+    };
+
+    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
+      const canonicalLimitsJson =
+        canonicalPlanCode === resolvedPlanCode
+          ? normalizedLimitsJson
+          : stableStringify(normalizedPlanLimits);
+
       await db
         .update(plans)
-        .set({ limits: normalizedLimitsJson })
+        .set({ limits: canonicalLimitsJson })
         .where(eq(plans.id, plan.id));
     }
 
@@ -245,7 +262,7 @@ router.post('/clients', async (req, res) => {
     const settingsPayload: Record<string, unknown> = {
       planId: plan.id,
       planName: plan.name,
-      planCode,
+      planCode: canonicalPlanCode,
       maxUsers: plan.maxUsers ?? undefined,
       maxStorage: plan.maxStorageGB ?? undefined,
       domain: fullDomain,
@@ -256,8 +273,8 @@ router.post('/clients', async (req, res) => {
       settingsPayload.features = parsedFeatures ?? plan.features;
     }
 
-    if (Object.keys(normalizedLimits).length > 0) {
-      settingsPayload.limits = normalizedLimits;
+    if (Object.keys(normalizedPlanLimits).length > 0) {
+      settingsPayload.limits = normalizedPlanLimits;
     }
 
     const [newClient] = await db
@@ -283,7 +300,7 @@ router.post('/clients', async (req, res) => {
       clientId: newClient.id,
       planId: plan.id,
       planName: plan.name,
-      plan: planCode,
+      plan: canonicalPlanCode,
       amount: plan.price.toString(),
       currency: plan.currency ?? 'IDR',
       paymentStatus: 'pending',

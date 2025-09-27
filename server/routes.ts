@@ -46,6 +46,8 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
+  stableStringify,
 } from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
@@ -3769,16 +3771,34 @@ Terima kasih!
 
       const fullDomain = `${subdomain}.profesionalservis.my.id`;
       const {
-        planCode,
+        planCode: resolvedPlanCode,
         normalizedLimits,
         normalizedLimitsJson,
         shouldPersistNormalizedLimits,
       } = resolvePlanConfiguration(plan);
 
-      if (shouldPersistNormalizedLimits) {
+      const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
+        fallbackName: typeof plan.name === "string" ? plan.name : undefined,
+        defaultCode: resolvedPlanCode,
+      });
+
+      const normalizedPlanLimits = {
+        ...normalizedLimits,
+        planCode: canonicalPlanCode,
+      };
+
+      const shouldPersistLimits =
+        shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode;
+
+      if (shouldPersistLimits) {
+        const canonicalLimitsJson =
+          canonicalPlanCode === resolvedPlanCode
+            ? normalizedLimitsJson
+            : stableStringify(normalizedPlanLimits);
+
         await db
           .update(plans)
-          .set({ limits: normalizedLimitsJson })
+          .set({ limits: canonicalLimitsJson })
           .where(eq(plans.id, plan.id));
       }
 
@@ -3787,7 +3807,7 @@ Terima kasih!
       const settingsPayload: Record<string, unknown> = {
         planId: plan.id,
         planName: plan.name,
-        planCode,
+        planCode: canonicalPlanCode,
         maxUsers: plan.maxUsers ?? undefined,
         maxStorage: plan.maxStorageGB ?? undefined,
         domain: fullDomain,
@@ -3799,8 +3819,8 @@ Terima kasih!
         settingsPayload.features = plan.features;
       }
 
-      if (Object.keys(normalizedLimits).length > 0) {
-        settingsPayload.limits = normalizedLimits;
+      if (Object.keys(normalizedPlanLimits).length > 0) {
+        settingsPayload.limits = normalizedPlanLimits;
       }
 
       const [newClient] = await db
@@ -3828,7 +3848,7 @@ Terima kasih!
           clientId: newClient.id,
           planId: plan.id,
           planName: plan.name,
-          plan: planCode,
+          plan: canonicalPlanCode,
           amount: typeof plan.price === 'number' ? plan.price.toString() : '0',
           currency: plan.currency ?? 'IDR',
           paymentStatus: 'pending',

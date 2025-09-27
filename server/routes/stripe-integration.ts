@@ -8,6 +8,8 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
+  stableStringify,
 } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -155,16 +157,31 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
 
       if (plan) {
         const {
-          planCode,
+          planCode: resolvedPlanCode,
           normalizedLimits,
           normalizedLimitsJson,
           shouldPersistNormalizedLimits,
         } = resolvePlanConfiguration(plan);
 
-        if (shouldPersistNormalizedLimits) {
+        const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
+          fallbackName: plan.name,
+          defaultCode: resolvedPlanCode,
+        });
+
+        const normalizedPlanLimits = {
+          ...normalizedLimits,
+          planCode: canonicalPlanCode,
+        };
+
+        if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
+          const canonicalLimitsJson =
+            canonicalPlanCode === resolvedPlanCode
+              ? normalizedLimitsJson
+              : stableStringify(normalizedPlanLimits);
+
           await db
             .update(plans)
-            .set({ limits: normalizedLimitsJson })
+            .set({ limits: canonicalLimitsJson })
             .where(eq(plans.id, plan.id));
         }
 
@@ -177,7 +194,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
             clientId: client.id,
             planId: plan.id,
             planName: plan.name,
-            plan: planCode,
+            plan: canonicalPlanCode,
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
@@ -197,8 +214,8 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           ...(existingSettings ?? {}),
           planId: plan.id,
           planName: plan.name,
-          planCode,
-          limits: normalizedLimits,
+          planCode: canonicalPlanCode,
+          limits: normalizedPlanLimits,
         };
 
         if (parsedPlanFeatures !== undefined) {
