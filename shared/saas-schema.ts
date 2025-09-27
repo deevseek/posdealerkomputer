@@ -285,7 +285,7 @@ export const resolvePlanConfiguration = (
   const planRecord = plan as Partial<Record<string, unknown>>;
   const planCodeCandidates = collectPlanCodeCandidates(rawLimits, planRecord);
 
-  const planCode =
+  const derivedPlanCode =
     planCodeCandidates.reduce<SubscriptionPlan | undefined>((resolved, candidate) => {
       if (resolved) {
         return resolved;
@@ -294,7 +294,12 @@ export const resolvePlanConfiguration = (
       return normalizePlanCode(candidate);
     }, undefined) ?? derivePlanCodeFromName(plan.name, options.fallbackCode ?? 'basic');
 
-  const normalizedLimits = sanitizeLimitsRecord(rawLimits, planCode);
+  const canonicalPlanCode = ensurePlanCode(derivedPlanCode, {
+    fallbackName: plan.name,
+    defaultCode: options.fallbackCode ?? 'basic',
+  });
+
+  const normalizedLimits = sanitizeLimitsRecord(rawLimits, canonicalPlanCode);
   const normalizedLimitsJson = stableStringify(normalizedLimits);
 
   let shouldPersistNormalizedLimits = false;
@@ -306,12 +311,15 @@ export const resolvePlanConfiguration = (
     if (!parsed) {
       shouldPersistNormalizedLimits = true;
     } else {
-      const existingNormalized = sanitizeLimitsRecord(parsed, planCode);
+      const existingNormalized = sanitizeLimitsRecord(parsed, canonicalPlanCode);
       const existingJson = stableStringify(existingNormalized);
       shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
     }
   } else if (isPlainObject(plan.limits)) {
-    const existingNormalized = sanitizeLimitsRecord(plan.limits as Record<string, unknown>, planCode);
+    const existingNormalized = sanitizeLimitsRecord(
+      plan.limits as Record<string, unknown>,
+      canonicalPlanCode,
+    );
     const existingJson = stableStringify(existingNormalized);
     shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
   } else {
@@ -323,13 +331,13 @@ export const resolvePlanConfiguration = (
     const normalizedAlias = normalizePlanCode(aliasSource);
     const aliasLower = aliasSource.trim().toLowerCase();
 
-    if (!normalizedAlias || normalizedAlias !== aliasLower) {
+    if (!normalizedAlias || normalizedAlias !== aliasLower || normalizedAlias !== canonicalPlanCode) {
       shouldPersistNormalizedLimits = true;
     }
   }
 
   return {
-    planCode,
+    planCode: canonicalPlanCode,
     normalizedLimits,
     normalizedLimitsJson,
     shouldPersistNormalizedLimits,
