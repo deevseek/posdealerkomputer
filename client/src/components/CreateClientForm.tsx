@@ -25,13 +25,17 @@ export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFor
     email: '',
     phone: '',
     address: '',
-    planId: '',
+    planId: '', // will hold plan id
     trialDays: 7
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Find selected plan
+    const selectedPlan = plans.find(p => p.id === formData.planId);
+    // Use enum value directly from plan.name
+    const planEnum = selectedPlan ? selectedPlan.name : '';
+    onSubmit({ ...formData, plan: planEnum });
   };
 
   return (
@@ -59,7 +63,7 @@ export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFor
               className="rounded-r-none"
             />
             <div className="px-3 py-2 bg-gray-50 border border-l-0 rounded-r-md text-sm text-gray-600">
-              .laptoppos.com
+              .profesionalservis.my.id
             </div>
           </div>
         </div>
@@ -125,7 +129,7 @@ export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFor
           <SelectContent>
             {plans.map((plan) => (
               <SelectItem key={plan.id} value={plan.id}>
-                {plan.name} - Rp {plan.price.toLocaleString('id-ID')}/bulan
+                {plan.name === 'basic' ? 'Basic' : plan.name === 'pro' ? 'Professional' : plan.name === 'premium' ? 'Enterprise' : plan.name} - Rp {plan.price.toLocaleString('id-ID')}/bulan
               </SelectItem>
             ))}
           </SelectContent>

@@ -34,6 +34,7 @@ router.use(requireSuperAdmin);
 // Route moved to admin.ts to fix routing conflicts
 
 // Create new client with trial period
+const MAIN_DOMAIN = 'profesionalservis.my.id';
 const createClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   subdomain: z.string().min(1, 'Subdomain is required').regex(/^[a-z0-9-]+$/, 'Invalid subdomain format'),
@@ -75,6 +76,12 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
+    // Map plan name for display
+    let displayName = plan.name;
+    if (plan.name === 'basic') displayName = 'Basic';
+    else if (plan.name === 'pro') displayName = 'Professional';
+    else if (plan.name === 'premium') displayName = 'Enterprise';
+
     // Create client
     const [newClient] = await db
       .insert(clients)
@@ -86,9 +93,10 @@ router.post('/clients', async (req, res) => {
         address,
         status: 'trial',
         trialEndsAt,
+        customDomain: `${subdomain}.${MAIN_DOMAIN}`,
         settings: JSON.stringify({
           planId: plan.id,
-          planName: plan.name,
+          planName: displayName,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
           features: JSON.parse(plan.features || '[]')
@@ -102,8 +110,8 @@ router.post('/clients', async (req, res) => {
       .values({
         clientId: newClient.id,
         planId: plan.id,
-        planName: plan.name,
-        plan: 'basic',
+        planName: displayName,
+        plan: plan.name === 'basic' ? 'basic' : plan.name === 'pro' ? 'pro' : 'premium',
         amount: '0', // Trial is free
         paymentStatus: 'paid',
         startDate: new Date(),

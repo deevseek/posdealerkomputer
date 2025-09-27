@@ -1711,7 +1711,12 @@ export class DatabaseStorage implements IStorage {
 
         const now = getCurrentJakartaTime();
         
-        // Update service ticket with cancellation data
+        // Validasi biaya cancel harus lebih dari 0
+        if (!data.cancellationFee || isNaN(Number(data.cancellationFee)) || Number(data.cancellationFee) <= 0) {
+          return { success: false, message: 'Biaya cancel harus diisi dan lebih dari 0' };
+        }
+
+        // Update service ticket dengan data pembatalan
         await tx.update(serviceTickets).set({
           status: 'cancelled',
           cancellationFee: data.cancellationFee,
@@ -1801,37 +1806,53 @@ export class DatabaseStorage implements IStorage {
 
           case 'warranty_refund':
             // Scenario 3: Cancel Warranty Service (Full Refund)
-            // Move parts to damaged goods stock with proper cost tracking
             for (const part of serviceParts) {
               const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
               if (product) {
-                // Get cost basis for proper loss calculation
-                const avgCost = await this.getAveragePurchasePrice(part.productId);
-                
-                // Reduce normal stock (parts moved to damaged)
-                const newStock = Math.max(0, (product.stock || 0) - part.quantity);
+                // Jika barang garansi kondisi normal, masuk ke stok normal
+                const newStock = (product.stock || 0) + part.quantity;
                 await tx.update(products).set({
                   stock: newStock,
                   updatedAt: now
                 }).where(eq(products.id, part.productId));
 
-                // Record movement to damaged goods with cost
+                // Catat pergerakan stok masuk (warranty_return)
+                const avgCost = await this.getAveragePurchasePrice(part.productId);
+                await tx.insert(stockMovements).values({
+                  productId: part.productId,
+                  movementType: 'in',
+                  quantity: part.quantity,
+                  unitCost: avgCost.toString(),
+                  referenceId: id,
+                  referenceType: 'warranty_return',
+                  notes: `Retur garansi - kondisi barang normal, dapat dijual kembali. ${ticket.ticketNumber}`,
+                  userId: data.userId
+                });
+
+                // Setelah barang diambil/tukar untuk klaim, kurangi stok normal
+                const afterExchangeStock = newStock - part.quantity;
+                await tx.update(products).set({
+                  stock: afterExchangeStock,
+                  updatedAt: now
+                }).where(eq(products.id, part.productId));
+
+                // Catat pergerakan stok keluar (warranty_exchange)
                 await tx.insert(stockMovements).values({
                   productId: part.productId,
                   movementType: 'out',
                   quantity: part.quantity,
                   unitCost: avgCost.toString(),
                   referenceId: id,
-                  referenceType: 'service',
-                  notes: `Dipindahkan ke barang rusak - warranty refund ${ticket.ticketNumber}`,
+                  referenceType: 'warranty_exchange',
+                  notes: `Barang diambil/tukar untuk klaim garansi. ${ticket.ticketNumber}`,
                   userId: data.userId
                 });
               }
             }
 
-            // Record financial transactions with full refund and proper cost basis
-            const partsForWarrantyFinance = [];
-            for (const part of serviceParts) {
+            // Siapkan data parts untuk finance
+            const partsForWarrantyFinance: Array<{ name: string; quantity: number; sellingPrice: string; costPrice: string }> = [];
+            for (const part of serviceParts as Array<{ productName: string; quantity: number; unitPrice: string; productId: string }>) {
               const avgCost = await this.getAveragePurchasePrice(part.productId);
               partsForWarrantyFinance.push({
                 name: part.productName,
@@ -1841,17 +1862,21 @@ export class DatabaseStorage implements IStorage {
               });
             }
 
+            // Kirim laborCost dan partsCost yang benar
+            const laborCost = ticket.laborCost || '0';
+            const partsCost = ticket.partsCost || '0';
+
+            // Panggil financeManager untuk catat refund dan reversal
             const warrantyResult = await financeManager.recordServiceCancellationWarrantyRefund(
               id,
               data.cancellationFee,
-              ticket.laborCost || '0',
-              ticket.partsCost || '0',
+              laborCost,
+              partsCost,
               data.cancellationReason,
               partsForWarrantyFinance,
               data.userId,
               tx
             );
-            
             if (!warrantyResult.success) {
               return { success: false, message: warrantyResult.error };
             }

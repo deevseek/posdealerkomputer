@@ -6,8 +6,8 @@ const seedPlans = async () => {
 
   const planData = [
     {
-      name: 'Basic',
-      description: 'Perfect untuk usaha kecil dengan fitur lengkap untuk mengelola laptop service',
+      name: 'basic',
+      description: 'Basic: Cocok untuk usaha kecil dengan fitur utama POS dan inventori',
       price: 149000, // Rp 149.000
       currency: 'IDR',
       billingPeriod: 'monthly',
@@ -33,8 +33,8 @@ const seedPlans = async () => {
       prioritySupport: false
     },
     {
-      name: 'Professional',
-      description: 'Solusi lengkap untuk toko laptop dengan volume menengah dan fitur advanced',
+      name: 'pro',
+      description: 'Professional: Untuk bisnis berkembang, fitur lanjutan dan integrasi',
       price: 299000, // Rp 299.000
       currency: 'IDR',
       billingPeriod: 'monthly',
@@ -61,8 +61,8 @@ const seedPlans = async () => {
       prioritySupport: false
     },
     {
-      name: 'Enterprise',
-      description: 'Untuk toko laptop besar dengan multiple cabang dan fitur enterprise',
+      name: 'premium',
+      description: 'Enterprise: Untuk bisnis besar, multi-cabang, analitik, dan dukungan prioritas',
       price: 599000, // Rp 599.000
       currency: 'IDR',
       billingPeriod: 'monthly',

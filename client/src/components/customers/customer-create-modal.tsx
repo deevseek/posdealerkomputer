@@ -17,10 +17,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { insertCustomerSchema } from "@shared/schema";
 import { z } from "zod";
 
-const customerFormSchema = insertCustomerSchema.extend({
+const customerFormSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").refine(val => val.trim().length > 0, { message: "Nama wajib diisi" }),
   email: z.string().email("Email tidak valid").optional().or(z.literal("")),
-  phone: z.string().optional(),
-  address: z.string().optional(),
+  phone: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
 });
 
 type CustomerFormData = z.infer<typeof customerFormSchema>;
@@ -51,10 +52,13 @@ export default function CustomerCreateModal({
 
   const createCustomerMutation = useMutation({
     mutationFn: async (data: CustomerFormData) => {
-      return await apiRequest('POST', '/api/customers', data);
+      console.log('[CustomerCreateModal] API POST /api/customers payload:', data);
+      const result = await apiRequest('POST', '/api/customers', data);
+      console.log('[CustomerCreateModal] API response:', result);
+      return result;
     },
     onSuccess: (newCustomer) => {
-      console.log('Customer created successfully:', newCustomer);
+      console.log('[CustomerCreateModal] Customer created successfully:', newCustomer);
       
       // Show creation toast first
       toast({
@@ -68,7 +72,7 @@ export default function CustomerCreateModal({
       
       // Call the callback immediately - no delay
       if (onCustomerCreated) {
-        console.log('About to call onCustomerCreated');
+        console.log('[CustomerCreateModal] About to call onCustomerCreated');
         onCustomerCreated(newCustomer);
       }
       
@@ -76,6 +80,7 @@ export default function CustomerCreateModal({
       queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
     },
     onError: (error: any) => {
+      console.error('[CustomerCreateModal] API error:', error);
       toast({
         title: "Error",
         description: error.message || "Gagal menambahkan customer",
@@ -86,13 +91,17 @@ export default function CustomerCreateModal({
 
   const handleSubmit = (data: CustomerFormData) => {
     // Clean up empty strings to null for optional fields
+    const clientId = localStorage.getItem('clientId') || 'default';
     const cleanData = {
       name: data.name,
       email: data.email || null,
       phone: data.phone || null,
       address: data.address || null,
+      clientId,
+      paymentTerms: "Cash", // default value
+      rating: 0, // default value
     };
-    
+    console.log('[CustomerCreateModal] Submit data:', cleanData);
     createCustomerMutation.mutate(cleanData);
   };
 

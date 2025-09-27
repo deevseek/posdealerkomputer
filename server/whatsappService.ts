@@ -1,28 +1,34 @@
+
 import { makeWASocket, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode-terminal';
 import { storage } from './storage';
+import fs from 'fs';
+import path from 'path';
+import { realtimeService } from './realtime';
 
 export class WhatsAppService {
   private socket: any = null;
   private isConnecting = false;
   private qrCode: string | null = null;
-  private connectionState: string = 'close';
+  private connectionState: 'open' | 'close' = 'close';
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private forceDisconnect: boolean = false;
 
   async initialize() {
     if (this.isConnecting) {
       console.log('WhatsApp already connecting...');
       return;
     }
-
+    if (this.forceDisconnect) {
+      console.log('WhatsApp forceDisconnect is true, skip initialize');
+      return;
+    }
     this.isConnecting = true;
     console.log('🔌 Initializing WhatsApp connection...');
-    
     try {
       // Use file-based auth state
       const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
-      
       // Create proper logger with required methods
       const logger = {
         level: 'silent',
@@ -33,37 +39,32 @@ export class WhatsAppService {
         trace: () => {},
         child: () => logger,
       };
-
       this.socket = makeWASocket({
         auth: state,
         printQRInTerminal: false,
         logger: logger as any,
       });
-
       // Connection updates
       this.socket.ev.on('connection.update', async (update: any) => {
-        const { connection, lastDisconnect, qr } = update;
-        
+  const { connection, lastDisconnect, qr } = update as { connection?: 'open' | 'close', lastDisconnect?: any, qr?: string };
         if (qr) {
           this.qrCode = qr;
           qrcode.generate(qr, { small: true });
           console.log('QR Code updated');
           await this.updateQRInDatabase();
         }
-
         if (connection === 'close') {
           this.connectionState = 'close';
           const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
           console.log('Connection closed due to ', lastDisconnect?.error, ', reconnecting ', shouldReconnect);
-          
-          if (shouldReconnect) {
-            setTimeout(() => this.initialize(), 3000);
-          } else {
-            console.log('WhatsApp logged out');
-            this.qrCode = null;
-            await this.clearQRFromDatabase();
+          // Force QR code regeneration on disconnect
+          this.qrCode = null;
+          await this.clearQRFromDatabase();
+          if (!this.forceDisconnect) {
+            setTimeout(async () => {
+              if (!this.forceDisconnect) await this.initialize();
+            }, 3000);
           }
-          
           this.isConnecting = false;
           await this.updateConnectionStatus(false);
         } else if (connection === 'open') {
@@ -73,15 +74,12 @@ export class WhatsAppService {
           console.log('✅ WhatsApp connected successfully');
           await this.updateConnectionStatus(true);
           await this.clearQRFromDatabase();
-          
           // Start connection health monitoring
           this.startConnectionMonitoring();
         }
       });
-
       // Save credentials when updated
       this.socket.ev.on('creds.update', saveCreds);
-      
     } catch (error) {
       console.error('WhatsApp initialization error:', error);
       this.isConnecting = false;
@@ -103,7 +101,7 @@ export class WhatsAppService {
         await this.initialize(); // Wait for reconnection attempt
         
         // Check again after reconnection attempt
-        if (this.connectionState === 'open' && this.socket) {
+  if ((this.connectionState as 'open' | 'close') === 'open' && !!this.socket) {
           console.log('WhatsApp reconnected successfully, retrying message send...');
         } else {
           console.log('WhatsApp reconnection failed, message cannot be sent');
@@ -152,7 +150,7 @@ export class WhatsAppService {
     return this.connectionState === 'open';
   }
 
-  getConnectionState(): string {
+  getConnectionState(): 'open' | 'close' {
     return this.connectionState;
   }
 
@@ -162,7 +160,19 @@ export class WhatsAppService {
       if (config) {
         await storage.upsertStoreConfig({
           ...config,
+          taxRate: config.taxRate ?? '11.00',
+          defaultDiscount: config.defaultDiscount ?? '0.00',
           whatsappConnected: connected,
+          databasePort: config.databasePort ?? undefined,
+        });
+        // Broadcast WhatsApp connection status
+        realtimeService.broadcast({
+          resource: 'whatsapp',
+          action: 'update',
+          data: {
+            connected,
+            qr: this.qrCode
+          }
         });
       }
     } catch (error) {
@@ -176,7 +186,19 @@ export class WhatsAppService {
       if (config && this.qrCode) {
         await storage.upsertStoreConfig({
           ...config,
+          taxRate: config.taxRate ?? '11.00',
+          defaultDiscount: config.defaultDiscount ?? '0.00',
           whatsappQR: this.qrCode,
+          databasePort: config.databasePort ?? undefined,
+        });
+        // Broadcast WhatsApp QR update
+        realtimeService.broadcast({
+          resource: 'whatsapp',
+          action: 'update',
+          data: {
+            connected: this.connectionState === 'open',
+            qr: this.qrCode
+          }
         });
       }
     } catch (error) {
@@ -190,7 +212,19 @@ export class WhatsAppService {
       if (config) {
         await storage.upsertStoreConfig({
           ...config,
+          taxRate: config.taxRate ?? '11.00',
+          defaultDiscount: config.defaultDiscount ?? '0.00',
           whatsappQR: null,
+          databasePort: config.databasePort ?? undefined,
+        });
+        // Broadcast WhatsApp QR cleared
+        realtimeService.broadcast({
+          resource: 'whatsapp',
+          action: 'update',
+          data: {
+            connected: this.connectionState === 'open',
+            qr: null
+          }
         });
       }
     } catch (error) {
@@ -285,6 +319,14 @@ export class WhatsAppService {
       sparepartsInfo += `\n\n💰 **Total Sparepart:** ${formatCurrency(totalParts)}`;
     }
 
+    // Garansi info
+    let warrantyInfo = '';
+    if (serviceTicket.warrantyDescription) {
+      warrantyInfo = `\n🛡️ **GARANSI SERVICE:**\n${serviceTicket.warrantyDescription}`;
+    } else if (serviceTicket.warrantyPeriod) {
+      warrantyInfo = `\n🛡️ **GARANSI SERVICE:**\n${serviceTicket.warrantyPeriod}`;
+    }
+
     const message = `🔧 **KONFIRMASI PENERIMAAN SERVICE**
 
 Halo ${customer.name},
@@ -310,6 +352,7 @@ ${serviceTicket.notes ? `📌 **CATATAN TEKNISI:**\n${serviceTicket.notes}\n\n` 
 💰 **ESTIMASI BIAYA SERVICE:**
 ${serviceTicket.estimatedCost ? formatCurrency(serviceTicket.estimatedCost) : 'Akan diberitahu setelah pemeriksaan'}
 ${sparepartsInfo}
+${warrantyInfo}
 
 📞 **INFORMASI KONTAK:**
 👤 Customer: ${customer.name}
@@ -319,7 +362,7 @@ ${customer.address ? `🏠 Alamat: ${customer.address}` : ''}
 
 🔍 **CEK STATUS SERVICE:**
 Anda dapat memantau perkembangan service kapan saja melalui:
-${statusUrl}?ticket=${serviceTicket.ticketNumber}
+${statusUrl}?ticket=${serviceTicket.ticketNumber}${warrantyInfo ? `&garansi=${encodeURIComponent(serviceTicket.warrantyDescription || serviceTicket.warrantyPeriod)}` : ''}
 *Klik link di atas untuk langsung melihat status service Anda*
 
 ⚠️ **PENTING:**
@@ -370,7 +413,7 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
     let statusText = '';
     let emoji = '';
     let nextSteps = '';
-    
+    let estimatedCostInfo = '';
     switch (serviceTicket.status) {
       case 'checking':
         statusText = 'SEDANG DICEK';
@@ -406,12 +449,21 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
         statusText = 'MENUNGGU KONFIRMASI';
         emoji = '❓';
         nextSteps = 'Kami memerlukan konfirmasi dari Anda untuk melanjutkan perbaikan. Silakan hubungi kami.';
+        // Tambahkan estimasi biaya jika ada
+        if (serviceTicket.estimatedCost) {
+          estimatedCostInfo = `\n\n💰 *Estimasi Biaya Service:* ${formatCurrency(serviceTicket.estimatedCost)}`;
+        }
         break;
       case 'testing':
         statusText = 'SEDANG TES';
         emoji = '🧪';
         nextSteps = 'Sedang dilakukan pengujian untuk memastikan perbaikan berfungsi dengan baik.';
         break;
+        case 'delivered':
+          statusText = 'SUDAH DIAMBIL';
+          emoji = '📦';
+          nextSteps = 'Perangkat Anda telah diambil. Terima kasih telah menggunakan layanan kami!';
+          break;
       default:
         statusText = 'DIUPDATE';
         emoji = '🔄';
@@ -478,7 +530,15 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
       completionInfo = `\n\n✅ **WAKTU SELESAI:** ${completedDate}`;
     }
 
-    const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}?ticket=${serviceTicket.ticketNumber}\n\n${serviceTicket.status === 'completed' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
+  // Garansi info
+  let warrantyInfo = '';
+  if (serviceTicket.warrantyDescription) {
+    warrantyInfo = `\n🛡️ **GARANSI SERVICE:**\n${serviceTicket.warrantyDescription}`;
+  } else if (serviceTicket.warrantyPeriod) {
+    warrantyInfo = `\n🛡️ **GARANSI SERVICE:**\n${serviceTicket.warrantyPeriod}`;
+  }
+
+  const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*${estimatedCostInfo}\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n${warrantyInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}?ticket=${serviceTicket.ticketNumber}${warrantyInfo ? `&garansi=${encodeURIComponent(serviceTicket.warrantyDescription || serviceTicket.warrantyPeriod)}` : ''}\n\n${serviceTicket.status === 'completed' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
 
     try {
       const result = await this.sendMessage(customerPhone, message);
@@ -498,6 +558,7 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
 
     // Check connection every 30 seconds
     this.heartbeatInterval = setInterval(() => {
+      if (this.forceDisconnect) return;
       if (this.connectionState !== 'open' && !this.isConnecting) {
         console.log('🩺 WhatsApp connection lost, attempting reconnection...');
         this.initialize();
@@ -506,18 +567,56 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
   }
 
   async disconnect() {
+    // Set forceDisconnect agar tidak auto-reconnect
+    this.forceDisconnect = true;
     // Clear heartbeat monitoring
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-
     if (this.socket) {
+      // Remove all listeners
+      this.socket.ev.removeAllListeners();
       await this.socket.logout();
       this.socket = null;
     }
     await this.updateConnectionStatus(false);
     await this.clearQRFromDatabase();
+    // Hapus file/folder auth_info_baileys agar session benar-benar terputus
+    try {
+      const authPath = path.resolve('auth_info_baileys');
+      if (fs.existsSync(authPath)) {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log('Auth info folder deleted, session WhatsApp benar-benar terputus');
+      }
+    } catch (err) {
+      console.error('Error deleting auth_info_baileys:', err);
+    }
+  }
+
+  // 🔥 Perbaikan baru: toggle WhatsApp aktif/nonaktif langsung broadcast
+  async toggleWhatsApp(enable: boolean) {
+    if (enable) {
+      console.log("🔌 Mengaktifkan WhatsApp...");
+      this.forceDisconnect = false;
+      await this.initialize();
+    } else {
+      console.log("⛔ Menonaktifkan WhatsApp...");
+      await this.disconnect();
+      // Setelah disconnect, langsung inisialisasi ulang untuk generate QR baru
+      this.forceDisconnect = false;
+      await this.initialize();
+    }
+    // Broadcast status langsung ke frontend
+    realtimeService.broadcast({
+      resource: 'whatsapp',
+      action: 'update',
+      data: {
+        connected: enable && this.connectionState === 'open',
+        qr: this.qrCode
+      }
+    });
+    await this.updateConnectionStatus(enable && this.connectionState === 'open');
   }
 }
 

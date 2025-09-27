@@ -32,7 +32,7 @@ export const sessions = pgTable(
 );
 
 // Enums
-export const userRoleEnum = pgEnum('user_role', ['admin', 'kasir', 'teknisi', 'purchasing', 'finance', 'owner']);
+export const userRoleEnum = pgEnum('user_role', ['super_admin', 'admin', 'kasir', 'teknisi', 'purchasing', 'finance', 'owner']);
 export const transactionTypeEnum = pgEnum('transaction_type', ['sale', 'service', 'purchase', 'return']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'transfer', 'qris', 'installment']);
 export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts', 'completed', 'delivered', 'cancelled', 'warranty_claim']);

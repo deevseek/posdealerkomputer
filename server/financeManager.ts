@@ -420,13 +420,13 @@ export class FinanceManager {
       sql`${accounts.type} IN ('revenue', 'expense')`
     ))
     .orderBy(accounts.code);
-    
+
     const revenue: any = {};
     const expenses: any = {};
     let totalRevenue = 0;
     let totalExpenses = 0;
-    
-    // Calculate account activity for the period
+
+    // Calculate account activity for the period, ONLY for 'confirmed' financial records
     for (const account of revenueAndExpenseAccounts) {
       // Get journal entry lines for this account in the period
       const activityQuery = await db.select({
@@ -441,21 +441,20 @@ export class FinanceManager {
         lte(journalEntries.date, end),
         eq(journalEntries.status, 'posted')
       ));
-      
+
+      // Filter only 'confirmed' financial records for this account
+      // ...existing code...
       let periodActivity = 0;
-      activityQuery.forEach(line => {
+      activityQuery.forEach((line: { debitAmount: string; creditAmount: string }) => {
         const debit = Number(line.debitAmount);
         const credit = Number(line.creditAmount);
-        
-        // For revenue accounts (normal credit balance), credit increases, debit decreases
-        // For expense accounts (normal debit balance), debit increases, credit decreases
         if (account.normalBalance === 'credit') {
           periodActivity += credit - debit;
         } else {
           periodActivity += debit - credit;
         }
       });
-      
+
       // Only include accounts with activity
       if (Math.abs(periodActivity) > 0.01) {
         const accountInfo = {
@@ -463,7 +462,7 @@ export class FinanceManager {
           amount: periodActivity,
           code: account.code
         };
-        
+
         if (account.type === 'revenue') {
           const category = account.subtype || 'Other Revenue';
           if (!revenue[category]) {
@@ -483,12 +482,12 @@ export class FinanceManager {
         }
       }
     }
-    
+
     // Calculate gross profit (Revenue - COGS)
     const cogs = expenses['cost_of_goods_sold']?.total || 0;
     const grossProfit = totalRevenue - cogs;
     const netIncome = totalRevenue - totalExpenses;
-    
+
     return {
       revenue,
       expenses,
@@ -581,17 +580,20 @@ export class FinanceManager {
     
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     
+    // Tambahkan filter status 'confirmed' ke semua query
+    const confirmedCondition = eq(financialRecords.status, 'confirmed');
+    const whereClauseWithStatus = whereClause ? and(confirmedCondition, whereClause) : confirmedCondition;
+
     // Total income - EXCLUDE refunds from revenue calculation for accounting accuracy
     const [incomeResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
       .where(and(
         eq(financialRecords.type, 'income'),
-        // Exclude ALL types of refunds from income calculation
         sql`${financialRecords.category} NOT LIKE '%Refund%'`,
         sql`${financialRecords.category} != 'Returns and Allowances'`,
         sql`${financialRecords.description} NOT LIKE '%Refund%'`,
-        whereClause
+        whereClauseWithStatus
       ));
 
     // Get service cancellation expenses to subtract from revenue for accurate NET revenue calculation
@@ -601,9 +603,9 @@ export class FinanceManager {
       .where(and(
         eq(financialRecords.type, 'expense'),
         sql`${financialRecords.category} IN ('Service Cancellation', 'Warranty Refund')`,
-        whereClause
+        whereClauseWithStatus
       ));
-    
+
     // Total expense - calculate properly excluding asset purchases
     const allExpenses = await db
       .select({
@@ -611,26 +613,26 @@ export class FinanceManager {
         amount: financialRecords.amount
       })
       .from(financialRecords)
-      .where(and(eq(financialRecords.type, 'expense'), whereClause));
-    
+      .where(and(eq(financialRecords.type, 'expense'), whereClauseWithStatus));
+
     // Exclude inventory purchases AND cancellation expenses from expense calculation 
     // (cancellation expenses are already netted from revenue above)
-    const actualExpenses = allExpenses.filter(expense => 
+    const actualExpenses = allExpenses.filter((expense: { category: string; amount: string }) => 
       expense.category !== 'Inventory Purchase' &&
       expense.category !== 'Service Cancellation' &&
       expense.category !== 'Warranty Refund' &&
       !expense.category?.toLowerCase().includes('purchase') &&
       !expense.category?.toLowerCase().includes('asset')
     );
-    
-    const totalExpenseAmount = actualExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+
+    const totalExpenseAmount = actualExpenses.reduce((sum: number, expense: { amount: string }) => sum + Number(expense.amount), 0);
     const expenseResult = { total: totalExpenseAmount };
-    
+
     // Count
     const [countResult] = await db
       .select({ count: count() })
       .from(financialRecords)
-      .where(whereClause);
+      .where(whereClauseWithStatus);
 
     // Breakdown by category
     const categoryBreakdown = await db
@@ -641,7 +643,7 @@ export class FinanceManager {
         count: count()
       })
       .from(financialRecords)
-      .where(whereClause)
+      .where(whereClauseWithStatus)
       .groupBy(financialRecords.category, financialRecords.type);
 
     // Breakdown by subcategory
@@ -653,7 +655,7 @@ export class FinanceManager {
         count: count()
       })
       .from(financialRecords)
-      .where(whereClause)
+      .where(whereClauseWithStatus)
       .groupBy(financialRecords.subcategory, financialRecords.type);
 
     // Breakdown by payment method
@@ -663,7 +665,7 @@ export class FinanceManager {
         total: sum(financialRecords.amount)
       })
       .from(financialRecords)
-      .where(whereClause)
+      .where(whereClauseWithStatus)
       .groupBy(financialRecords.paymentMethod);
 
     // Breakdown by source/reference type
@@ -674,7 +676,7 @@ export class FinanceManager {
         count: count()
       })
       .from(financialRecords)
-      .where(whereClause)
+      .where(whereClauseWithStatus)
       .groupBy(financialRecords.referenceType);
 
     // Inventory value calculation
@@ -689,18 +691,18 @@ export class FinanceManager {
       .from(products)
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
-    const totalInventoryValue = inventoryBreakdown.reduce((total, item) => total + Number(item.totalValue), 0);
-    const totalInventoryCount = inventoryBreakdown.reduce((total, item) => total + (item.stock || 0), 0);
-    
+  const totalInventoryValue = inventoryBreakdown.reduce((total: number, item: { totalValue: number }) => total + Number(item.totalValue), 0);
+  const totalInventoryCount = inventoryBreakdown.reduce((total: number, item: { stock: number }) => total + (item.stock || 0), 0);
+
     // Get total refunds separately for proper accounting
     const [refundResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
       .where(and(
         sql`${financialRecords.type} = 'refund_recovery' OR ${financialRecords.category} = 'Returns and Allowances'`,
-        whereClause
+        whereClauseWithStatus
       ));
-    
+
     const grossIncome = Number(incomeResult.total || 0);
     const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
     const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
@@ -709,7 +711,7 @@ export class FinanceManager {
 
     // Process category breakdown
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
-    categoryBreakdown.forEach(item => {
+    categoryBreakdown.forEach((item: { category: string; type: string; total: string; count: number }) => {
       if (!categories[item.category]) {
         categories[item.category] = { income: 0, expense: 0, count: 0 };
       }
@@ -723,7 +725,7 @@ export class FinanceManager {
 
     // Process subcategory breakdown
     const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
-    subcategoryBreakdown.forEach(item => {
+    subcategoryBreakdown.forEach((item: { subcategory: string; type: string; total: string; count: number }) => {
       if (item.subcategory) {
         subcategories[item.subcategory] = {
           amount: Number(item.total),
@@ -735,7 +737,7 @@ export class FinanceManager {
 
     // Process payment method breakdown
     const paymentMethods: { [key: string]: number } = {};
-    paymentBreakdown.forEach(item => {
+    paymentBreakdown.forEach((item: { paymentMethod: string; total: string }) => {
       if (item.paymentMethod) {
         paymentMethods[item.paymentMethod] = Number(item.total);
       }
@@ -743,7 +745,7 @@ export class FinanceManager {
 
     // Process source breakdown
     const sources: { [key: string]: { amount: number; count: number } } = {};
-    sourceBreakdown.forEach(item => {
+    sourceBreakdown.forEach((item: { referenceType: string; total: string; count: number }) => {
       if (item.referenceType) {
         sources[item.referenceType] = {
           amount: Number(item.total),
@@ -754,7 +756,7 @@ export class FinanceManager {
 
     // Process inventory breakdown
     const inventory: { [key: string]: { value: number; stock: number; avgCost: number } } = {};
-    inventoryBreakdown.forEach(item => {
+    inventoryBreakdown.forEach((item: { name: string; totalValue: number; stock: number; averageCost: number }) => {
       if (item.name) {
         inventory[item.name] = {
           value: Number(item.totalValue),
@@ -763,7 +765,7 @@ export class FinanceManager {
         };
       }
     });
-    
+
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
@@ -1086,7 +1088,7 @@ export class FinanceManager {
     const incomeSet = new Set<string>();
     const expenseSet = new Set<string>();
     
-    records.forEach(r => {
+    records.forEach((r: { type: string; category: string }) => {
       if (r.type === 'income') {
         incomeSet.add(r.category);
       } else if (r.type === 'expense') {
@@ -1327,13 +1329,24 @@ export class FinanceManager {
         });
       }
 
-      // Create EXPENSE records to PROPERLY REVERSE original service revenue
+      // Reverse OMSET & LABA BERSIH dari service yang dibatalkan garansi
+      // Hapus/mengurangi pendapatan service (labor dan parts) yang sudah tercatat sebelumnya
+      // Labor cost reversal (pendapatan jasa)
       if (Number(originalLaborCost) > 0) {
+        // Cari dan update record pendapatan labor agar statusnya 'reversed'
+        await dbClient.update(financialRecords)
+          .set({ status: 'reversed' })
+          .where(and(
+            eq(financialRecords.referenceType, 'service_labor'),
+            eq(financialRecords.reference, serviceId),
+            eq(financialRecords.type, 'income')
+          ));
+        // Catat expense reversal
         await dbClient.insert(financialRecords).values({
           type: 'expense',
-          category: 'Warranty Refund',
+          category: 'Service Revenue Reversal',
           amount: originalLaborCost,
-          description: `Warranty labor cost reversal - ${reason}`,
+          description: `Reversal omset jasa service karena refund garansi - ${reason}`,
           reference: serviceId,
           referenceType: 'warranty_labor_reversal',
           paymentMethod: 'cash',
@@ -1341,14 +1354,22 @@ export class FinanceManager {
           userId: userId
         });
       }
-
-      // Create EXPENSE records to PROPERLY REVERSE original parts revenue  
+      // Parts cost reversal (pendapatan sparepart)
       if (Number(originalPartsCost) > 0) {
+        // Cari dan update record pendapatan parts agar statusnya 'reversed'
+        await dbClient.update(financialRecords)
+          .set({ status: 'reversed' })
+          .where(and(
+            eq(financialRecords.referenceType, 'service_parts_revenue'),
+            eq(financialRecords.reference, serviceId),
+            eq(financialRecords.type, 'income')
+          ));
+        // Catat expense reversal
         await dbClient.insert(financialRecords).values({
           type: 'expense',
-          category: 'Warranty Refund',
+          category: 'Parts Revenue Reversal',
           amount: originalPartsCost,
-          description: `Warranty parts cost reversal - ${reason}`,
+          description: `Reversal omset sparepart service karena refund garansi - ${reason}`,
           reference: serviceId,
           referenceType: 'warranty_parts_reversal',
           paymentMethod: 'cash',

@@ -14,8 +14,19 @@ const requireSuperAdmin = (req: Request, res: Response, next: NextFunction) => {
     console.log('Development mode: Granting super admin access');
     return next();
   }
-  
+
+  // Debug log session user info
+  if (req.session && req.session.user) {
+    console.log('Session user:', req.session.user);
+  }
+
   // In production, check for proper super admin status
+  // Cek session user dan role
+  if (req.session && req.session.user && (req.session.user.role === 'super_admin' || req.session.user.role === 'admin')) {
+    req.isSuperAdmin = true;
+    return next();
+  }
+
   if (!req.isSuperAdmin) {
     return res.status(403).json({ 
       error: 'Super admin required',
@@ -131,8 +142,16 @@ const createClientSchema = z.object({
 });
 
 router.post('/clients', async (req, res) => {
+    // Map plan name to valid enum value
+    const planEnumMap: Record<string, string> = {
+      'Basic': 'basic',
+      'Professional': 'pro',
+      'Enterprise': 'premium'
+    };
   try {
-    const { name, subdomain, email, planId } = createClientSchema.parse(req.body);
+  const { name, subdomain, email, planId } = createClientSchema.parse(req.body);
+  // Always use profesionalservis.my.id as domain suffix for subdomain
+  const fullDomain = `${subdomain}.profesionalservis.my.id`;
 
     // Check if subdomain already exists
     const [existingClient] = await db
@@ -167,13 +186,15 @@ router.post('/clients', async (req, res) => {
         name,
         subdomain,
         email,
+        customDomain: fullDomain,
         status: 'trial',
         trialEndsAt,
         settings: JSON.stringify({
-          planId: plan.id,
-          planName: plan.name,
-          maxUsers: plan.limits?.maxUsers || 10,
-          maxStorage: plan.limits?.maxStorage || 1000
+         planId: plan.id,
+         planName: plan.name,
+         maxUsers: plan.maxUsers || 10,
+         maxStorage: plan.maxStorageGB || 1000,
+         domain: fullDomain
         })
       })
       .returning();
@@ -185,6 +206,7 @@ router.post('/clients', async (req, res) => {
         clientId: newClient.id,
         planId: plan.id,
         planName: plan.name,
+  plan: 'basic',
         amount: plan.price.toString(),
         paymentStatus: 'pending',
         startDate: new Date(),

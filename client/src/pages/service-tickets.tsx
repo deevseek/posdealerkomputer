@@ -375,6 +375,12 @@ export default function ServiceTickets() {
   const handleCustomerCreated = (newCustomer: any) => {
     // Select the newly created customer
     form.setValue("customerId", newCustomer.id);
+    setShowCustomerCreateModal(false);
+    // Optional: focus ke field berikutnya agar user bisa lanjut input
+    setTimeout(() => {
+      const nextInput = document.querySelector('[data-testid="input-device-type"]') as HTMLInputElement;
+      if (nextInput) nextInput.focus();
+    }, 300);
   };
 
   const handleCancelService = (ticket: ServiceTicket) => {

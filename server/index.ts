@@ -6,6 +6,15 @@ import saasRoutes from "./routes/saas";
 import adminRoutes from "./routes/admin";
 
 const app = express();
+import session from 'express-session';
+
+// Setup session middleware BEFORE admin routes
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false } // set true jika pakai https
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 

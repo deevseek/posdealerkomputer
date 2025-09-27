@@ -1,6 +1,8 @@
 import { makeWASocket, DisconnectReason, useMultiFileAuthState } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
-import qrcode from 'qrcode-terminal';
+// Fix import for qrcode-terminal (CommonJS)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const qrcode = require('qrcode-terminal');
 import { storage } from './storage';
 
 export class WhatsAppService {
@@ -129,6 +131,7 @@ export class WhatsAppService {
         await storage.upsertStoreConfig({
           ...config,
           whatsappConnected: connected,
+          taxRate: config.taxRate ?? '11.00', // Ensure string
         });
       }
     } catch (error) {
@@ -143,6 +146,7 @@ export class WhatsAppService {
         await storage.upsertStoreConfig({
           ...config,
           whatsappQR: this.qrCode,
+          taxRate: config.taxRate ?? '11.00',
         });
       }
     } catch (error) {
@@ -157,6 +161,7 @@ export class WhatsAppService {
         await storage.upsertStoreConfig({
           ...config,
           whatsappQR: null,
+          taxRate: config.taxRate ?? '11.00',
         });
       }
     } catch (error) {

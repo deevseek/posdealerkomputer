@@ -596,16 +596,30 @@ export default function Inventory() {
   });
 
   const getStockStatus = (product: any) => {
-    const stock = product.stock || 0;
+    // Calculate stock from all movements, including warranty
+    const movements = stockMovements.filter((m: any) => m.productId === product.id);
+    let stock = 0;
+    movements.forEach((m: any) => {
+      if (
+        m.movementType === 'in' ||
+        m.movementType === 'warranty_return'
+      ) {
+        stock += m.quantity;
+      } else if (
+        m.movementType === 'out' ||
+        m.movementType === 'warranty_exchange'
+      ) {
+        stock -= m.quantity;
+      }
+    });
     const minStock = product.minStock || 5;
-    
     if (stock <= 0) {
-      return { text: "Stok Habis", variant: "destructive" as const, color: "text-red-600" };
+      return { text: "Stok Habis", variant: "destructive" as const, color: "text-red-600", stock };
     }
     if (stock <= minStock) {
-      return { text: "Stok Rendah", variant: "secondary" as const, color: "text-orange-600" };
+      return { text: "Stok Rendah", variant: "secondary" as const, color: "text-orange-600", stock };
     }
-    return { text: "Tersedia", variant: "default" as const, color: "text-green-600" };
+    return { text: "Tersedia", variant: "default" as const, color: "text-green-600", stock };
   };
 
   const filteredProducts = products.filter((product: any) =>
@@ -614,9 +628,9 @@ export default function Inventory() {
   );
 
   const lowStockProducts = products.filter((product: any) => {
-    const stock = product.stock || 0;
-    const minStock = product.minStock || 5;
-    return stock <= minStock;
+  const stock = getStockStatus(product).stock;
+  const minStock = product.minStock || 5;
+  return stock <= minStock;
   });
 
   const incomingStock = (purchaseOrders as any[]).filter((po: any) => 
@@ -790,26 +804,29 @@ export default function Inventory() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {lowStockProducts.map((product: any) => {
+                        {filteredProducts.map((product: any) => {
                           const stockStatus = getStockStatus(product);
                           return (
                             <TableRow key={product.id}>
-                              <TableCell className="font-medium">
-                                {product.name}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <span className={stockStatus.color}>
-                                  {product.stock || 0}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {product.minStock || 5}
-                              </TableCell>
                               <TableCell>
-                                <Badge variant={stockStatus.variant}>
-                                  {stockStatus.text}
-                                </Badge>
+                                <div>
+                                  <p className="font-medium" data-testid={`product-name-${product.id}`}>{product.name}</p>
+                                  <p className="text-sm text-muted-foreground">{product.description}</p>
+                                </div>
                               </TableCell>
+                              <TableCell data-testid={`product-sku-${product.id}`}>{product.sku || "-"}</TableCell>
+                              <TableCell className="text-right">
+                                <span className={`font-bold text-lg ${stockStatus.color}`} data-testid={`product-stock-${product.id}`}>{stockStatus.stock}</span>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">{product.minStock || 5}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="space-y-1">
+                                  <div className="font-medium">Rp {Number(product.averageCost || 0).toLocaleString('id-ID')}</div>
+                                  <div className="text-xs text-muted-foreground">Last: Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}</TableCell>
+                              <TableCell><Badge variant={stockStatus.variant}>{stockStatus.text}</Badge></TableCell>
                             </TableRow>
                           );
                         })}
@@ -905,49 +922,27 @@ export default function Inventory() {
                       <TableBody>
                         {filteredProducts.map((product: any) => {
                           const stockStatus = getStockStatus(product);
-                          
                           return (
                             <TableRow key={product.id}>
                               <TableCell>
                                 <div>
-                                  <p className="font-medium" data-testid={`product-name-${product.id}`}>
-                                    {product.name}
-                                  </p>
-                                  <p className="text-sm text-muted-foreground">
-                                    {product.description}
-                                  </p>
+                                  <p className="font-medium" data-testid={`product-name-${product.id}`}>{product.name}</p>
+                                  <p className="text-sm text-muted-foreground">{product.description}</p>
                                 </div>
                               </TableCell>
-                              <TableCell data-testid={`product-sku-${product.id}`}>
-                                {product.sku || "-"}
-                              </TableCell>
+                              <TableCell data-testid={`product-sku-${product.id}`}>{product.sku || "-"}</TableCell>
                               <TableCell className="text-right">
-                                <span 
-                                  className={`font-bold text-lg ${stockStatus.color}`}
-                                  data-testid={`product-stock-${product.id}`}
-                                >
-                                  {product.stock || 0}
-                                </span>
+                                <span className={`font-bold text-lg ${stockStatus.color}`} data-testid={`product-stock-${product.id}`}>{stockStatus.stock}</span>
                               </TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {product.minStock || 5}
-                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">{product.minStock || 5}</TableCell>
                               <TableCell className="text-right">
                                 <div className="space-y-1">
                                   <div className="font-medium">Rp {Number(product.averageCost || 0).toLocaleString('id-ID')}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Last: Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}
-                                  </div>
+                                  <div className="text-xs text-muted-foreground">Last: Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}</div>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right">
-                                Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant={stockStatus.variant}>
-                                  {stockStatus.text}
-                                </Badge>
-                              </TableCell>
+                              <TableCell className="text-right">Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}</TableCell>
+                              <TableCell><Badge variant={stockStatus.variant}>{stockStatus.text}</Badge></TableCell>
                             </TableRow>
                           );
                         })}
@@ -1111,30 +1106,59 @@ export default function Inventory() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        stockMovements.slice(0, 20).map((movement: any) => (
-                          <TableRow key={movement.id}>
-                            <TableCell className="text-sm">
-                              {formatDateShort(movement.createdAt)}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {movement.productName || movement.productId}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={movement.movementType === 'in' ? 'default' : 'secondary'}>
-                                {movement.movementType === 'in' ? 'IN' : 'OUT'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
-                              {movement.movementType === 'in' ? '+' : '-'}{movement.quantity}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {movement.referenceType === 'purchase' ? 'Purchase Order' : movement.referenceType}
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {movement.notes}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        stockMovements.slice(0, 20).map((movement: any) => {
+                          let typeLabel = '';
+                          let badgeVariant: 'default' | 'destructive' | 'secondary' | 'outline' = 'secondary';
+                          let qtyPrefix = '';
+                          switch (movement.movementType) {
+                            case 'in':
+                              typeLabel = 'IN';
+                              badgeVariant = 'default';
+                              qtyPrefix = '+';
+                              break;
+                            case 'out':
+                              typeLabel = 'OUT';
+                              badgeVariant = 'secondary';
+                              qtyPrefix = '-';
+                              break;
+                            case 'warranty_return':
+                              typeLabel = 'Warranty Return';
+                              badgeVariant = 'default'; // 'success' replaced with 'default'
+                              qtyPrefix = '+ (Return)';
+                              break;
+                            case 'warranty_exchange':
+                              typeLabel = 'Warranty Exchange';
+                              badgeVariant = 'destructive';
+                              qtyPrefix = '- (Exchange)';
+                              break;
+                            default:
+                              typeLabel = movement.movementType;
+                              badgeVariant = 'outline';
+                              qtyPrefix = '';
+                          }
+                          return (
+                            <TableRow key={movement.id}>
+                              <TableCell className="text-sm">
+                                {formatDateShort(movement.createdAt)}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {movement.productName || movement.productId}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={badgeVariant}>{typeLabel}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-medium">
+                                {qtyPrefix} {movement.quantity}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {movement.referenceType === 'purchase' ? 'Purchase Order' : movement.referenceType}
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                {movement.notes}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>

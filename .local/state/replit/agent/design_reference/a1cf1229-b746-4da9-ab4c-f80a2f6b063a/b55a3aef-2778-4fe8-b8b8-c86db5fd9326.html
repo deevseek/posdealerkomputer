@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaptopPOS - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                borderRadius: {
+                    lg: "var(--radius)",
+                    md: "calc(var(--radius) - 2px)",
+                    sm: "calc(var(--radius) - 4px)",
+                },
+                colors: {
+                    background: "var(--background)",
+                    foreground: "var(--foreground)",
+                    card: {
+                        DEFAULT: "var(--card)",
+                        foreground: "var(--card-foreground)",
+                    },
+                    popover: {
+                        DEFAULT: "var(--popover)",
+                        foreground: "var(--popover-foreground)",
+                    },
+                    primary: {
+                        DEFAULT: "var(--primary)",
+                        foreground: "var(--primary-foreground)",
+                    },
+                    secondary: {
+                        DEFAULT: "var(--secondary)",
+                        foreground: "var(--secondary-foreground)",
+                    },
+                    muted: {
+                        DEFAULT: "var(--muted)",
+                        foreground: "var(--muted-foreground)",
+                    },
+                    accent: {
+                        DEFAULT: "var(--accent)",
+                        foreground: "var(--accent-foreground)",
+                    },
+                    destructive: {
+                        DEFAULT: "var(--destructive)",
+                        foreground: "var(--destructive-foreground)",
+                    },
+                    border: "var(--border)",
+                    input: "var(--input)",
+                    ring: "var(--ring)",
+                }
+            },
+            fontFamily: {
+                sans: ["Inter", "system-ui", "sans-serif"],
+            }
+        }
+    };
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --background: hsl(210 40% 98%);
+            --foreground: hsl(222.2 84% 4.9%);
+            --card: hsl(0 0% 100%);
+            --card-foreground: hsl(222.2 84% 4.9%);
+            --popover: hsl(0 0% 100%);
+            --popover-foreground: hsl(222.2 84% 4.9%);
+            --primary: hsl(221 83% 53%);
+            --primary-foreground: hsl(210 40% 98%);
+            --secondary: hsl(215 16% 47%);
+            --secondary-foreground: hsl(222.2 84% 4.9%);
+            --muted: hsl(210 40% 96%);
+            --muted-foreground: hsl(215.4 16.3% 46.9%);
+            --accent: hsl(158 64% 52%);
+            --accent-foreground: hsl(210 40% 98%);
+            --destructive: hsl(0 84% 60%);
+            --destructive-foreground: hsl(210 40% 98%);
+            --border: hsl(214.3 31.8% 91.4%);
+            --input: hsl(214.3 31.8% 91.4%);
+            --ring: hsl(221 83% 53%);
+            --radius: 0.5rem;
+        }
+        .sidebar-collapsed {
+            width: 4rem;
+        }
+        .sidebar-expanded {
+            width: 16rem;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body class="bg-background text-foreground font-sans">
+    <!-- @COMPONENT: AppLayout -->
+    <div class="flex h-screen overflow-hidden">
+        <!-- @COMPONENT: Sidebar -->
+        <aside id="sidebar" class="sidebar-expanded transition-all duration-300 bg-card border-r border-border flex flex-col shadow-sm">
+            <div class="p-4 border-b border-border">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                        <i class="fas fa-laptop text-primary-foreground text-sm"></i>
+                    </div>
+                    <div id="logo-text" class="transition-opacity duration-300">
+                        <h1 class="text-lg font-semibold text-foreground">LaptopPOS</h1>
+                        <p class="text-xs text-muted-foreground" data-bind="store.name">Service & Sales</p>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                <!-- Dashboard -->
+                <a href="#dashboard" class="nav-item active flex items-center space-x-3 px-3 py-2 rounded-md bg-primary text-primary-foreground">
+                    <i class="fas fa-chart-line w-5"></i>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+
+                <!-- @STATE: currentUserRole:string -->
+                <!-- POS Section - visible to Admin, Kasir, Owner -->
+                <div class="space-y-1" data-role-access="admin,kasir,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-cash-register w-5"></i>
+                        <span class="nav-text">POS</span>
+                    </div>
+                </div>
+
+                <!-- Service Section - visible to Admin, Teknisi, Owner -->
+                <div class="space-y-1" data-role-access="admin,teknisi,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-tools w-5"></i>
+                        <span class="nav-text">Service</span>
+                    </div>
+                </div>
+
+                <!-- Inventory Section - visible to Admin, Purchasing, Owner -->
+                <div class="space-y-1" data-role-access="admin,purchasing,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-boxes w-5"></i>
+                        <span class="nav-text">Inventory</span>
+                    </div>
+                </div>
+
+                <!-- Financial Section - visible to Admin, Finance, Owner -->
+                <div class="space-y-1" data-role-access="admin,finance,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-chart-pie w-5"></i>
+                        <span class="nav-text">Financial</span>
+                    </div>
+                </div>
+
+                <!-- Customers & Suppliers -->
+                <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                    <i class="fas fa-users w-5"></i>
+                    <span class="nav-text">Customers</span>
+                </div>
+
+                <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                    <i class="fas fa-truck w-5"></i>
+                    <span class="nav-text">Suppliers</span>
+                </div>
+
+                <!-- Reports - visible to Admin, Finance, Owner -->
+                <div class="space-y-1" data-role-access="admin,finance,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-file-alt w-5"></i>
+                        <span class="nav-text">Reports</span>
+                    </div>
+                </div>
+
+                <!-- Settings - visible to Admin, Owner only -->
+                <div class="space-y-1" data-role-access="admin,owner">
+                    <div class="nav-item flex items-center space-x-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                        <i class="fas fa-cog w-5"></i>
+                        <span class="nav-text">Settings</span>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="p-4 border-t border-border">
+                <button id="collapse-btn" class="w-full flex items-center justify-center p-2 rounded-md bg-muted hover:bg-primary hover:text-primary-foreground transition-colors">
+                    <i id="collapse-icon" class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+        </aside>
+        <!-- @END_COMPONENT: Sidebar -->
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <!-- @COMPONENT: Header -->
+            <header class="bg-card border-b border-border px-6 py-4 flex justify-between items-center shadow-sm">
+                <div class="flex items-center space-x-4">
+                    <h2 class="text-xl font-semibold text-foreground">Dashboard</h2>
+                    <nav class="text-sm text-muted-foreground">
+                        <span>Home</span> / <span class="text-foreground">Dashboard</span>
+                    </nav>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Quick Actions -->
+                    <button class="btn-primary px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                        <i class="fas fa-plus mr-2"></i>New Transaction
+                    </button>
+                    
+                    <!-- User Profile -->
+                    <div class="flex items-center space-x-3">
+                        <div class="text-right">
+                            <p class="text-sm font-medium" data-bind="user.name">John Admin</p>
+                            <p class="text-xs text-muted-foreground" data-bind="user.role">Administrator</p>
+                        </div>
+                        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-primary-foreground text-sm"></i>
+                        </div>
+                        <button class="text-muted-foreground hover:text-foreground transition-colors">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            <!-- @END_COMPONENT: Header -->
+
+            <!-- @COMPONENT: MainContent -->
+            <main class="flex-1 overflow-y-auto p-6">
+                <!-- Dashboard Stats Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <!-- @COMPONENT: StatCard -->
+                    <div class="bg-card rounded-lg border border-border p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-muted-foreground">Today's Sales</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="stats.todaySales">Rp 12,450,000</p>
+                                <p class="text-sm text-accent mt-1">
+                                    <i class="fas fa-arrow-up mr-1"></i>+12% from yesterday
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-money-bill-wave text-primary text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card rounded-lg border border-border p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-muted-foreground">Active Services</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="stats.activeServices">23</p>
+                                <p class="text-sm text-secondary mt-1">
+                                    <i class="fas fa-clock mr-1"></i>5 urgent
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-tools text-accent text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card rounded-lg border border-border p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-muted-foreground">Low Stock Items</p>
+                                <p class="text-2xl font-bold text-destructive" data-bind="stats.lowStock">8</p>
+                                <p class="text-sm text-muted-foreground mt-1">
+                                    Requires attention
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-destructive/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-exclamation-triangle text-destructive text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-card rounded-lg border border-border p-6 shadow-sm">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-muted-foreground">Monthly Profit</p>
+                                <p class="text-2xl font-bold text-foreground" data-bind="stats.monthlyProfit">Rp 45,200,000</p>
+                                <p class="text-sm text-accent mt-1">
+                                    <i class="fas fa-arrow-up mr-1"></i>+8% this month
+                                </p>
+                            </div>
+                            <div class="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center">
+                                <i class="fas fa-chart-line text-accent text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: StatCard -->
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <!-- @COMPONENT: RecentTransactions -->
+                    <div class="lg:col-span-2 bg-card rounded-lg border border-border shadow-sm">
+                        <div class="p-6 border-b border-border">
+                            <div class="flex items-center justify-between">
+                                <h3 class="text-lg font-semibold text-foreground">Recent Transactions</h3>
+                                <button class="text-primary hover:text-primary/80 text-sm font-medium">
+                                    View All <i class="fas fa-arrow-right ml-1"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="p-6">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="text-xs text-muted-foreground uppercase border-b border-border">
+                                        <tr>
+                                            <th class="text-left py-3">Transaction ID</th>
+                                            <th class="text-left py-3">Customer</th>
+                                            <th class="text-left py-3">Type</th>
+                                            <th class="text-right py-3">Amount</th>
+                                            <th class="text-left py-3">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="text-foreground">
+                                        <!-- @MAP: transactions.map(transaction => ( -->
+                                        <tr class="border-b border-border hover:bg-muted/50 transition-colors">
+                                            <td class="py-3 font-medium" data-bind="transaction.id">TRX-001</td>
+                                            <td class="py-3" data-bind="transaction.customer">Budi Santoso</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-primary/10 text-primary">
+                                                    <i class="fas fa-shopping-cart mr-1"></i>Sale
+                                                </span>
+                                            </td>
+                                            <td class="py-3 text-right font-medium" data-bind="transaction.amount">Rp 2,450,000</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-accent/10 text-accent">
+                                                    <i class="fas fa-check-circle mr-1"></i>Completed
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr class="border-b border-border hover:bg-muted/50 transition-colors">
+                                            <td class="py-3 font-medium">SVC-045</td>
+                                            <td class="py-3">Maria Christina</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-accent/10 text-accent">
+                                                    <i class="fas fa-wrench mr-1"></i>Service
+                                                </span>
+                                            </td>
+                                            <td class="py-3 text-right font-medium">Rp 850,000</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-secondary/10 text-secondary">
+                                                    <i class="fas fa-clock mr-1"></i>In Progress
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr class="hover:bg-muted/50 transition-colors">
+                                            <td class="py-3 font-medium">TRX-002</td>
+                                            <td class="py-3">Ahmad Rizki</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-primary/10 text-primary">
+                                                    <i class="fas fa-shopping-cart mr-1"></i>Sale
+                                                </span>
+                                            </td>
+                                            <td class="py-3 text-right font-medium">Rp 1,250,000</td>
+                                            <td class="py-3">
+                                                <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-accent/10 text-accent">
+                                                    <i class="fas fa-check-circle mr-1"></i>Completed
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <!-- @END_MAP )) -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: RecentTransactions -->
+
+                    <!-- @COMPONENT: QuickActions -->
+                    <div class="bg-card rounded-lg border border-border shadow-sm">
+                        <div class="p-6 border-b border-border">
+                            <h3 class="text-lg font-semibold text-foreground">Quick Actions</h3>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <button data-event="click:handleNewSale" class="w-full flex items-center space-x-3 p-3 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>New Sale</span>
+                            </button>
+                            
+                            <button data-event="click:handleNewService" class="w-full flex items-center space-x-3 p-3 rounded-md border border-border hover:bg-muted transition-colors">
+                                <i class="fas fa-wrench text-accent"></i>
+                                <span>New Service</span>
+                            </button>
+                            
+                            <button data-event="click:handleAddProduct" class="w-full flex items-center space-x-3 p-3 rounded-md border border-border hover:bg-muted transition-colors">
+                                <i class="fas fa-box text-secondary"></i>
+                                <span>Add Product</span>
+                            </button>
+                            
+                            <button data-event="click:handleAddCustomer" class="w-full flex items-center space-x-3 p-3 rounded-md border border-border hover:bg-muted transition-colors">
+                                <i class="fas fa-user-plus text-primary"></i>
+                                <span>Add Customer</span>
+                            </button>
+                            
+                            <button data-event="click:openReports" class="w-full flex items-center space-x-3 p-3 rounded-md border border-border hover:bg-muted transition-colors">
+                                <i class="fas fa-file-download text-muted-foreground"></i>
+                                <span>Generate Report</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: QuickActions -->
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- @COMPONENT: ServiceStatus -->
+                    <div class="bg-card rounded-lg border border-border shadow-sm">
+                        <div class="p-6 border-b border-border">
+                            <h3 class="text-lg font-semibold text-foreground">Service Status</h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <!-- @MAP: services.map(service => ( -->
+                                <div class="flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/50 transition-colors">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-laptop text-secondary"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground" data-bind="service.customerName">Andi Pratama</p>
+                                            <p class="text-xs text-muted-foreground" data-bind="service.device">ASUS ROG Strix - Screen Repair</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-secondary/10 text-secondary">
+                                            In Progress
+                                        </span>
+                                        <p class="text-xs text-muted-foreground mt-1" data-bind="service.estimatedCompletion">Est: 2 days</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/50 transition-colors">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-accent/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-laptop text-accent"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground">Sari Indah</p>
+                                            <p class="text-xs text-muted-foreground">Dell Inspiron - Virus Removal</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-accent/10 text-accent">
+                                            Ready
+                                        </span>
+                                        <p class="text-xs text-muted-foreground mt-1">Est: Completed</p>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between p-3 rounded-md border border-border hover:bg-muted/50 transition-colors">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-laptop text-destructive"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground">Tony Wijaya</p>
+                                            <p class="text-xs text-muted-foreground">MacBook Pro - Logic Board</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-md text-xs bg-destructive/10 text-destructive">
+                                            Delayed
+                                        </span>
+                                        <p class="text-xs text-muted-foreground mt-1">Est: 5 days</p>
+                                    </div>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: ServiceStatus -->
+
+                    <!-- @COMPONENT: InventoryAlerts -->
+                    <div class="bg-card rounded-lg border border-border shadow-sm">
+                        <div class="p-6 border-b border-border">
+                            <h3 class="text-lg font-semibold text-foreground">Inventory Alerts</h3>
+                        </div>
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <!-- @MAP: alerts.map(alert => ( -->
+                                <div class="flex items-center justify-between p-3 rounded-md border border-destructive/20 bg-destructive/5">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-exclamation text-destructive"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground" data-bind="alert.productName">RAM DDR4 8GB</p>
+                                            <p class="text-xs text-muted-foreground">Stock: <span data-bind="alert.currentStock">2 units</span></p>
+                                        </div>
+                                    </div>
+                                    <button class="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                                        Reorder
+                                    </button>
+                                </div>
+
+                                <div class="flex items-center justify-between p-3 rounded-md border border-destructive/20 bg-destructive/5">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-destructive/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-exclamation text-destructive"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground">SSD 512GB</p>
+                                            <p class="text-xs text-muted-foreground">Stock: <span>1 unit</span></p>
+                                        </div>
+                                    </div>
+                                    <button class="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                                        Reorder
+                                    </button>
+                                </div>
+
+                                <div class="flex items-center justify-between p-3 rounded-md border border-secondary/20 bg-secondary/5">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-secondary/10 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-info text-secondary"></i>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm font-medium text-foreground">Laptop Charger</p>
+                                            <p class="text-xs text-muted-foreground">Stock: <span>5 units</span></p>
+                                        </div>
+                                    </div>
+                                    <button class="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition-colors">
+                                        Reorder
+                                    </button>
+                                </div>
+                                <!-- @END_MAP )) -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- @END_COMPONENT: InventoryAlerts -->
+                </div>
+            </main>
+            <!-- @END_COMPONENT: MainContent -->
+        </div>
+    </div>
+    <!-- @END_COMPONENT: AppLayout -->
+
+    <!-- @COMPONENT: Modal - New Transaction -->
+    <!-- @STATE: showTransactionModal:boolean = false -->
+    <div id="transactionModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-50" data-event="click:closeModal">
+        <div class="bg-card rounded-lg border border-border shadow-lg w-full max-w-4xl max-h-[90vh] overflow-hidden" data-event="click:stopPropagation">
+            <div class="p-6 border-b border-border flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-foreground">New Transaction</h2>
+                <button data-event="click:closeModal" class="text-muted-foreground hover:text-foreground">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Customer Selection -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Customer</label>
+                            <div class="relative">
+                                <input type="text" placeholder="Search customer..." class="w-full px-4 py-2 border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent">
+                                <button class="absolute right-3 top-2 text-muted-foreground hover:text-foreground">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Transaction Type -->
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Transaction Type</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button class="p-3 border border-border rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                    <i class="fas fa-shopping-cart mb-2 block"></i>
+                                    <span class="text-sm">Product Sale</span>
+                                </button>
+                                <button class="p-3 border border-border rounded-md hover:bg-muted transition-colors">
+                                    <i class="fas fa-tools mb-2 block"></i>
+                                    <span class="text-sm">Service</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Payment Method -->
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Payment Method</label>
+                            <select class="w-full px-4 py-2 border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent">
+                                <option>Cash</option>
+                                <option>Bank Transfer</option>
+                                <option>QRIS</option>
+                                <option>Installment</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Product Selection -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-foreground mb-2">Add Products</label>
+                            <div class="relative">
+                                <input type="text" placeholder="Scan barcode or search product..." class="w-full px-4 py-2 border border-input rounded-md focus:ring-2 focus:ring-ring focus:border-transparent">
+                                <button class="absolute right-3 top-2 text-muted-foreground hover:text-foreground">
+                                    <i class="fas fa-barcode"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Selected Items -->
+                        <div class="bg-muted rounded-md p-4 space-y-2">
+                            <div class="flex justify-between items-center text-sm">
+                                <span class="font-medium">ASUS VivoBook 15</span>
+                                <div class="flex items-center space-x-2">
+                                    <button class="w-6 h-6 rounded-md bg-secondary text-secondary-foreground text-xs">-</button>
+                                    <span data-bind="item.quantity">1</span>
+                                    <button class="w-6 h-6 rounded-md bg-secondary text-secondary-foreground text-xs">+</button>
+                                    <span class="font-medium ml-2" data-bind="item.totalPrice">Rp 8,500,000</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Transaction Summary -->
+                        <div class="bg-muted rounded-md p-4 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span>Subtotal:</span>
+                                <span data-bind="transaction.subtotal">Rp 8,500,000</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Tax (11%):</span>
+                                <span data-bind="transaction.tax">Rp 935,000</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Discount:</span>
+                                <span data-bind="transaction.discount">- Rp 0</span>
+                            </div>
+                            <div class="border-t border-border pt-2 flex justify-between font-semibold">
+                                <span>Total:</span>
+                                <span data-bind="transaction.total">Rp 9,435,000</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-end space-x-3 mt-6 pt-6 border-t border-border">
+                    <button data-event="click:closeModal" class="px-6 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+                        Cancel
+                    </button>
+                    <button data-event="click:saveTransaction" data-implementation="Should validate and process transaction" class="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                        Process Transaction
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: Modal -->
+
+    <!-- @COMPONENT: Receipt Modal -->
+    <!-- @STATE: showReceiptModal:boolean = false -->
+    <div id="receiptModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-card rounded-lg border border-border shadow-lg w-full max-w-md">
+            <div class="p-6 border-b border-border flex justify-between items-center no-print">
+                <h2 class="text-xl font-semibold text-foreground">Receipt</h2>
+                <button data-event="click:closeReceiptModal" class="text-muted-foreground hover:text-foreground">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- @COMPONENT: PrintableReceipt -->
+            <div class="p-6" id="receipt-content">
+                <div class="text-center mb-6">
+                    <h3 class="text-lg font-bold text-foreground" data-bind="store.name">LaptopPOS Service Center</h3>
+                    <p class="text-xs text-muted-foreground" data-bind="store.address">Jl. Teknologi No. 123, Jakarta</p>
+                    <p class="text-xs text-muted-foreground" data-bind="store.phone">Phone: (021) 12345678</p>
+                </div>
+
+                <div class="border-t border-b border-border py-4 space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span>Receipt #:</span>
+                        <span class="font-mono" data-bind="receipt.number">TRX-001</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>Date:</span>
+                        <span data-bind="receipt.date">2024-01-15 14:30</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>Cashier:</span>
+                        <span data-bind="cashier.name">John Admin</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>Customer:</span>
+                        <span data-bind="customer.name">Budi Santoso</span>
+                    </div>
+                </div>
+
+                <!-- @MAP: receiptItems.map(item => ( -->
+                <div class="py-4 space-y-2 border-b border-border">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium" data-bind="item.name">ASUS VivoBook 15</p>
+                            <p class="text-xs text-muted-foreground" data-bind="item.qty">Qty: 1 x Rp 8,500,000</p>
+                        </div>
+                        <p class="text-sm font-medium" data-bind="item.total">Rp 8,500,000</p>
+                    </div>
+                </div>
+                <!-- @END_MAP )) -->
+
+                <div class="py-4 space-y-2">
+                    <div class="flex justify-between text-sm">
+                        <span>Subtotal:</span>
+                        <span data-bind="receipt.subtotal">Rp 8,500,000</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span>Tax (11%):</span>
+                        <span data-bind="receipt.tax">Rp 935,000</span>
+                    </div>
+                    <div class="flex justify-between font-semibold text-lg border-t border-border pt-2">
+                        <span>TOTAL:</span>
+                        <span data-bind="receipt.total">Rp 9,435,000</span>
+                    </div>
+                </div>
+
+                <div class="text-center mt-6 text-xs text-muted-foreground">
+                    <p>Thank you for your business!</p>
+                    <p>Return policy: 7 days with receipt</p>
+                </div>
+            </div>
+            <!-- @END_COMPONENT: PrintableReceipt -->
+
+            <div class="p-6 border-t border-border flex space-x-3 no-print">
+                <button data-event="click:printReceipt" class="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors">
+                    <i class="fas fa-print mr-2"></i>Print
+                </button>
+                <button data-event="click:emailReceipt" class="flex-1 px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+                    <i class="fas fa-envelope mr-2"></i>Email
+                </button>
+            </div>
+        </div>
+    </div>
+    <!-- @END_COMPONENT: Receipt Modal -->
+
+    <script>
+        // TODO: Replace with React state management and API integration
+        (function() {
+            // Sidebar collapse functionality
+            const sidebar = document.getElementById('sidebar');
+            const collapseBtn = document.getElementById('collapse-btn');
+            const collapseIcon = document.getElementById('collapse-icon');
+            const logoText = document.getElementById('logo-text');
+            const navTexts = document.querySelectorAll('.nav-text');
+            
+            let isCollapsed = false;
+
+            collapseBtn.addEventListener('click', function() {
+                isCollapsed = !isCollapsed;
+                
+                if (isCollapsed) {
+                    sidebar.classList.remove('sidebar-expanded');
+                    sidebar.classList.add('sidebar-collapsed');
+                    collapseIcon.classList.remove('fa-chevron-left');
+                    collapseIcon.classList.add('fa-chevron-right');
+                    logoText.style.opacity = '0';
+                    navTexts.forEach(text => text.style.opacity = '0');
+                } else {
+                    sidebar.classList.remove('sidebar-collapsed');
+                    sidebar.classList.add('sidebar-expanded');
+                    collapseIcon.classList.remove('fa-chevron-right');
+                    collapseIcon.classList.add('fa-chevron-left');
+                    logoText.style.opacity = '1';
+                    navTexts.forEach(text => text.style.opacity = '1');
+                }
+            });
+
+            // Modal functionality
+            const transactionModal = document.getElementById('transactionModal');
+            const receiptModal = document.getElementById('receiptModal');
+            
+            // Open new transaction modal
+            document.querySelector('[data-event="click:handleNewSale"]').addEventListener('click', function() {
+                transactionModal.classList.remove('hidden');
+                // TODO: Initialize transaction form state
+            });
+
+            // Close modals
+            function closeModal() {
+                transactionModal.classList.add('hidden');
+                receiptModal.classList.add('hidden');
+            }
+
+            document.querySelectorAll('[data-event="click:closeModal"]').forEach(btn => {
+                btn.addEventListener('click', closeModal);
+            });
+
+            document.querySelectorAll('[data-event="click:closeReceiptModal"]').forEach(btn => {
+                btn.addEventListener('click', closeModal);
+            });
+
+            // Prevent modal close when clicking inside modal content
+            document.querySelectorAll('[data-event="click:stopPropagation"]').forEach(el => {
+                el.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+
+            // Process transaction
+            document.querySelector('[data-event="click:saveTransaction"]').addEventListener('click', function() {
+                // TODO: Implement transaction validation and processing
+                transactionModal.classList.add('hidden');
+                receiptModal.classList.remove('hidden');
+            });
+
+            // Print receipt
+            document.querySelector('[data-event="click:printReceipt"]').addEventListener('click', function() {
+                window.print();
+            });
+
+            // Role-based navigation visibility
+            // TODO: Implement proper role checking from authentication context
+            const currentUserRole = 'admin'; // This would come from authentication state
+            
+            document.querySelectorAll('[data-role-access]').forEach(element => {
+                const allowedRoles = element.getAttribute('data-role-access').split(',');
+                if (!allowedRoles.includes(currentUserRole)) {
+                    element.style.display = 'none';
+                }
+            });
+
+            // Navigation item click handlers
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    // Remove active class from all items
+                    document.querySelectorAll('.nav-item').forEach(nav => {
+                        nav.classList.remove('active', 'bg-primary', 'text-primary-foreground');
+                        nav.classList.add('text-muted-foreground');
+                    });
+                    
+                    // Add active class to clicked item
+                    this.classList.add('active', 'bg-primary', 'text-primary-foreground');
+                    this.classList.remove('text-muted-foreground');
+                    
+                    // TODO: Implement proper routing/page switching
+                });
+            });
+
+            // Quick action handlers
+            document.querySelector('[data-event="click:handleNewService"]').addEventListener('click', function() {
+                // TODO: Navigate to service creation page
+                console.log('Opening service creation form');
+            });
+
+            document.querySelector('[data-event="click:handleAddProduct"]').addEventListener('click', function() {
+                // TODO: Navigate to product management
+                console.log('Opening product management');
+            });
+
+            document.querySelector('[data-event="click:handleAddCustomer"]').addEventListener('click', function() {
+                // TODO: Navigate to customer management
+                console.log('Opening customer management');
+            });
+
+            document.querySelector('[data-event="click:openReports"]').addEventListener('click', function() {
+                // TODO: Navigate to reports page
+                console.log('Opening reports section');
+            });
+
+            // Auto-refresh dashboard data every 30 seconds
+            // TODO: Implement real-time data updates from API
+            setInterval(function() {
+                console.log('Refreshing dashboard data...');
+            }, 30000);
+
+            // Initialize tooltips or other UI enhancements here
+            // TODO: Add proper error handling and loading states
+        })();
+    </script>
+</body>
+</html>
