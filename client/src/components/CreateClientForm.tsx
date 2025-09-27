@@ -14,9 +14,19 @@ interface Plan {
 
 interface CreateClientFormProps {
   plans: Plan[];
-  onSubmit: (data: any) => void;
+  onSubmit: (data: {
+    name: string;
+    subdomain: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    planId: string;
+    trialDays: number;
+  }) => void;
   isLoading: boolean;
 }
+
+const sanitize = (value: string) => value.trim();
 
 export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFormProps) {
   const [formData, setFormData] = useState({
@@ -31,11 +41,19 @@ export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFor
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Find selected plan
-    const selectedPlan = plans.find(p => p.id === formData.planId);
-    // Use enum value directly from plan.name
-    const planEnum = selectedPlan ? selectedPlan.name : '';
-    onSubmit({ ...formData, plan: planEnum });
+    if (!formData.planId) {
+      return;
+    }
+
+    onSubmit({
+      name: sanitize(formData.name),
+      subdomain: sanitize(formData.subdomain.toLowerCase()),
+      email: sanitize(formData.email.toLowerCase()),
+      phone: sanitize(formData.phone) || undefined,
+      address: sanitize(formData.address) || undefined,
+      planId: formData.planId,
+      trialDays: formData.trialDays,
+    });
   };
 
   return (
@@ -137,7 +155,7 @@ export function CreateClientForm({ plans, onSubmit, isLoading }: CreateClientFor
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">
-        <Button type="submit" disabled={isLoading}>
+        <Button type="submit" disabled={isLoading || !formData.planId}>
           {isLoading ? 'Membuat...' : 'Buat Client'}
         </Button>
       </div>
