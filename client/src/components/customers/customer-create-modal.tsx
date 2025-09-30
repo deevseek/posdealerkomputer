@@ -26,6 +26,16 @@ const customerFormSchema = z.object({
 
 type CustomerFormData = z.infer<typeof customerFormSchema>;
 
+interface CreateCustomerPayload {
+  name: string;
+  clientId: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  paymentTerms: number;
+  rating: number;
+}
+
 interface CustomerCreateModalProps {
   open: boolean;
   onClose: () => void;
@@ -51,7 +61,7 @@ export default function CustomerCreateModal({
   });
 
   const createCustomerMutation = useMutation({
-    mutationFn: async (data: CustomerFormData) => {
+    mutationFn: async (data: CreateCustomerPayload) => {
       console.log('[CustomerCreateModal] API POST /api/customers payload:', data);
       const result = await apiRequest('POST', '/api/customers', data);
       console.log('[CustomerCreateModal] API response:', result);
@@ -90,16 +100,15 @@ export default function CustomerCreateModal({
   });
 
   const handleSubmit = (data: CustomerFormData) => {
-    // Clean up empty strings to null for optional fields
     const clientId = localStorage.getItem('clientId') || 'default';
-    const cleanData = {
-      name: data.name,
-      email: data.email || null,
-      phone: data.phone || null,
-      address: data.address || null,
+    const cleanData: CreateCustomerPayload = {
+      name: data.name.trim(),
+      email: data.email?.trim() || undefined,
+      phone: data.phone?.trim() || undefined,
+      address: data.address?.trim() || undefined,
       clientId,
-      paymentTerms: "Cash", // default value
-      rating: 0, // default value
+      paymentTerms: 30,
+      rating: 0,
     };
     console.log('[CustomerCreateModal] Submit data:', cleanData);
     createCustomerMutation.mutate(cleanData);

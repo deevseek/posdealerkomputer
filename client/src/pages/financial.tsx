@@ -22,7 +22,7 @@ export default function Financial() {
     <div className="flex h-screen bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header title="Keuangan" breadcrumb="Beranda / Keuangan" />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-background p-6">
           <div className="container mx-auto">
             <div className="max-w-2xl mx-auto text-center space-y-8">

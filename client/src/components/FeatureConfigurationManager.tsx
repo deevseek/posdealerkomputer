@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,29 @@ import {
   FileText, Settings, UserCog, Shield, Layers, MessageCircle, Palette,
   Database, CreditCard, BarChart3, CheckCircle, XCircle, Save
 } from 'lucide-react';
+
+import type { Plan as SaasPlan } from '@shared/saas-schema';
+
+type PlanFeatureLimits = {
+  maxUsers?: number | null;
+  maxTransactionsPerMonth?: number | null;
+  maxStorageGB?: number | null;
+  [key: string]: unknown;
+};
+
+type PlanFeatureResponse = {
+  planId: string;
+  planName: string;
+  features: string[];
+  limits: PlanFeatureLimits;
+};
+
+const defaultPlanFeatures: PlanFeatureResponse = {
+  planId: '',
+  planName: '',
+  features: [],
+  limits: {}
+};
 
 // Define all available application features
 const APPLICATION_FEATURES = [
@@ -145,21 +168,23 @@ export function FeatureConfigurationManager() {
   const queryClient = useQueryClient();
 
   // Fetch subscription plans
-  const { data: plans, isLoading: plansLoading } = useQuery({
+  const { data: plans = [], isLoading: plansLoading } = useQuery<SaasPlan[]>({
     queryKey: ['/api/admin/plans'],
     retry: false,
   });
 
   // Fetch plan features configuration
-  const { data: planFeatures } = useQuery({
+  const { data: planFeaturesResponse } = useQuery<PlanFeatureResponse | null>({
     queryKey: ['/api/admin/plan-features', selectedPlan],
     enabled: !!selectedPlan,
     retry: false,
   });
 
+  const planFeatures = useMemo(() => planFeaturesResponse ?? defaultPlanFeatures, [planFeaturesResponse]);
+
   // Update plan features mutation
   const updatePlanFeatures = useMutation({
-    mutationFn: async (data: { planId: string; features: any; limits: any }) => {
+    mutationFn: async (data: { planId: string; features: string[]; limits: PlanFeatureLimits }) => {
       return apiRequest('PUT', `/api/admin/plans/${data.planId}/features`, {
         features: data.features,
         limits: data.limits
@@ -183,32 +208,32 @@ export function FeatureConfigurationManager() {
   });
 
   const handleFeatureToggle = (featureId: string, enabled: boolean) => {
-    const currentFeatures = planFeatures?.features || [];
-    const updatedFeatures = enabled 
+    const currentFeatures = planFeatures.features || [];
+    const updatedFeatures = enabled
       ? [...currentFeatures.filter((f: string) => f !== featureId), featureId]
       : currentFeatures.filter((f: string) => f !== featureId);
-    
+
     updatePlanFeatures.mutate({
       planId: selectedPlan,
       features: updatedFeatures,
-      limits: planFeatures?.limits || {}
+      limits: planFeatures.limits || {}
     });
   };
 
   const handleLimitUpdate = (limitType: string, value: number) => {
     const updatedLimits = {
-      ...planFeatures?.limits || {},
+      ...(planFeatures.limits || {}),
       [limitType]: value
     };
-    
+
     updatePlanFeatures.mutate({
       planId: selectedPlan,
-      features: planFeatures?.features || [],
+      features: planFeatures.features || [],
       limits: updatedLimits
     });
   };
 
-  const selectedPlanData = plans?.find((p: any) => p.id === selectedPlan);
+  const selectedPlanData = plans.find((plan) => plan.id === selectedPlan);
 
   return (
     <div className="space-y-6">
@@ -220,7 +245,7 @@ export function FeatureConfigurationManager() {
             <SelectValue placeholder="Choose a subscription plan" />
           </SelectTrigger>
           <SelectContent>
-            {plans?.map((plan: any) => (
+            {plans.map((plan) => (
               <SelectItem key={plan.id} value={plan.id}>
                 <div className="flex items-center space-x-2">
                   <span>{plan.name}</span>
@@ -259,7 +284,7 @@ export function FeatureConfigurationManager() {
               <TabsContent value="features" className="space-y-4 mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {APPLICATION_FEATURES.map((feature) => {
-                    const isEnabled = planFeatures?.features?.includes(feature.id) || false;
+                    const isEnabled = planFeatures.features?.includes(feature.id) || false;
                     const IconComponent = feature.icon;
                     
                     return (
@@ -318,7 +343,7 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-users"
                           type="number"
-                          value={planFeatures?.limits?.maxUsers || selectedPlanData.maxUsers || 5}
+                          value={planFeatures.limits?.maxUsers ?? selectedPlanData.maxUsers ?? 5}
                           onChange={(e) => handleLimitUpdate('maxUsers', parseInt(e.target.value))}
                           className="mt-1"
                           min="1"
@@ -341,7 +366,7 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-transactions"
                           type="number"
-                          value={planFeatures?.limits?.maxTransactionsPerMonth || selectedPlanData.maxTransactionsPerMonth || 1000}
+                          value={planFeatures.limits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 1000}
                           onChange={(e) => handleLimitUpdate('maxTransactionsPerMonth', parseInt(e.target.value))}
                           className="mt-1"
                           min="1"
@@ -364,7 +389,7 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-storage"
                           type="number"
-                          value={planFeatures?.limits?.maxStorageGB || selectedPlanData.maxStorageGB || 1}
+                          value={planFeatures.limits?.maxStorageGB ?? selectedPlanData.maxStorageGB ?? 1}
                           onChange={(e) => handleLimitUpdate('maxStorageGB', parseInt(e.target.value))}
                           className="mt-1"
                           min="1"
@@ -384,15 +409,15 @@ export function FeatureConfigurationManager() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="font-medium text-blue-700">Active Features:</span>
-                        <span className="ml-2 font-bold">{planFeatures?.features?.length || 0}</span>
+                        <span className="ml-2 font-bold">{planFeatures.features?.length || 0}</span>
                       </div>
                       <div>
                         <span className="font-medium text-blue-700">Max Users:</span>
-                        <span className="ml-2 font-bold">{planFeatures?.limits?.maxUsers || selectedPlanData.maxUsers}</span>
+                        <span className="ml-2 font-bold">{planFeatures.limits?.maxUsers ?? selectedPlanData.maxUsers}</span>
                       </div>
                       <div>
                         <span className="font-medium text-blue-700">Monthly Transactions:</span>
-                        <span className="ml-2 font-bold">{(planFeatures?.limits?.maxTransactionsPerMonth || selectedPlanData.maxTransactionsPerMonth)?.toLocaleString()}</span>
+                        <span className="ml-2 font-bold">{(planFeatures.limits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 0).toLocaleString()}</span>
                       </div>
                     </div>
                   </CardContent>

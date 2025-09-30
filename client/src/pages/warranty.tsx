@@ -50,48 +50,64 @@ interface WarrantyItem {
   id: string;
   type: 'service' | 'sale';
   customerName: string;
-  customerPhone?: string;
+  customerPhone?: string | null;
   productName?: string;
   deviceInfo?: string;
   warrantyDuration: number;
-  warrantyStartDate: string;
-  warrantyEndDate?: string;
+  warrantyStartDate: string | null;
+  warrantyEndDate?: string | null;
   status: 'active' | 'expired' | 'unlimited';
   daysRemaining?: number;
   ticketNumber?: string;
   transactionNumber?: string;
-  customerId: string; // Add customerId to warranty item
+  customerId?: string | null; // Add customerId to warranty item
 }
 
 // Import specific schema types with aliasing
-import { WarrantyClaim as SharedWarrantyClaim } from "@shared/schema";
+import { WarrantyClaim as SharedWarrantyClaim, type Customer, type Product, type Transaction, type ServiceTicket } from "@shared/schema";
 
 // Extended WarrantyClaim interface with joined reference fields (type-safe)
 type EnhancedWarrantyClaim = SharedWarrantyClaim & {
   customerName?: string;
   transactionNumber?: string;
   serviceTicketNumber?: string;
+  deviceInfo?: string;
+  productName?: string;
+};
+
+type ServiceTicketWithCustomer = ServiceTicket & {
+  customerName?: string | null;
+  customer?: { name?: string | null } | null;
+};
+
+type TransactionWithItems = Transaction & {
+  items?: Array<{
+    product?: { name?: string | null } | null;
+  }>;
 };
 
 
-function getWarrantyStatus(endDate?: string, duration?: number): { status: 'active' | 'expired' | 'unlimited', daysRemaining?: number } {
+function getWarrantyStatus(endDate?: string | Date | null, duration?: number | null): {
+  status: 'active' | 'expired' | 'unlimited';
+  daysRemaining?: number;
+} {
   if (!duration || duration >= 9999) {
     return { status: 'unlimited' };
   }
-  
+
   if (!endDate) {
     return { status: 'expired' };
   }
-  
+
   const now = getCurrentJakartaTime();
   const end = new Date(endDate);
   const diffTime = end.getTime() - now.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
+
   if (diffDays <= 0) {
     return { status: 'expired' };
   }
-  
+
   return { status: 'active', daysRemaining: diffDays };
 }
 
@@ -127,42 +143,42 @@ export default function WarrantyPage() {
   const { toast } = useToast();
 
   // Fetch service tickets with warranties
-  const { data: serviceTickets = [] } = useQuery({
+  const { data: serviceTickets = [] } = useQuery<ServiceTicketWithCustomer[]>({
     queryKey: ["/api/service-tickets"],
     queryFn: async () => {
       const response = await fetch("/api/service-tickets", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch service tickets");
-      return response.json();
+      return response.json() as Promise<ServiceTicketWithCustomer[]>;
     },
   });
 
   // Fetch transactions with warranties
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] } = useQuery<TransactionWithItems[]>({
     queryKey: ["/api/transactions"],
     queryFn: async () => {
       const response = await fetch("/api/transactions", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch transactions");
-      return response.json();
+      return response.json() as Promise<TransactionWithItems[]>;
     },
   });
 
   // Fetch customers for lookup
-  const { data: customers = [] } = useQuery({
+  const { data: customers = [] } = useQuery<Customer[]>({
     queryKey: ["/api/customers"],
     queryFn: async () => {
       const response = await fetch("/api/customers", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch customers");
-      return response.json();
+      return response.json() as Promise<Customer[]>;
     },
   });
 
   // Fetch products for lookup
-  const { data: products = [] } = useQuery({
+  const { data: products = [] } = useQuery<Product[]>({
     queryKey: ["/api/products"],
     queryFn: async () => {
       const response = await fetch("/api/products", { credentials: "include" });
       if (!response.ok) throw new Error("Failed to fetch products");
-      return response.json();
+      return response.json() as Promise<Product[]>;
     },
   });
 
@@ -172,22 +188,22 @@ export default function WarrantyPage() {
   });
 
   // Enhance warranty claims with customer data
-  const enhancedClaims: EnhancedWarrantyClaim[] = warrantyClaims.map((claim: EnhancedWarrantyClaim) => {
-    const customer = customers.find((c: any) => c.id === claim.customerId);
+  const enhancedClaims: EnhancedWarrantyClaim[] = warrantyClaims.map((claim) => {
+    const customer = customers.find((c) => c.id === claim.customerId);
     let deviceInfo = "";
     let productName = "";
 
     if (claim.originalServiceTicketId) {
-      const ticket = serviceTickets.find((t: any) => t.id === claim.originalServiceTicketId);
+      const ticket = serviceTickets.find((t) => t.id === claim.originalServiceTicketId);
       if (ticket) {
         deviceInfo = `${ticket.deviceType}${ticket.deviceBrand ? ` - ${ticket.deviceBrand}` : ''}${ticket.deviceModel ? ` ${ticket.deviceModel}` : ''}`;
       }
     }
 
     if (claim.originalTransactionId) {
-      const transaction = transactions.find((t: any) => t.id === claim.originalTransactionId);
+      const transaction = transactions.find((t) => t.id === claim.originalTransactionId);
       if (transaction) {
-        productName = transaction.items?.map((item: any) => item.product?.name || 'Unknown Product').join(', ') || 'Unknown Product';
+        productName = transaction.items?.map((item) => item.product?.name || 'Unknown Product').join(', ') || 'Unknown Product';
       }
     }
 
@@ -203,48 +219,52 @@ export default function WarrantyPage() {
   const warrantyItems: WarrantyItem[] = [
     // Service warranties
     ...serviceTickets
-      .filter((ticket: any) => ticket.warrantyDuration && ticket.warrantyDuration > 0)
-      .map((ticket: any) => {
-        const customer = customers.find((c: any) => c.id === ticket.customerId);
-        const warrantyStatus = getWarrantyStatus(ticket.warrantyEndDate, ticket.warrantyDuration);
-        
+      .filter((ticket) => (ticket.warrantyDuration ?? 0) > 0)
+      .map((ticket) => {
+        const customer = customers.find((c) => c.id === ticket.customerId);
+        const warrantyStart = ticket.warrantyStartDate ? new Date(ticket.warrantyStartDate).toISOString() : null;
+        const warrantyEnd = ticket.warrantyEndDate ? new Date(ticket.warrantyEndDate).toISOString() : undefined;
+        const warrantyStatus = getWarrantyStatus(warrantyEnd, ticket.warrantyDuration);
+
         return {
           id: ticket.id,
           type: 'service' as const,
           customerName: customer?.name || 'Unknown Customer',
           customerPhone: customer?.phone,
           deviceInfo: `${ticket.deviceType}${ticket.deviceBrand ? ` - ${ticket.deviceBrand}` : ''}${ticket.deviceModel ? ` ${ticket.deviceModel}` : ''}`,
-          warrantyDuration: ticket.warrantyDuration,
-          warrantyStartDate: ticket.warrantyStartDate,
-          warrantyEndDate: ticket.warrantyEndDate,
+          warrantyDuration: ticket.warrantyDuration ?? 0,
+          warrantyStartDate: warrantyStart,
+          warrantyEndDate: warrantyEnd ?? null,
           status: warrantyStatus.status,
           daysRemaining: warrantyStatus.daysRemaining,
           ticketNumber: ticket.ticketNumber,
           customerId: ticket.customerId,
         };
       }),
-    
+
     // Transaction/POS warranties
     ...transactions
-      .filter((transaction: any) => transaction.warrantyDuration && transaction.warrantyDuration > 0)
-      .map((transaction: any) => {
-        const customer = customers.find((c: any) => c.id === transaction.customerId);
-        const warrantyStatus = getWarrantyStatus(transaction.warrantyEndDate, transaction.warrantyDuration);
-        
+      .filter((transaction) => (transaction.warrantyDuration ?? 0) > 0)
+      .map((transaction) => {
+        const customer = customers.find((c) => c.id === transaction.customerId);
+        const warrantyStart = transaction.warrantyStartDate ? new Date(transaction.warrantyStartDate).toISOString() : null;
+        const warrantyEnd = transaction.warrantyEndDate ? new Date(transaction.warrantyEndDate).toISOString() : undefined;
+        const warrantyStatus = getWarrantyStatus(warrantyEnd, transaction.warrantyDuration);
+
         // Get product names from transaction items
-        const productNames = transaction.items?.map((item: any) => {
+        const productNames = transaction.items?.map((item) => {
           return item.product?.name || 'Unknown Product';
         }).join(', ') || 'Unknown Product';
-        
+
         return {
           id: transaction.id,
           type: 'sale' as const,
           customerName: customer?.name || 'Walk-in Customer',
           customerPhone: customer?.phone,
           productName: productNames,
-          warrantyDuration: transaction.warrantyDuration,
-          warrantyStartDate: transaction.warrantyStartDate,
-          warrantyEndDate: transaction.warrantyEndDate,
+          warrantyDuration: transaction.warrantyDuration ?? 0,
+          warrantyStartDate: warrantyStart,
+          warrantyEndDate: warrantyEnd ?? null,
           status: warrantyStatus.status,
           daysRemaining: warrantyStatus.daysRemaining,
           transactionNumber: transaction.transactionNumber,
@@ -277,12 +297,14 @@ export default function WarrantyPage() {
       const bDays = b.daysRemaining || 999999;
       return aDays - bDays; // Sort by days remaining (ascending)
     }
-    
+
     if (a.status === 'active' && b.status !== 'active') return -1;
     if (a.status !== 'active' && b.status === 'active') return 1;
-    
+
     // Sort by start date (most recent first)
-    return new Date(b.warrantyStartDate).getTime() - new Date(a.warrantyStartDate).getTime();
+    const aStart = a.warrantyStartDate ? new Date(a.warrantyStartDate).getTime() : 0;
+    const bStart = b.warrantyStartDate ? new Date(b.warrantyStartDate).getTime() : 0;
+    return bStart - aStart;
   });
 
   const getStatusBadge = (item: WarrantyItem) => {
@@ -422,7 +444,7 @@ export default function WarrantyPage() {
                       />
                     </div>
                     
-                    <Select value={filterType} onValueChange={(value: any) => setFilterType(value)}>
+                    <Select value={filterType} onValueChange={(value: 'all' | 'service' | 'sale') => setFilterType(value)}>
                       <SelectTrigger className="w-48">
                         <SelectValue placeholder="Filter Tipe" />
                       </SelectTrigger>
@@ -433,7 +455,7 @@ export default function WarrantyPage() {
                       </SelectContent>
                     </Select>
                     
-                    <Select value={filterStatus} onValueChange={(value: any) => setFilterStatus(value)}>
+                    <Select value={filterStatus} onValueChange={(value: 'all' | 'active' | 'expired' | 'unlimited') => setFilterStatus(value)}>
                       <SelectTrigger className="w-48">
                         <SelectValue placeholder="Filter Status" />
                       </SelectTrigger>
@@ -521,13 +543,13 @@ export default function WarrantyPage() {
                           </TableCell>
                           
                           <TableCell>
-                            {formatDateShort(warranty.warrantyStartDate)}
+                            {warranty.warrantyStartDate ? formatDateShort(warranty.warrantyStartDate) : '-'}
                           </TableCell>
-                          
+
                           <TableCell>
-                            {warranty.status === 'unlimited' 
-                              ? 'Tanpa Batas' 
-                              : warranty.warrantyEndDate 
+                            {warranty.status === 'unlimited'
+                              ? 'Tanpa Batas'
+                              : warranty.warrantyEndDate
                                 ? formatDateShort(warranty.warrantyEndDate)
                                 : '-'
                             }
@@ -681,7 +703,7 @@ export default function WarrantyPage() {
                               </TableCell>
                               
                               <TableCell>
-                                {formatDateShort(claim.claimDate)}
+                                {claim.claimDate ? formatDateShort(claim.claimDate) : '-'}
                               </TableCell>
                               
                               <TableCell>

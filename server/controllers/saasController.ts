@@ -57,27 +57,29 @@ export class SaasController {
       await db.insert(subscriptions).values({
         clientId: newClient[0].id,
         plan: 'basic',
+        planName: 'Trial - Basic',
         startDate: new Date(),
         endDate: trialEndDate,
         paymentStatus: 'paid',
-        amount: 0,
+        amount: '0',
         currency: 'IDR',
         autoRenew: false
       });
 
       // Create default admin user for the tenant
       const hashedPassword = await bcrypt.hash('admin123', 10);
-      await storage.createUser({
-        id: `admin-${newClient[0].id}`,
-        clientId: newClient[0].id, // Add client_id to user
-        username: 'admin',
-        email: validatedData.email,
-        firstName: 'Admin',
-        lastName: 'User',
-        password: hashedPassword,
-        role: 'admin',
-        isActive: true
-      });
+      await storage.createUser(
+        {
+          username: 'admin',
+          email: validatedData.email,
+          firstName: 'Admin',
+          lastName: 'User',
+          password: hashedPassword,
+          role: 'admin',
+          isActive: true
+        },
+        newClient[0].id
+      );
 
       res.status(201).json({
         success: true,
@@ -171,10 +173,11 @@ export class SaasController {
         .values({
           clientId: req.tenant.id,
           plan,
+          planName: `${plan.toUpperCase()} ${isYearly ? 'Yearly' : 'Monthly'}`,
           startDate,
           endDate,
           paymentStatus: 'pending',
-          amount,
+          amount: amount.toString(),
           currency: 'IDR',
           autoRenew: true
         })
@@ -217,7 +220,7 @@ export class SaasController {
         .values({
           subscriptionId: sub.id,
           clientId: sub.clientId,
-          amount: sub.amount,
+          amount: Number(sub.amount),
           currency: sub.currency,
           status: 'paid', // Mock payment always succeeds
           paymentMethod,

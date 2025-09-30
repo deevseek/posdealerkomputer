@@ -1,8 +1,20 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
+
 import { clients, subscriptions, plans } from '../../shared/saas-schema';
 import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+
+import {
+  clients,
+  subscriptions,
+  plans,
+  PLAN_CODE_VALUES as SHARED_PLAN_CODES,
+  resolvePlanConfiguration,
+  safeParseJson,
+  ensurePlanCode,
+} from '../../shared/saas-schema';
+
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -41,6 +53,25 @@ const router = Router();
 
 // All admin routes require super admin access
 router.use(requireSuperAdmin);
+
+const PLAN_CODE_VALUES = SHARED_PLAN_CODES;
+
+const coerceLimitsPayload = (input: unknown): Record<string, unknown> | undefined => {
+  if (!input) {
+    return undefined;
+  }
+
+  if (typeof input === 'string') {
+    const parsed = safeParseJson<Record<string, unknown>>(input);
+    return parsed ? { ...parsed } : undefined;
+  }
+
+  if (typeof input === 'object' && !Array.isArray(input)) {
+    return { ...(input as Record<string, unknown>) };
+  }
+
+  return undefined;
+};
 
 // Dashboard stats
 router.get('/stats', async (req, res) => {
@@ -137,29 +168,59 @@ router.get('/clients', async (req, res) => {
 // Create new client
 const createClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  subdomain: z.string().min(1, 'Subdomain is required'),
+  subdomain: z
+    .string()
+    .min(1, 'Subdomain is required')
+    .regex(/^[a-z0-9-]+$/i, 'Subdomain hanya boleh berisi huruf, angka, dan tanda hubung'),
   email: z.string().email('Valid email is required'),
-  planId: z.string().min(1, 'Plan is required')
+  planId: z.string().uuid('Plan is required'),
+  phone: z.string().trim().optional(),
+  address: z.string().trim().optional(),
+  trialDays: z.coerce.number().min(0).max(90).optional().default(7),
 });
 
 router.post('/clients', async (req, res) => {
   try {
-  const { name, subdomain, email, planId } = createClientSchema.parse(req.body);
-  // Always use profesionalservis.my.id as domain suffix for subdomain
-  const fullDomain = `${subdomain}.profesionalservis.my.id`;
+    const parsed = createClientSchema.parse(req.body);
 
-    // Check if subdomain already exists
-    const [existingClient] = await db
-      .select()
+    const name = parsed.name.trim();
+    const subdomain = parsed.subdomain.trim().toLowerCase();
+    const email = parsed.email.trim().toLowerCase();
+    const phone = parsed.phone?.trim();
+    const address = parsed.address?.trim();
+    const trialDays = parsed.trialDays ?? 7;
+    const { planId } = parsed;
+
+    if (!name) {
+      return res.status(400).json({ message: 'Client name is required' });
+    }
+
+    if (!subdomain) {
+      return res.status(400).json({ message: 'Subdomain is required' });
+    }
+
+    const fullDomain = `${subdomain}.profesionalservis.my.id`;
+
+    const [existingSubdomain] = await db
+      .select({ id: clients.id })
       .from(clients)
       .where(eq(clients.subdomain, subdomain))
       .limit(1);
 
-    if (existingClient) {
+    if (existingSubdomain) {
       return res.status(400).json({ message: 'Subdomain already exists' });
     }
 
-    // Get plan details
+    const [existingEmail] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(eq(clients.email, email))
+      .limit(1);
+
+    if (existingEmail) {
+      return res.status(400).json({ message: 'Email already exists' });
+    }
+
     const [plan] = await db
       .select()
       .from(plans)
@@ -167,12 +228,53 @@ router.post('/clients', async (req, res) => {
       .limit(1);
 
     if (!plan) {
-      return res.status(400).json({ message: 'Plan not found' });
+      return res.status(404).json({ message: 'Plan not found' });
     }
 
-    // Calculate trial end date (7 days from now)
+    const {
+      planCode: canonicalPlanCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+      shouldPersistNormalizedLimits,
+    } = resolvePlanConfiguration(plan);
+
+    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+    });
+
+    const normalizedPlanLimits = {
+      ...normalizedLimits,
+      planCode: subscriptionPlan,
+    };
+
+    if (shouldPersistNormalizedLimits) {
+      await db
+        .update(plans)
+        .set({ limits: normalizedLimitsJson })
+        .where(eq(plans.id, plan.id));
+    }
+
     const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+    trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
+
+    const settingsPayload: Record<string, unknown> = {
+      planId: plan.id,
+      planName: plan.name,
+      planCode: subscriptionPlan,
+      maxUsers: plan.maxUsers ?? undefined,
+      maxStorage: plan.maxStorageGB ?? undefined,
+      domain: fullDomain,
+    };
+
+    if (plan.features) {
+      const parsedFeatures = safeParseJson<unknown>(plan.features);
+      settingsPayload.features = parsedFeatures ?? plan.features;
+    }
+
+    if (Object.keys(normalizedPlanLimits).length > 0) {
+      settingsPayload.limits = normalizedPlanLimits;
+    }
+
 
     const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
     const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
@@ -212,18 +314,50 @@ router.post('/clients', async (req, res) => {
         });
 
       return createdClient;
+
+    const [newClient] = await db
+      .insert(clients)
+      .values({
+        name,
+        subdomain,
+        email,
+        phone: phone || null,
+        address: address || null,
+        customDomain: fullDomain,
+        status: 'trial',
+        trialEndsAt,
+        settings: JSON.stringify(settingsPayload),
+      })
+      .returning();
+
+    const subscriptionStart = new Date();
+    const subscriptionEnd = new Date(subscriptionStart);
+    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
+
+    await db.insert(subscriptions).values({
+      clientId: newClient.id,
+      planId: plan.id,
+      planName: plan.name,
+      plan: subscriptionPlan,
+      amount: plan.price.toString(),
+      currency: plan.currency ?? 'IDR',
+      paymentStatus: 'pending',
+      startDate: subscriptionStart,
+      endDate: subscriptionEnd,
+      trialEndDate: trialEndsAt,
+
     });
 
     res.json({
       message: 'Client created successfully',
-      client: newClient
+      client: newClient,
     });
   } catch (error) {
     console.error('Error creating client:', error);
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation error',
-        errors: error.errors 
+        errors: error.errors,
       });
     }
     res.status(500).json({ message: 'Failed to create client' });
@@ -263,13 +397,116 @@ router.patch('/clients/:id/status', async (req, res) => {
   }
 });
 
+// Plan management
+const planBaseSchema = z.object({
+  name: z.string().min(1, 'Plan name is required'),
+  description: z.string().default('').optional(),
+  price: z.number().min(0, 'Price must be non-negative'),
+  currency: z.string().default('IDR').optional(),
+  billingPeriod: z.enum(['monthly', 'yearly']).default('monthly').optional(),
+  maxUsers: z.number().min(1, 'Max users must be at least 1').optional(),
+  maxTransactionsPerMonth: z.number().min(0, 'Max transactions must be non-negative').optional(),
+  maxStorageGB: z.number().min(0, 'Max storage must be non-negative').optional(),
+  whatsappIntegration: z.boolean().optional(),
+  customBranding: z.boolean().optional(),
+  apiAccess: z.boolean().optional(),
+  prioritySupport: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  planCode: z.enum(PLAN_CODE_VALUES).optional(),
+  features: z.union([z.array(z.string()), z.string()]).optional(),
+  limits: z.union([z.record(z.any()), z.string()]).optional(),
+});
+
+const createPlanSchema = planBaseSchema;
+
+router.post('/plans', async (req, res) => {
+  try {
+    const validatedData = createPlanSchema.parse(req.body);
+
+    const {
+      planCode: requestedPlanCode,
+      limits,
+      features,
+      description,
+      currency,
+      billingPeriod,
+      whatsappIntegration,
+      customBranding,
+      apiAccess,
+      prioritySupport,
+      isActive,
+      ...coreData
+    } = validatedData;
+
+    const planConfigurationInput = {
+      name: coreData.name,
+      limits: limits ?? null,
+      ...(requestedPlanCode ? { planCode: requestedPlanCode } : {}),
+    };
+
+    const {
+      planCode: effectivePlanCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+    } = resolvePlanConfiguration(planConfigurationInput, {
+      fallbackCode: requestedPlanCode,
+    });
+
+    const normalizedFeatures =
+      features !== undefined
+        ? Array.isArray(features)
+          ? JSON.stringify(features)
+          : features
+        : undefined;
+
+    const [newPlan] = await db
+      .insert(plans)
+      .values({
+        name: coreData.name,
+        description: description?.trim() ?? '',
+        price: coreData.price,
+        currency: currency ?? 'IDR',
+        billingPeriod: billingPeriod ?? 'monthly',
+        maxUsers: coreData.maxUsers,
+        maxTransactionsPerMonth: coreData.maxTransactionsPerMonth,
+        maxStorageGB: coreData.maxStorageGB,
+        whatsappIntegration: whatsappIntegration ?? false,
+        customBranding: customBranding ?? false,
+        apiAccess: apiAccess ?? false,
+        prioritySupport: prioritySupport ?? false,
+        isActive: isActive ?? true,
+        features: normalizedFeatures,
+        limits: normalizedLimitsJson,
+      })
+      .returning();
+
+    res.status(201).json({
+      message: 'Plan created successfully',
+      plan: {
+        ...newPlan,
+        planCode: effectivePlanCode,
+        limits: normalizedLimitsJson,
+        normalizedLimits,
+      },
+    });
+  } catch (error) {
+    console.error('Error creating plan:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        message: 'Validation error',
+        errors: error.errors,
+      });
+    }
+    res.status(500).json({ message: 'Failed to create plan' });
+  }
+});
+
 // Get all subscription plans
 router.get('/plans', async (req, res) => {
   try {
     const allPlans = await db
       .select()
       .from(plans)
-      .where(eq(plans.isActive, true))
       .orderBy(plans.price);
 
     res.json(allPlans);
@@ -280,25 +517,30 @@ router.get('/plans', async (req, res) => {
 });
 
 // Update plan pricing and details
-const updatePlanSchema = z.object({
-  name: z.string().min(1, 'Plan name is required').optional(),
-  description: z.string().optional(),
-  price: z.number().min(0, 'Price must be non-negative').optional(),
-  currency: z.string().optional(),
-  maxUsers: z.number().min(1, 'Max users must be at least 1').optional(),
-  maxTransactionsPerMonth: z.number().min(1, 'Max transactions must be at least 1').optional(),
-  maxStorageGB: z.number().min(1, 'Max storage must be at least 1GB').optional(),
-  whatsappIntegration: z.boolean().optional(),
-  customBranding: z.boolean().optional(),
-  apiAccess: z.boolean().optional(),
-  prioritySupport: z.boolean().optional(),
-  isActive: z.boolean().optional()
-});
+const updatePlanSchema = planBaseSchema.partial();
 
 router.put('/plans/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const validatedData = updatePlanSchema.parse(req.body);
+
+    const {
+      planCode: requestedPlanCode,
+      limits,
+      features,
+      ...restUpdates
+    } = validatedData;
+
+    const updatePayload: Record<string, any> = {
+      ...restUpdates,
+      updatedAt: new Date(),
+    };
+
+    if (features !== undefined) {
+      updatePayload.features = Array.isArray(features)
+        ? JSON.stringify(features)
+        : features;
+    }
 
     // Check if plan exists
     const [existingPlan] = await db
@@ -311,19 +553,53 @@ router.put('/plans/:id', async (req, res) => {
       return res.status(404).json({ message: 'Plan not found' });
     }
 
+    const existingConfiguration = resolvePlanConfiguration(existingPlan);
+    const incomingLimitsRecord = coerceLimitsPayload(limits);
+
+    let mergedLimitsSource: Record<string, unknown> | undefined;
+
+    if (incomingLimitsRecord) {
+      mergedLimitsSource = {
+        ...existingConfiguration.normalizedLimits,
+        ...incomingLimitsRecord,
+      };
+    } else if (limits !== undefined) {
+      mergedLimitsSource = { ...existingConfiguration.normalizedLimits };
+    }
+
+    const planConfigurationInput = {
+      name: existingPlan.name,
+      limits: mergedLimitsSource ?? existingPlan.limits,
+      ...(requestedPlanCode ? { planCode: requestedPlanCode } : {}),
+    };
+
+    const canonicalConfiguration = resolvePlanConfiguration(planConfigurationInput, {
+      fallbackCode: requestedPlanCode ?? existingConfiguration.planCode,
+    });
+
+    if (
+      limits !== undefined ||
+      requestedPlanCode !== undefined ||
+      existingConfiguration.shouldPersistNormalizedLimits ||
+      canonicalConfiguration.shouldPersistNormalizedLimits
+    ) {
+      updatePayload.limits = canonicalConfiguration.normalizedLimitsJson;
+    }
+
     // Update plan
     const [updatedPlan] = await db
       .update(plans)
-      .set({
-        ...validatedData,
-        updatedAt: new Date()
-      })
+      .set(updatePayload)
       .where(eq(plans.id, id))
       .returning();
 
     res.json({
       message: 'Plan updated successfully',
-      plan: updatedPlan
+      plan: {
+        ...updatedPlan,
+        planCode: canonicalConfiguration.planCode,
+        normalizedLimits: canonicalConfiguration.normalizedLimits,
+      }
     });
   } catch (error) {
     console.error('Error updating plan:', error);
