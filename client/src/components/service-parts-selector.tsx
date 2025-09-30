@@ -52,7 +52,10 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
 
   // Filter products that have stock
   const availableProducts = useMemo(() => {
-    return products.filter(product => product.stock > 0 && product.isActive);
+    return products.filter(product => {
+      const stock = product.stock ?? 0;
+      return stock > 0 && product.isActive === true;
+    });
   }, [products]);
 
   const selectedProduct = useMemo(() => {
@@ -77,10 +80,12 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
       return;
     }
 
-    if (quantity > selectedProduct.stock) {
+    const availableStock = selectedProduct.stock ?? 0;
+
+    if (quantity > availableStock) {
       toast({
         title: "Error",
-        description: `Stock tidak cukup. Tersedia: ${selectedProduct.stock}`,
+        description: `Stock tidak cukup. Tersedia: ${availableStock}`,
         variant: "destructive"
       });
       return;
@@ -93,10 +98,10 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
       const existingPart = parts[existingPartIndex];
       const newQuantity = existingPart.quantity + quantity;
       
-      if (newQuantity > selectedProduct.stock) {
+      if (newQuantity > availableStock) {
         toast({
           title: "Error",
-          description: `Total quantity melebihi stock. Tersedia: ${selectedProduct.stock}, Sudah dipilih: ${existingPart.quantity}`,
+          description: `Total quantity melebihi stock. Tersedia: ${availableStock}, Sudah dipilih: ${existingPart.quantity}`,
           variant: "destructive"
         });
         return;
@@ -121,7 +126,7 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
         quantity,
         unitPrice,
         totalPrice,
-        stock: selectedProduct.stock
+        stock: availableStock
       };
 
       onPartsChange([...parts, newPart]);
@@ -143,10 +148,12 @@ export function ServicePartsSelector({ parts, onPartsChange, laborCost }: Servic
     const product = availableProducts.find(p => p.id === productId);
     if (!product) return;
 
-    if (newQuantity > product.stock) {
+    const availableStock = product.stock ?? 0;
+
+    if (newQuantity > availableStock) {
       toast({
         title: "Error",
-        description: `Quantity melebihi stock. Tersedia: ${product.stock}`,
+        description: `Quantity melebihi stock. Tersedia: ${availableStock}`,
         variant: "destructive"
       });
       return;

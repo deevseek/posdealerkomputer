@@ -3,8 +3,15 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Info } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+interface LowStockProduct {
+  id: string;
+  name: string;
+  stock: number | null;
+  minStock?: number | null;
+}
+
 export default function InventoryAlerts() {
-  const { data: lowStockProducts, isLoading } = useQuery({
+  const { data: lowStockProducts = [], isLoading } = useQuery<LowStockProduct[]>({
     queryKey: ["/api/products/low-stock"],
     retry: false,
   });
@@ -21,14 +28,15 @@ export default function InventoryAlerts() {
               <div key={i} className="h-16 bg-muted rounded animate-pulse" />
             ))}
           </div>
-        ) : !lowStockProducts || lowStockProducts.length === 0 ? (
+        ) : lowStockProducts.length === 0 ? (
           <p className="text-muted-foreground text-center py-8">
             Semua produk stoknya mencukupi.
           </p>
         ) : (
           <div className="space-y-4">
-            {lowStockProducts.map((product: any) => {
-              const isVeryLow = product.stock <= 1;
+            {lowStockProducts.map((product) => {
+              const currentStock = product.stock ?? 0;
+              const isVeryLow = currentStock <= 1;
               
               return (
                 <div 
@@ -55,8 +63,8 @@ export default function InventoryAlerts() {
                         {product.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Stok: <span data-testid={`stock-count-${product.id}`}>{product.stock} unit</span>
-                        {product.minStock && (
+                        Stok: <span data-testid={`stock-count-${product.id}`}>{currentStock} unit</span>
+                        {product.minStock != null && (
                           <span className="ml-2">Minimal: {product.minStock}</span>
                         )}
                       </p>
