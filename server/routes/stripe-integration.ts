@@ -197,13 +197,8 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           .values({
             clientId: client.id,
             planId: plan.id,
-
             planName: planDisplayName,
-            plan: planSlug,
-
-            planName: plan.name,
             plan: subscriptionPlan,
-
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
@@ -238,15 +233,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           .update(clients)
           .set({
             status: 'active',
-
-            settings: sql`jsonb_set(
-              jsonb_set(settings::jsonb, '{planName}', '"${planDisplayName}"'),
-              '{planSlug}',
-              '"${planSlug}"'
-            )`,
-
             settings: JSON.stringify(updatedSettings),
-
             updatedAt: new Date()
           })
           .where(eq(clients.id, client.id));

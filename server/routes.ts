@@ -3701,18 +3701,13 @@ Terima kasih!
   // Create new client
   app.post('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
     try {
-
-      const { name, subdomain, email, planId, trialDays = 7, plan: requestedPlanName } = req.body;
-
-      // Validate required fields
-      if (!name || !subdomain || !email || !planId) {
-
       const {
         name: rawName,
         subdomain: rawSubdomain,
         email: rawEmail,
-        planId,
-        trialDays = 7,
+        planId: rawPlanId,
+        trialDays: rawTrialDays = 7,
+        plan: rawRequestedPlan,
         phone: rawPhone,
         address: rawAddress,
       } = req.body ?? {};
@@ -3720,7 +3715,8 @@ Terima kasih!
       const name = typeof rawName === 'string' ? rawName.trim() : '';
       const subdomain = typeof rawSubdomain === 'string' ? rawSubdomain.trim().toLowerCase() : '';
       const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : '';
-      const selectedPlanId = typeof planId === 'string' ? planId.trim() : '';
+      const selectedPlanId = typeof rawPlanId === 'string' ? rawPlanId.trim() : '';
+      const requestedPlanName = typeof rawRequestedPlan === 'string' ? rawRequestedPlan : undefined;
       const phone = sanitizeOptionalText(rawPhone);
       const address = sanitizeOptionalText(rawAddress);
 
@@ -3768,9 +3764,9 @@ Terima kasih!
       }
 
       const parsedTrialDays =
-        typeof trialDays === 'number'
-          ? trialDays
-          : Number.parseInt(typeof trialDays === 'string' ? trialDays : '', 10);
+        typeof rawTrialDays === 'number'
+          ? rawTrialDays
+          : Number.parseInt(typeof rawTrialDays === 'string' ? rawTrialDays : '', 10);
 
       const boundedTrialDays = Number.isFinite(parsedTrialDays)
         ? Math.min(Math.max(Math.trunc(parsedTrialDays), 0), 90)
@@ -3826,9 +3822,11 @@ Terima kasih!
         settingsPayload.limits = normalizedPlanLimits;
       }
 
-
       const planSlug = resolveSubscriptionPlanSlug(plan.name, requestedPlanName);
       const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+
+      settingsPayload.planName = planDisplayName;
+      settingsPayload.planSlug = planSlug;
 
       const newClient = await db.transaction(async (tx) => {
         const [createdClient] = await tx
@@ -3837,17 +3835,18 @@ Terima kasih!
             name,
             subdomain,
             email,
+            phone: phone ?? null,
+            address: address ?? null,
+            customDomain: fullDomain,
             status: 'trial',
             trialEndsAt,
-            settings: JSON.stringify({
-              planId: plan.id,
-              planName: planDisplayName,
-              planSlug,
-              maxUsers: plan.maxUsers || 10,
-              maxStorage: plan.maxStorageGB || 1
-            })
+            settings: JSON.stringify(settingsPayload),
           })
           .returning();
+
+        const subscriptionStart = new Date();
+        const subscriptionEnd = new Date(subscriptionStart);
+        subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
 
         await tx
           .insert(subscriptions)
@@ -3855,49 +3854,17 @@ Terima kasih!
             clientId: createdClient.id,
             planId: plan.id,
             planName: planDisplayName,
-            plan: planSlug,
-            amount: '0',
-            paymentStatus: 'paid',
-            startDate: new Date(),
-            endDate: trialEndsAt
+            plan: subscriptionPlan,
+            amount: typeof plan.price === 'number' ? plan.price.toString() : '0',
+            currency: plan.currency ?? 'IDR',
+            paymentStatus: 'pending',
+            startDate: subscriptionStart,
+            endDate: subscriptionEnd,
+            trialEndDate: trialEndsAt,
           });
 
         return createdClient;
       });
-
-      const [newClient] = await db
-        .insert(clients)
-        .values({
-          name,
-          subdomain,
-          email,
-          phone: phone ?? null,
-          address: address ?? null,
-          customDomain: fullDomain,
-          status: 'trial',
-          trialEndsAt,
-          settings: JSON.stringify(settingsPayload),
-        })
-        .returning();
-
-      const subscriptionStart = new Date();
-      const subscriptionEnd = new Date(subscriptionStart);
-      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
-
-      await db
-        .insert(subscriptions)
-        .values({
-          clientId: newClient.id,
-          planId: plan.id,
-          planName: plan.name,
-          plan: subscriptionPlan,
-          amount: typeof plan.price === 'number' ? plan.price.toString() : '0',
-          currency: plan.currency ?? 'IDR',
-          paymentStatus: 'pending',
-          startDate: subscriptionStart,
-          endDate: subscriptionEnd,
-          trialEndDate: trialEndsAt,
-        });
 
 
       realtimeService.broadcast({
