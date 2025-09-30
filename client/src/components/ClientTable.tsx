@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Pencil, Eye } from 'lucide-react';
 
 interface ClientTableProps {
@@ -14,6 +15,42 @@ interface ClientTableProps {
   refetchClients: () => void;
   plans?: any[];
 }
+
+const formatCurrency = (amount?: number | string | null) => {
+  if (amount == null) {
+    return null;
+  }
+
+  const numeric = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(numeric);
+};
+
+const formatPaymentStatus = (status?: string | null) => {
+  if (!status) {
+    return null;
+  }
+
+  switch (status) {
+    case 'paid':
+      return 'Paid';
+    case 'pending':
+      return 'Pending';
+    case 'failed':
+      return 'Failed';
+    case 'refunded':
+      return 'Refunded';
+    default:
+      return status;
+  }
+};
 
 export default function ClientTable({ clients, refetchClients, plans = [] }: ClientTableProps) {
   const queryClient = useQueryClient();
@@ -56,6 +93,7 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
             <TableHead>ID</TableHead>
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
+            <TableHead>Domain</TableHead>
             <TableHead>Plan</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Actions</TableHead>
@@ -66,97 +104,134 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
             const subscription = client.subscription ?? null;
             const isActive = client.status === 'active';
             const nextStatus = isActive ? 'suspended' : 'active';
+            const matchedPlan = subscription?.planId
+              ? plans.find((plan: any) => plan.id === subscription.planId)
+              : undefined;
+            const displayPrice =
+              matchedPlan?.price ?? (subscription?.amount ? Number(subscription.amount) : undefined);
+            const formattedPrice = formatCurrency(displayPrice);
+            const paymentStatusLabel = formatPaymentStatus(subscription?.paymentStatus);
+            const domain = client.customDomain
+              ? client.customDomain
+              : client.subdomain
+              ? `${client.subdomain}.profesionalservis.my.id`
+              : '-';
 
             return (
               <TableRow key={client.id}>
-              <TableCell>{client.id}</TableCell>
-              <TableCell>{client.name}</TableCell>
-              <TableCell>{client.email}</TableCell>
-              <TableCell>{subscription?.planName || subscription?.plan || '-'}</TableCell>
-              <TableCell>
-                {isActive ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />}
-              </TableCell>
-              <TableCell className="space-x-2">
-                <Dialog
-                  open={!!editClient && editClient.id === client.id}
-                  onOpenChange={(open) => {
-                    if (open) {
-                      setEditClient({
-                        id: client.id,
-                        name: client.name,
-                        email: client.email,
-                        planId: subscription?.planId || '',
-                      });
-                    } else {
-                      setEditClient(null);
-                    }
-                  }}
-                >
-                  <DialogTrigger asChild>
-                    <Button size="sm" variant="outline"><Pencil className="h-4 w-4" /></Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>Edit Client</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-2">
-                      <Input
-                        placeholder="Name"
-                        value={editClient?.name || ''}
-                        onChange={(e) => setEditClient({ ...editClient, name: e.target.value })}
-                      />
-                      <Input
-                        placeholder="Email"
-                        type="email"
-                        value={editClient?.email || ''}
-                        onChange={(e) => setEditClient({ ...editClient, email: e.target.value })}
-                      />
-                      <Select
-                        value={editClient?.planId || ''}
-                        onValueChange={(value) => setEditClient({ ...editClient, planId: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select Plan" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {plans.map((plan: any) => (
-                            <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex space-x-2">
-                        <Button
-                          onClick={() =>
-                            editClient &&
-                            updateClientMutation.mutate({
-                              id: editClient.id,
-                              name: editClient.name,
-                              email: editClient.email,
-                              planId: editClient.planId,
-                            })
-                          }
-                          disabled={updateClientMutation.isPending}
-                        >
-                          {updateClientMutation.isPending ? 'Saving...' : 'Save'}
-                        </Button>
-                        <Button variant="outline" onClick={() => setEditClient(null)} disabled={updateClientMutation.isPending}>
-                          Cancel
-                        </Button>
+                <TableCell>{client.id}</TableCell>
+                <TableCell>{client.name}</TableCell>
+                <TableCell>{client.email}</TableCell>
+                <TableCell>
+                  <code className="text-xs bg-muted px-2 py-1 rounded">{domain}</code>
+                </TableCell>
+                <TableCell>
+                  {subscription ? (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 font-medium">
+                        <span>{subscription.planName || subscription.plan || '-'}</span>
+                        {paymentStatusLabel && subscription.paymentStatus !== 'paid' ? (
+                          <Badge variant="outline" className="uppercase tracking-wide">
+                            {paymentStatusLabel}
+                          </Badge>
+                        ) : null}
                       </div>
+                      {formattedPrice ? (
+                        <p className="text-xs text-muted-foreground">{formattedPrice} / bulan</p>
+                      ) : null}
                     </div>
-                  </DialogContent>
-                </Dialog>
-                <Button
-                  size="sm"
-                  variant={isActive ? 'destructive' : 'default'}
-                  onClick={() => updateStatusMutation.mutate({ id: client.id, status: nextStatus })}
-                  disabled={updateStatusMutation.isPending}
-                >
-                  {isActive ? 'Suspend' : 'Activate'}
-                </Button>
-                <Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button>
-              </TableCell>
-            </TableRow>
+                  ) : (
+                    <span className="text-muted-foreground">Tidak ada paket</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {isActive ? <CheckCircle className="text-green-500" /> : <XCircle className="text-red-500" />}
+                </TableCell>
+                <TableCell className="space-x-2">
+                  <Dialog
+                    open={!!editClient && editClient.id === client.id}
+                    onOpenChange={(open) => {
+                      if (open) {
+                        setEditClient({
+                          id: client.id,
+                          name: client.name,
+                          email: client.email,
+                          planId: subscription?.planId || '',
+                        });
+                      } else {
+                        setEditClient(null);
+                      }
+                    }}
+                  >
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline"><Pencil className="h-4 w-4" /></Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[500px]">
+                      <DialogHeader>
+                        <DialogTitle>Edit Client</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-2">
+                        <Input
+                          placeholder="Name"
+                          value={editClient?.name || ''}
+                          onChange={(e) => setEditClient({ ...editClient, name: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Email"
+                          type="email"
+                          value={editClient?.email || ''}
+                          onChange={(e) => setEditClient({ ...editClient, email: e.target.value })}
+                        />
+                        <Select
+                          value={editClient?.planId || ''}
+                          onValueChange={(value) => setEditClient({ ...editClient, planId: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Plan" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {plans.map((plan: any) => (
+                              <SelectItem key={plan.id} value={plan.id}>{plan.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex space-x-2">
+                          <Button
+                            onClick={() =>
+                              editClient &&
+                              updateClientMutation.mutate({
+                                id: editClient.id,
+                                name: editClient.name,
+                                email: editClient.email,
+                                planId: editClient.planId,
+                              })
+                            }
+                            disabled={updateClientMutation.isPending}
+                          >
+                            {updateClientMutation.isPending ? 'Saving...' : 'Save'}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditClient(null)}
+                            disabled={updateClientMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <Button
+                    size="sm"
+                    variant={isActive ? 'destructive' : 'default'}
+                    onClick={() => updateStatusMutation.mutate({ id: client.id, status: nextStatus })}
+                    disabled={updateStatusMutation.isPending}
+                  >
+                    {isActive ? 'Suspend' : 'Activate'}
+                  </Button>
+                  <Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button>
+                </TableCell>
+              </TableRow>
             );
           })}
         </TableBody>

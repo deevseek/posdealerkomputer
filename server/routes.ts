@@ -14,7 +14,7 @@ import {
 import XLSX from 'xlsx';
 import multer from 'multer';
 import { db } from "./db";
-import { eq, and, gte, lte, lt, desc, count, sql, isNull } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, count, sql, isNull, inArray } from "drizzle-orm";
 import {
   products,
   categories, 
@@ -40,7 +40,6 @@ import {
   insertWarrantyClaimSchema
 } from "@shared/schema";
 
-import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
 import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from "@shared/saas-utils";
 import {
   plans,
@@ -3659,37 +3658,57 @@ Terima kasih!
   };
 
   // SaaS Admin Routes - Client Management
-  app.get('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+  app.get('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (_req, res) => {
     try {
-      const clientsWithSubscriptions = await db
+      const baseClients = await db
         .select({
           id: clients.id,
           name: clients.name,
           subdomain: clients.subdomain,
+          customDomain: clients.customDomain,
           email: clients.email,
           status: clients.status,
           trialEndsAt: clients.trialEndsAt,
           createdAt: clients.createdAt,
-          subscription: {
-            id: subscriptions.id,
-            planId: subscriptions.planId,
-            planName: subscriptions.planName,
-            plan: subscriptions.plan,
-            paymentStatus: subscriptions.paymentStatus,
-            startDate: subscriptions.startDate,
-            endDate: subscriptions.endDate,
-            amount: subscriptions.amount
-          }
         })
         .from(clients)
-        .leftJoin(
-          subscriptions, 
-          and(
-            eq(subscriptions.clientId, clients.id),
-            eq(subscriptions.paymentStatus, 'paid')
-          )
-        )
         .orderBy(desc(clients.createdAt));
+
+      if (baseClients.length === 0) {
+        return res.json([]);
+      }
+
+      const clientIds = baseClients.map((client) => client.id).filter(Boolean);
+
+      const subscriptionRows = await db
+        .select({
+          id: subscriptions.id,
+          clientId: subscriptions.clientId,
+          planId: subscriptions.planId,
+          planName: subscriptions.planName,
+          plan: subscriptions.plan,
+          paymentStatus: subscriptions.paymentStatus,
+          startDate: subscriptions.startDate,
+          endDate: subscriptions.endDate,
+          amount: subscriptions.amount,
+          currency: subscriptions.currency,
+          createdAt: subscriptions.createdAt,
+        })
+        .from(subscriptions)
+        .where(inArray(subscriptions.clientId, clientIds))
+        .orderBy(desc(subscriptions.createdAt));
+
+      const subscriptionByClient = new Map<string, typeof subscriptionRows[number]>();
+      for (const subscription of subscriptionRows) {
+        if (!subscriptionByClient.has(subscription.clientId)) {
+          subscriptionByClient.set(subscription.clientId, subscription);
+        }
+      }
+
+      const clientsWithSubscriptions = baseClients.map((client) => ({
+        ...client,
+        subscription: subscriptionByClient.get(client.id) ?? null,
+      }));
 
       res.json(clientsWithSubscriptions);
     } catch (error) {
