@@ -79,6 +79,9 @@ export default function PlanCard({ plan, onUpdate }: PlanCardProps) {
   const [editPlan, setEditPlan] = useState<EditablePlan | null>(null);
 
   const updatePlanMutation = useMutation({
+
+    mutationFn: async (data: any) => apiRequest('PUT', `/api/admin/saas/plans/${data.id}`, data),
+
     mutationFn: async (data: EditablePlan) => {
       if (!data.id) {
         throw new Error('Plan tidak ditemukan.');
@@ -126,11 +129,12 @@ export default function PlanCard({ plan, onUpdate }: PlanCardProps) {
 
       return apiRequest('PUT', `/api/admin/plans/${data.id}`, payload);
     },
+
     onSuccess: () => {
       toast({ title: 'Success', description: 'Plan updated' });
       setIsDialogOpen(false);
       setEditPlan(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/plans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/plans'] });
       onUpdate?.();
     },
     onError: (error: any) => {
@@ -170,8 +174,22 @@ export default function PlanCard({ plan, onUpdate }: PlanCardProps) {
   return (
     <Card className="mb-3 border-l-4 border-l-blue-500">
       <CardHeader className="flex justify-between items-center">
+
+        <CardTitle>{plan.name}</CardTitle>
+        <Dialog
+          open={editPlan?.id === plan.id}
+          onOpenChange={(open) => {
+            if (open) {
+              setEditPlan({ ...plan });
+            } else {
+              setEditPlan(null);
+            }
+          }}
+        >
+
         <CardTitle>{getPlanLabel(plan.name)}</CardTitle>
         <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
+
           <DialogTrigger asChild>
             <Button size="sm" variant="outline" onClick={openDialog}>
               <Pencil className="h-4 w-4" />

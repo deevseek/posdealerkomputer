@@ -142,10 +142,32 @@ export default function AdminSaaS() {
   const queryClient = useQueryClient();
 
   // Queries
+
+  const { data: analyticsRaw } = useQuery({
+    queryKey: ['/api/admin/saas/stats'],
+    retry: false,
+    select: (data: any) => ({
+      clients: {
+        total: data?.totalClients ?? 0,
+        newThisMonth: data?.newClientsThisMonth ?? 0,
+        active: data?.activeClients ?? 0,
+        trial: data?.trialClients ?? 0,
+        expiringTrials: data?.expiringTrials ?? 0,
+        suspended: data?.suspendedClients ?? 0,
+      },
+      revenue: {
+        monthlyTotal: data?.monthlyRevenue ?? 0,
+      },
+    }),
+  });
+  const analytics =
+    analyticsRaw ?? {
+
   const { data: analyticsRaw } = useQuery<AnalyticsSummary>({ queryKey: ['/api/admin/saas/stats'], retry: false });
   const analyticsData = analyticsRaw as AnalyticsSummary | undefined;
   const analytics: AnalyticsSummary =
     analyticsData ?? {
+
       clients: {
         total: 0,
         newThisMonth: 0,
@@ -165,8 +187,13 @@ export default function AdminSaaS() {
   });
   const clients = Array.isArray(clientsRaw) ? clientsRaw : [];
 
+
+  const { data: plansRaw } = useQuery({ queryKey: ['/api/admin/saas/plans'], retry: false });
+  const plans = Array.isArray(plansRaw) ? plansRaw : [];
+
   const { data: plansRaw } = useQuery<PlanSummary[]>({ queryKey: ['/api/admin/plans'], retry: false });
   const plans: PlanSummary[] = Array.isArray(plansRaw) ? plansRaw : [];
+
 
   const { data: expiringTrialsRaw } = useQuery<any[]>({
     queryKey: ['/api/admin/notifications/expiring-trials'],
@@ -193,6 +220,26 @@ export default function AdminSaaS() {
 
   // Mutations
   const createPlanMutation = useMutation({
+
+    mutationFn: async (planData: any) => apiRequest('POST', '/api/admin/saas/plans', planData),
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Plan created successfully' });
+      setCreatePlanOpen(false);
+      setNewPlan({
+        name: 'basic',
+        description: '',
+        price: '',
+        maxUsers: '',
+        maxTransactionsPerMonth: '',
+        maxStorageGB: '',
+        whatsappIntegration: false,
+        customBranding: false,
+        apiAccess: false,
+        prioritySupport: false,
+        isActive: true,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/plans'] });
+
     mutationFn: async (planData: NewPlanFormState) => {
       const trimmedName = planData.name.trim();
       if (!trimmedName) {
@@ -262,6 +309,7 @@ export default function AdminSaaS() {
       setCreatePlanOpen(false);
       setNewPlan({ ...PLAN_FORM_TEMPLATE });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/plans'] });
+
     },
     onError: (error: any) =>
       toast({ title: 'Error', description: error.message || 'Failed to create plan', variant: 'destructive' }),

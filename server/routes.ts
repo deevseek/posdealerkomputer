@@ -3672,6 +3672,7 @@ Terima kasih!
           createdAt: clients.createdAt,
           subscription: {
             id: subscriptions.id,
+            planId: subscriptions.planId,
             planName: subscriptions.planName,
             plan: subscriptions.plan,
             paymentStatus: subscriptions.paymentStatus,
@@ -3916,6 +3917,114 @@ Terima kasih!
     }
   });
 
+  app.put('/api/admin/saas/clients/:id', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, email, planId } = req.body as { name?: string; email?: string; planId?: string };
+
+      const [existingClient] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, id))
+        .limit(1);
+
+      if (!existingClient) {
+        return res.status(404).json({ message: 'Client not found' });
+      }
+
+      const clientUpdates: Record<string, unknown> = { updatedAt: new Date() };
+
+      if (typeof name === 'string' && name.trim().length > 0 && name !== existingClient.name) {
+        clientUpdates.name = name.trim();
+      }
+
+      if (typeof email === 'string' && email.trim().length > 0 && email !== existingClient.email) {
+        clientUpdates.email = email.trim();
+      }
+
+      let updatedClient = existingClient;
+
+      if (Object.keys(clientUpdates).length > 1) {
+        [updatedClient] = await db
+          .update(clients)
+          .set(clientUpdates)
+          .where(eq(clients.id, id))
+          .returning();
+      }
+
+      let updatedSubscription = null;
+
+      if (planId) {
+        const [plan] = await db
+          .select()
+          .from(plans)
+          .where(eq(plans.id, planId))
+          .limit(1);
+
+        if (!plan) {
+          return res.status(400).json({ message: 'Plan not found' });
+        }
+
+        const [currentSubscription] = await db
+          .select()
+          .from(subscriptions)
+          .where(eq(subscriptions.clientId, id))
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(1);
+
+        const subscriptionPayload = {
+          planId: plan.id,
+          planName: plan.name,
+          plan: plan.name.toLowerCase() as any,
+          amount: plan.price.toString(),
+          updatedAt: new Date(),
+        };
+
+        if (currentSubscription) {
+          [updatedSubscription] = await db
+            .update(subscriptions)
+            .set(subscriptionPayload)
+            .where(eq(subscriptions.id, currentSubscription.id))
+            .returning();
+        } else {
+          const startDate = new Date();
+          const endDate = new Date(startDate);
+          endDate.setMonth(endDate.getMonth() + 1);
+
+          [updatedSubscription] = await db
+            .insert(subscriptions)
+            .values({
+              clientId: id,
+              planId: plan.id,
+              planName: plan.name,
+              plan: plan.name.toLowerCase() as any,
+              amount: plan.price.toString(),
+              paymentStatus: 'paid',
+              startDate,
+              endDate,
+            })
+            .returning();
+        }
+      }
+
+      realtimeService.broadcast({
+        resource: 'saas-clients',
+        action: 'update',
+        data: { ...updatedClient, subscription: updatedSubscription },
+        id,
+      });
+
+      res.json({
+        message: 'Client updated successfully',
+        client: updatedClient,
+        subscription: updatedSubscription,
+      });
+    } catch (error) {
+      console.error('Error updating SaaS client:', error);
+      res.status(500).json({ message: 'Failed to update client' });
+    }
+  });
+
   // Update client status
   app.patch('/api/admin/saas/clients/:id/status', isAuthenticated, requirePermission('saas_admin'), async (req: any, res) => {
     try {
@@ -4034,6 +4143,80 @@ Terima kasih!
     } catch (error) {
       console.error('Error fetching plans:', error);
       res.status(500).json({ message: 'Failed to fetch plans' });
+    }
+  });
+
+  app.post('/api/admin/saas/plans', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const {
+        name,
+        description,
+        price,
+        currency = 'IDR',
+        billingPeriod = 'monthly',
+        maxUsers,
+        maxTransactionsPerMonth,
+        maxStorageGB,
+        whatsappIntegration,
+        customBranding,
+        apiAccess,
+        prioritySupport,
+        features,
+        limits,
+      } = req.body;
+
+      if (!name || !description) {
+        return res.status(400).json({ message: 'Name and description are required' });
+      }
+
+      const parsedPrice = typeof price === 'string' ? parseInt(price, 10) : price;
+      if (!Number.isFinite(parsedPrice)) {
+        return res.status(400).json({ message: 'Price must be a valid number' });
+      }
+
+      const parseOptionalNumber = (value: unknown) => {
+        if (typeof value === 'number') {
+          return value;
+        }
+        if (typeof value === 'string' && value.trim().length > 0) {
+          const parsed = parseInt(value, 10);
+          return Number.isFinite(parsed) ? parsed : undefined;
+        }
+        return undefined;
+      };
+
+      const [newPlan] = await db
+        .insert(plans)
+        .values({
+          name: name.toLowerCase(),
+          description,
+          price: parsedPrice,
+          currency: currency || 'IDR',
+          billingPeriod: billingPeriod || 'monthly',
+          maxUsers: parseOptionalNumber(maxUsers),
+          maxTransactionsPerMonth: parseOptionalNumber(maxTransactionsPerMonth),
+          maxStorageGB: parseOptionalNumber(maxStorageGB),
+          whatsappIntegration: Boolean(whatsappIntegration),
+          customBranding: Boolean(customBranding),
+          apiAccess: Boolean(apiAccess),
+          prioritySupport: Boolean(prioritySupport),
+          features: Array.isArray(features)
+            ? JSON.stringify(features)
+            : typeof features === 'string' && features.trim().length > 0
+            ? features
+            : undefined,
+          limits: typeof limits === 'object' && limits !== null
+            ? JSON.stringify(limits)
+            : typeof limits === 'string' && limits.trim().length > 0
+            ? limits
+            : undefined,
+        })
+        .returning();
+
+      res.json({ message: 'Plan created successfully', plan: newPlan });
+    } catch (error) {
+      console.error('Error creating plan:', error);
+      res.status(500).json({ message: 'Failed to create plan' });
     }
   });
 
