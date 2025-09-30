@@ -40,6 +40,7 @@ import {
   insertWarrantyClaimSchema
 } from "@shared/schema";
 import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
+import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from "@shared/saas-utils";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -3713,6 +3714,9 @@ Terima kasih!
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
+      const planSlug = normalizeSubscriptionPlan(plan.name);
+      const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+
       // Create client
       const [newClient] = await db
         .insert(clients)
@@ -3724,7 +3728,7 @@ Terima kasih!
           trialEndsAt,
           settings: JSON.stringify({
             planId: plan.id,
-            planName: plan.name,
+            planName: planDisplayName,
             maxUsers: plan.maxUsers || 10,
             maxStorage: plan.maxStorageGB || 1
           })
@@ -3737,8 +3741,8 @@ Terima kasih!
         .values({
           clientId: newClient.id,
           planId: plan.id,
-          planName: plan.name,
-          plan: plan.name.toLowerCase() as any,
+          planName: planDisplayName,
+          plan: planSlug,
           amount: '0',
           paymentStatus: 'paid',
           startDate: new Date(),

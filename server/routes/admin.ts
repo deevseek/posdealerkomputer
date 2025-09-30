@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans } from '../../shared/saas-schema';
+import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -179,6 +180,9 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 7);
 
+    const planSlug = normalizeSubscriptionPlan(plan.name);
+    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+
     // Create client
     const [newClient] = await db
       .insert(clients)
@@ -190,11 +194,11 @@ router.post('/clients', async (req, res) => {
         status: 'trial',
         trialEndsAt,
         settings: JSON.stringify({
-         planId: plan.id,
-         planName: plan.name,
-         maxUsers: plan.maxUsers || 10,
-         maxStorage: plan.maxStorageGB || 1000,
-         domain: fullDomain
+          planId: plan.id,
+          planName: planDisplayName,
+          maxUsers: plan.maxUsers || 10,
+          maxStorage: plan.maxStorageGB || 1000,
+          domain: fullDomain
         })
       })
       .returning();
@@ -205,8 +209,8 @@ router.post('/clients', async (req, res) => {
       .values({
         clientId: newClient.id,
         planId: plan.id,
-        planName: plan.name,
-  plan: 'basic',
+        planName: planDisplayName,
+        plan: planSlug,
         amount: plan.price.toString(),
         paymentStatus: 'pending',
         startDate: new Date(),

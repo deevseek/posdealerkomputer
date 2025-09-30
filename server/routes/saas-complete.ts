@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -76,11 +77,8 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
-    // Map plan name for display
-    let displayName = plan.name;
-    if (plan.name === 'basic') displayName = 'Basic';
-    else if (plan.name === 'pro') displayName = 'Professional';
-    else if (plan.name === 'premium') displayName = 'Enterprise';
+    const planSlug = normalizeSubscriptionPlan(plan.name);
+    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
 
     // Create client
     const [newClient] = await db
@@ -96,7 +94,7 @@ router.post('/clients', async (req, res) => {
         customDomain: `${subdomain}.${MAIN_DOMAIN}`,
         settings: JSON.stringify({
           planId: plan.id,
-          planName: displayName,
+          planName: planDisplayName,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
           features: JSON.parse(plan.features || '[]')
@@ -110,8 +108,8 @@ router.post('/clients', async (req, res) => {
       .values({
         clientId: newClient.id,
         planId: plan.id,
-        planName: displayName,
-        plan: plan.name === 'basic' ? 'basic' : plan.name === 'pro' ? 'pro' : 'premium',
+        planName: planDisplayName,
+        plan: planSlug,
         amount: '0', // Trial is free
         paymentStatus: 'paid',
         startDate: new Date(),
@@ -440,13 +438,15 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       ));
 
     // Create new subscription
+    const planSlug = normalizeSubscriptionPlan(plan.name);
+    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
     const [newSubscription] = await db
       .insert(subscriptions)
       .values({
         clientId: id,
         planId: plan.id,
-        planName: plan.name,
-        plan: plan.name.toLowerCase() as 'basic' | 'pro' | 'premium',
+        planName: planDisplayName,
+        plan: planSlug,
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
@@ -462,8 +462,8 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         status: 'active',
         settings: sql`jsonb_set(
           settings::jsonb, 
-          '{planName}', 
-          '"${plan.name}"'
+          '{planName}',
+          '"${planDisplayName}"'
         )`,
         updatedAt: new Date()
       })

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
@@ -147,14 +148,16 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
+        const planSlug = normalizeSubscriptionPlan(plan.name);
+        const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
         // Create new active subscription
         const [newSubscription] = await db
           .insert(subscriptions)
           .values({
             clientId: client.id,
             planId: plan.id,
-            planName: plan.name,
-            plan: plan.name.toLowerCase() as 'basic' | 'pro' | 'premium',
+            planName: planDisplayName,
+            plan: planSlug,
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
