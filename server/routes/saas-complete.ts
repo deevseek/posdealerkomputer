@@ -9,6 +9,7 @@ import {
   resolvePlanConfiguration,
   safeParseJson,
   stableStringify,
+  ensurePlanCode,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
@@ -91,9 +92,13 @@ router.post('/clients', async (req, res) => {
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
+    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+    });
+
     const normalizedPlanLimits = {
       ...normalizedLimits,
-      planCode: canonicalPlanCode,
+      planCode: subscriptionPlan,
     };
 
     if (shouldPersistNormalizedLimits) {
@@ -126,7 +131,7 @@ router.post('/clients', async (req, res) => {
         settings: JSON.stringify({
           planId: plan.id,
           planName: displayName,
-          planCode: canonicalPlanCode,
+          planCode: subscriptionPlan,
           maxUsers: plan.maxUsers || 10,
           maxStorage: plan.maxStorageGB || 1,
           limits: normalizedPlanLimits,
@@ -142,7 +147,7 @@ router.post('/clients', async (req, res) => {
           clientId: newClient.id,
           planId: plan.id,
           planName: displayName,
-          plan: canonicalPlanCode,
+          plan: subscriptionPlan,
           amount: '0', // Trial is free
           paymentStatus: 'paid',
         startDate: new Date(),
@@ -477,9 +482,13 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
+    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+    });
+
     const normalizedPlanLimits = {
       ...normalizedLimits,
-      planCode: canonicalPlanCode,
+      planCode: subscriptionPlan,
     };
 
     if (shouldPersistNormalizedLimits) {
@@ -496,7 +505,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
         clientId: id,
         planId: plan.id,
         planName: plan.name,
-        plan: canonicalPlanCode,
+        plan: subscriptionPlan,
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
@@ -516,7 +525,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
           jsonb_set(
             jsonb_set(settings::jsonb, '{planName}', to_jsonb(${plan.name})),
             '{planCode}',
-            to_jsonb(${canonicalPlanCode})
+            to_jsonb(${subscriptionPlan})
           ),
           '{limits}',
           ${normalizedLimitsJsonForSettings}::jsonb

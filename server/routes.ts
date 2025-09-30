@@ -46,6 +46,7 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
 } from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
@@ -3775,9 +3776,13 @@ Terima kasih!
         shouldPersistNormalizedLimits,
       } = resolvePlanConfiguration(plan);
 
+      const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+        fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+      });
+
       const normalizedPlanLimits = {
         ...normalizedLimits,
-        planCode: canonicalPlanCode,
+        planCode: subscriptionPlan,
       };
 
       const shouldPersistLimits = shouldPersistNormalizedLimits;
@@ -3794,7 +3799,7 @@ Terima kasih!
       const settingsPayload: Record<string, unknown> = {
         planId: plan.id,
         planName: plan.name,
-        planCode: canonicalPlanCode,
+        planCode: subscriptionPlan,
         maxUsers: plan.maxUsers ?? undefined,
         maxStorage: plan.maxStorageGB ?? undefined,
         domain: fullDomain,
@@ -3835,7 +3840,7 @@ Terima kasih!
           clientId: newClient.id,
           planId: plan.id,
           planName: plan.name,
-          plan: canonicalPlanCode,
+          plan: subscriptionPlan,
           amount: typeof plan.price === 'number' ? plan.price.toString() : '0',
           currency: plan.currency ?? 'IDR',
           paymentStatus: 'pending',

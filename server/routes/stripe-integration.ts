@@ -8,6 +8,7 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
 } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -154,17 +155,21 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
-        const {
-          planCode: canonicalPlanCode,
-          normalizedLimits,
-          normalizedLimitsJson,
-          shouldPersistNormalizedLimits,
-        } = resolvePlanConfiguration(plan);
+      const {
+        planCode: canonicalPlanCode,
+        normalizedLimits,
+        normalizedLimitsJson,
+        shouldPersistNormalizedLimits,
+      } = resolvePlanConfiguration(plan);
 
-        const normalizedPlanLimits = {
-          ...normalizedLimits,
-          planCode: canonicalPlanCode,
-        };
+      const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+        fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+      });
+
+      const normalizedPlanLimits = {
+        ...normalizedLimits,
+        planCode: subscriptionPlan,
+      };
 
         if (shouldPersistNormalizedLimits) {
           await db
@@ -182,7 +187,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
             clientId: client.id,
             planId: plan.id,
             planName: plan.name,
-            plan: canonicalPlanCode,
+            plan: subscriptionPlan,
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
@@ -202,7 +207,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           ...(existingSettings ?? {}),
           planId: plan.id,
           planName: plan.name,
-          planCode: canonicalPlanCode,
+          planCode: subscriptionPlan,
           limits: normalizedPlanLimits,
         };
 

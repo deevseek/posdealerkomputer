@@ -8,6 +8,7 @@ import {
   PLAN_CODE_VALUES as SHARED_PLAN_CODES,
   resolvePlanConfiguration,
   safeParseJson,
+  ensurePlanCode,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
@@ -232,9 +233,13 @@ router.post('/clients', async (req, res) => {
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
 
+    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+    });
+
     const normalizedPlanLimits = {
       ...normalizedLimits,
-      planCode: canonicalPlanCode,
+      planCode: subscriptionPlan,
     };
 
     if (shouldPersistNormalizedLimits) {
@@ -250,7 +255,7 @@ router.post('/clients', async (req, res) => {
     const settingsPayload: Record<string, unknown> = {
       planId: plan.id,
       planName: plan.name,
-      planCode: canonicalPlanCode,
+      planCode: subscriptionPlan,
       maxUsers: plan.maxUsers ?? undefined,
       maxStorage: plan.maxStorageGB ?? undefined,
       domain: fullDomain,
@@ -288,7 +293,7 @@ router.post('/clients', async (req, res) => {
       clientId: newClient.id,
       planId: plan.id,
       planName: plan.name,
-      plan: canonicalPlanCode,
+      plan: subscriptionPlan,
       amount: plan.price.toString(),
       currency: plan.currency ?? 'IDR',
       paymentStatus: 'pending',
