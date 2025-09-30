@@ -4,8 +4,266 @@ import { z } from 'zod';
 
 // Enums for SaaS system
 export const clientStatusEnum = pgEnum('client_status', ['active', 'suspended', 'expired', 'trial']);
-export const subscriptionPlanEnum = pgEnum('subscription_plan', ['basic', 'pro', 'premium']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'failed', 'cancelled']);
+
+export const PLAN_CODE_VALUES = ['basic', 'pro', 'premium'] as const;
+export type SubscriptionPlan = (typeof PLAN_CODE_VALUES)[number];
+
+const PLAN_CODE_ALIAS_MAP: Record<string, SubscriptionPlan> = {
+  basic: 'basic',
+  starter: 'basic',
+  standard: 'basic',
+  entry: 'basic',
+  lite: 'basic',
+  core: 'basic',
+  pro: 'pro',
+  professional: 'pro',
+  bisnis: 'pro',
+  business: 'pro',
+  growth: 'pro',
+  advanced: 'pro',
+  premium: 'premium',
+  enterprise: 'premium',
+  ultimate: 'premium',
+  elite: 'premium',
+  unlimited: 'premium',
+};
+
+const PLAN_RECORD_CODE_KEYS = [
+  'planCode',
+  'plan_code',
+  'plan',
+  'planId',
+  'plan_id',
+  'code',
+  'tier',
+  'level',
+  'planName',
+  'plan_name',
+  'planLabel',
+  'plan_label',
+  'planTier',
+  'plan_tier',
+  'subscriptionPlan',
+  'subscription_plan',
+  'subscriptionTier',
+  'subscription_tier',
+  'subscriptionLevel',
+  'subscription_level',
+  'package',
+  'packageName',
+  'package_name',
+  'slug',
+  'identifier',
+  'key',
+] as const;
+
+const collectPlanRecordCandidates = (
+  record: Partial<Record<string, unknown>> | undefined,
+): string[] => {
+  if (!record) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  for (const key of PLAN_RECORD_CODE_KEYS) {
+    const value = record[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        candidates.push(trimmed);
+      }
+    }
+  }
+
+  return candidates;
+};
+
+export const resolveCanonicalPlanCode = (
+  planRecord: Partial<Record<string, unknown>> | undefined,
+  initialCandidate: unknown,
+  options: {
+    fallbackName?: string;
+    defaultCode?: SubscriptionPlan;
+    additionalCandidates?: unknown[];
+  } = {},
+): SubscriptionPlan => {
+  const queue: unknown[] = [];
+
+  if (initialCandidate !== undefined) {
+    queue.push(initialCandidate);
+  }
+
+  if (options.additionalCandidates?.length) {
+    queue.push(...options.additionalCandidates);
+  }
+
+  queue.push(...collectPlanRecordCandidates(planRecord));
+
+  if (typeof planRecord?.name === 'string') {
+    queue.push(planRecord.name);
+  }
+
+  const { fallbackName = typeof planRecord?.name === 'string' ? planRecord.name : undefined, defaultCode = 'basic' } =
+    options;
+
+  for (const candidate of queue) {
+    const normalized = normalizePlanCode(candidate);
+    if (normalized) {
+      return normalized;
+    }
+
+    if (typeof candidate === 'string') {
+      const derived = derivePlanCodeFromName(candidate, defaultCode);
+      if (derived) {
+        return derived;
+      }
+    }
+  }
+
+  if (fallbackName) {
+    return derivePlanCodeFromName(fallbackName, defaultCode);
+  }
+
+  return defaultCode;
+};
+
+export const normalizePlanCode = (value: unknown): SubscriptionPlan | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return PLAN_CODE_ALIAS_MAP[normalized];
+};
+
+export const derivePlanCodeFromName = (
+  planName: string,
+  fallback: SubscriptionPlan = 'basic',
+): SubscriptionPlan => {
+  const normalized = planName.trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const directMatch = normalizePlanCode(normalized);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  for (const [keyword, code] of Object.entries(PLAN_CODE_ALIAS_MAP)) {
+    if (normalized.includes(keyword)) {
+      return code;
+    }
+  }
+
+  return fallback;
+};
+
+export const ensurePlanCode = (
+  candidate: unknown,
+  options: { fallbackName?: string; defaultCode?: SubscriptionPlan } = {},
+): SubscriptionPlan => {
+  const direct = normalizePlanCode(candidate);
+  if (direct) {
+    return direct;
+  }
+
+  const { fallbackName, defaultCode = 'basic' } = options;
+
+  if (typeof fallbackName === 'string') {
+    return derivePlanCodeFromName(fallbackName, defaultCode);
+  }
+
+  return defaultCode;
+};
+
+const PLAN_LIMIT_CODE_KEYS = [
+  'planCode',
+  'plan_code',
+  'plan',
+  'code',
+  'tier',
+  'level',
+  'planName',
+  'plan_name',
+  'planTier',
+  'plan_tier',
+  'subscriptionPlan',
+  'subscription_plan',
+  'subscriptionTier',
+  'subscription_tier',
+  'package',
+  'packageName',
+  'package_name',
+] as const;
+const PLAN_LIMIT_CODE_KEY_SET = new Set<string>(PLAN_LIMIT_CODE_KEYS);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const safeParseJson = <T>(value: string | null | undefined): T | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    return undefined;
+  }
+};
+
+const coerceLimitsRecord = (input: unknown): Record<string, unknown> | undefined => {
+  if (!input) {
+    return undefined;
+  }
+
+  if (typeof input === 'string') {
+    const parsed = safeParseJson<Record<string, unknown>>(input);
+    return parsed ? { ...parsed } : undefined;
+  }
+
+  if (isPlainObject(input)) {
+    return { ...(input as Record<string, unknown>) };
+  }
+
+  return undefined;
+};
+
+const sanitizeLimitsRecord = (
+  record: Record<string, unknown> | undefined,
+  planCode: SubscriptionPlan,
+): Record<string, unknown> => {
+  const sanitized: Record<string, unknown> = {};
+
+  if (record) {
+    for (const [key, value] of Object.entries(record)) {
+      if (PLAN_LIMIT_CODE_KEY_SET.has(key)) {
+        continue;
+      }
+
+      if (value !== undefined) {
+        sanitized[key] = value;
+      }
+    }
+  }
+
+  sanitized.planCode = planCode;
+  return sanitized;
+};
+
+export const stableStringify = (value: Record<string, unknown>): string =>
+  JSON.stringify(value, Object.keys(value).sort());
 
 // Clients table - Each tenant/customer
 export const clients = pgTable('clients', {
@@ -30,7 +288,7 @@ export const subscriptions = pgTable('subscriptions', {
   clientId: uuid('client_id').references(() => clients.id).notNull(),
   planId: uuid('plan_id').references(() => plans.id),
   planName: text('plan_name').notNull(),
-  plan: subscriptionPlanEnum('plan').notNull(),
+  plan: text('plan').notNull().$type<SubscriptionPlan>(),
   startDate: timestamp('start_date').notNull(),
   endDate: timestamp('end_date').notNull(),
   paymentStatus: paymentStatusEnum('payment_status').notNull().default('pending'),
@@ -81,10 +339,133 @@ export const plans = pgTable('plans', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+type PlanRow = typeof plans.$inferSelect;
+
+const collectPlanCodeCandidates = (
+  record: Record<string, unknown> | undefined,
+  plan: Partial<Record<string, unknown>>,
+): string[] => {
+  const candidates: string[] = [];
+
+  if (record) {
+    for (const key of PLAN_LIMIT_CODE_KEYS) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        candidates.push(value);
+      }
+    }
+  }
+
+  for (const key of PLAN_LIMIT_CODE_KEYS) {
+    const value = plan[key];
+    if (typeof value === 'string' && value.trim()) {
+      candidates.push(value);
+    }
+  }
+
+  return candidates;
+};
+
+const findFirstPlanCodeAlias = (
+  record: Record<string, unknown> | undefined,
+  plan: Partial<Record<string, unknown>>,
+): string | undefined => {
+  if (record) {
+    for (const key of PLAN_LIMIT_CODE_KEYS) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value;
+      }
+    }
+  }
+
+  for (const key of PLAN_LIMIT_CODE_KEYS) {
+    const value = plan[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+type PlanConfigurationInput = {
+  name: string;
+  limits?: PlanRow['limits'] | Record<string, unknown> | null;
+} & Partial<Record<string, unknown>>;
+
+export const resolvePlanConfiguration = (
+  plan: PlanConfigurationInput,
+  options: { fallbackCode?: SubscriptionPlan } = {},
+) => {
+  const rawLimits = coerceLimitsRecord(plan.limits);
+  const planRecord = plan as Partial<Record<string, unknown>>;
+  const planCodeCandidates = collectPlanCodeCandidates(rawLimits, planRecord);
+
+  const derivedPlanCode =
+    planCodeCandidates.reduce<SubscriptionPlan | undefined>((resolved, candidate) => {
+      if (resolved) {
+        return resolved;
+      }
+
+      return normalizePlanCode(candidate);
+    }, undefined) ?? derivePlanCodeFromName(plan.name, options.fallbackCode ?? 'basic');
+
+  const canonicalPlanCode = resolveCanonicalPlanCode(planRecord, derivedPlanCode, {
+    fallbackName: plan.name,
+    defaultCode: options.fallbackCode ?? 'basic',
+    additionalCandidates: planCodeCandidates,
+  });
+
+  const normalizedLimits = sanitizeLimitsRecord(rawLimits, canonicalPlanCode);
+  const normalizedLimitsJson = stableStringify(normalizedLimits);
+
+  let shouldPersistNormalizedLimits = false;
+
+  if (plan.limits == null) {
+    shouldPersistNormalizedLimits = Object.keys(normalizedLimits).length > 0;
+  } else if (typeof plan.limits === 'string') {
+    const parsed = safeParseJson<Record<string, unknown>>(plan.limits);
+    if (!parsed) {
+      shouldPersistNormalizedLimits = true;
+    } else {
+      const existingNormalized = sanitizeLimitsRecord(parsed, canonicalPlanCode);
+      const existingJson = stableStringify(existingNormalized);
+      shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
+    }
+  } else if (isPlainObject(plan.limits)) {
+    const existingNormalized = sanitizeLimitsRecord(
+      plan.limits as Record<string, unknown>,
+      canonicalPlanCode,
+    );
+    const existingJson = stableStringify(existingNormalized);
+    shouldPersistNormalizedLimits = existingJson !== normalizedLimitsJson;
+  } else {
+    shouldPersistNormalizedLimits = true;
+  }
+
+  const aliasSource = findFirstPlanCodeAlias(rawLimits, planRecord);
+  if (typeof aliasSource === 'string') {
+    const normalizedAlias = normalizePlanCode(aliasSource);
+    const aliasLower = aliasSource.trim().toLowerCase();
+
+    if (!normalizedAlias || normalizedAlias !== aliasLower || normalizedAlias !== canonicalPlanCode) {
+      shouldPersistNormalizedLimits = true;
+    }
+  }
+
+  return {
+    planCode: canonicalPlanCode,
+    normalizedLimits,
+    normalizedLimitsJson,
+    shouldPersistNormalizedLimits,
+  };
+};
+
 // Plan features table - Define what each plan includes (legacy, keeping for compatibility)
 export const planFeatures = pgTable('plan_features', {
   id: uuid('id').primaryKey().defaultRandom(),
-  plan: subscriptionPlanEnum('plan').notNull(),
+  plan: text('plan').notNull().$type<SubscriptionPlan>(),
   featureName: text('feature_name').notNull(),
   featureValue: text('feature_value'), // Can be boolean, number, or text
   maxUsers: integer('max_users').default(5),

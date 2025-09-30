@@ -230,6 +230,8 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  protected readonly db = db;
+
   // User operations (mandatory for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));

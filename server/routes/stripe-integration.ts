@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
-import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import {
+  clients,
+  subscriptions,
+  plans,
+  payments,
+  resolvePlanConfiguration,
+  safeParseJson,
+  ensurePlanCode,
+} from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
@@ -147,6 +155,31 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
+      const {
+        planCode: canonicalPlanCode,
+        normalizedLimits,
+        normalizedLimitsJson,
+        shouldPersistNormalizedLimits,
+      } = resolvePlanConfiguration(plan);
+
+      const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+        fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+      });
+
+      const normalizedPlanLimits = {
+        ...normalizedLimits,
+        planCode: subscriptionPlan,
+      };
+
+        if (shouldPersistNormalizedLimits) {
+          await db
+            .update(plans)
+            .set({ limits: normalizedLimitsJson })
+            .where(eq(plans.id, plan.id));
+        }
+
+        const parsedPlanFeatures = safeParseJson<unknown>(plan.features);
+
         // Create new active subscription
         const [newSubscription] = await db
           .insert(subscriptions)
@@ -154,7 +187,7 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
             clientId: client.id,
             planId: plan.id,
             planName: plan.name,
-            plan: plan.name.toLowerCase() as 'basic' | 'pro' | 'premium',
+            plan: subscriptionPlan,
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
@@ -169,11 +202,27 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           .set({ subscriptionId: newSubscription.id })
           .where(eq(payments.id, paymentId));
 
+        const existingSettings = safeParseJson<Record<string, unknown>>(client.settings);
+        const updatedSettings: Record<string, unknown> = {
+          ...(existingSettings ?? {}),
+          planId: plan.id,
+          planName: plan.name,
+          planCode: subscriptionPlan,
+          limits: normalizedPlanLimits,
+        };
+
+        if (parsedPlanFeatures !== undefined) {
+          updatedSettings.features = parsedPlanFeatures;
+        } else if (plan.features) {
+          updatedSettings.features = plan.features;
+        }
+
         // Update client status to active
         await db
           .update(clients)
-          .set({ 
+          .set({
             status: 'active',
+            settings: JSON.stringify(updatedSettings),
             updatedAt: new Date()
           })
           .where(eq(clients.id, client.id));
