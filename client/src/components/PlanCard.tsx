@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
-import { toast, useToast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -20,11 +20,11 @@ export default function PlanCard({ plan, onUpdate }: PlanCardProps) {
   const [editPlan, setEditPlan] = useState<any>(null);
 
   const updatePlanMutation = useMutation({
-    mutationFn: async (data: any) => apiRequest('PUT', `/api/admin/plans/${data.id}`, data),
+    mutationFn: async (data: any) => apiRequest('PUT', `/api/admin/saas/plans/${data.id}`, data),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Plan updated' });
       setEditPlan(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/plans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/plans'] });
       onUpdate?.();
     },
     onError: (error: any) => toast({ title: 'Error', description: error.message || 'Failed', variant: 'destructive' }),
@@ -34,7 +34,16 @@ export default function PlanCard({ plan, onUpdate }: PlanCardProps) {
     <Card className="mb-3 border-l-4 border-l-blue-500">
       <CardHeader className="flex justify-between items-center">
         <CardTitle>{plan.name}</CardTitle>
-        <Dialog open={editPlan?.id === plan.id} onOpenChange={() => setEditPlan(null)}>
+        <Dialog
+          open={editPlan?.id === plan.id}
+          onOpenChange={(open) => {
+            if (open) {
+              setEditPlan({ ...plan });
+            } else {
+              setEditPlan(null);
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button size="sm" variant="outline"><Pencil className="h-4 w-4" /></Button>
           </DialogTrigger>

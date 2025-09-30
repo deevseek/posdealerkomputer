@@ -45,25 +45,42 @@ export default function AdminSaaS() {
   const queryClient = useQueryClient();
 
   // Queries
-  const { data: analyticsRaw } = useQuery({ queryKey: ['/api/admin/saas/stats'], retry: false });
-  const analytics = analyticsRaw ?? {
-    clients: {
-      total: 0,
-      newThisMonth: 0,
-      active: 0,
-      trial: 0,
-      expiringTrials: 0,
-      suspended: 0,
-    },
-    revenue: {
-      monthlyTotal: 0,
-    },
-  };
+  const { data: analyticsRaw } = useQuery({
+    queryKey: ['/api/admin/saas/stats'],
+    retry: false,
+    select: (data: any) => ({
+      clients: {
+        total: data?.totalClients ?? 0,
+        newThisMonth: data?.newClientsThisMonth ?? 0,
+        active: data?.activeClients ?? 0,
+        trial: data?.trialClients ?? 0,
+        expiringTrials: data?.expiringTrials ?? 0,
+        suspended: data?.suspendedClients ?? 0,
+      },
+      revenue: {
+        monthlyTotal: data?.monthlyRevenue ?? 0,
+      },
+    }),
+  });
+  const analytics =
+    analyticsRaw ?? {
+      clients: {
+        total: 0,
+        newThisMonth: 0,
+        active: 0,
+        trial: 0,
+        expiringTrials: 0,
+        suspended: 0,
+      },
+      revenue: {
+        monthlyTotal: 0,
+      },
+    };
 
   const { data: clientsRaw, refetch: refetchClients } = useQuery({ queryKey: ['/api/admin/saas/clients'], retry: false });
   const clients = Array.isArray(clientsRaw) ? clientsRaw : [];
 
-  const { data: plansRaw } = useQuery({ queryKey: ['/api/admin/plans'], retry: false });
+  const { data: plansRaw } = useQuery({ queryKey: ['/api/admin/saas/plans'], retry: false });
   const plans = Array.isArray(plansRaw) ? plansRaw : [];
 
   const { data: expiringTrialsRaw } = useQuery({ queryKey: ['/api/admin/notifications/expiring-trials'], retry: false });
@@ -74,7 +91,7 @@ export default function AdminSaaS() {
 
   // Mutations
   const createPlanMutation = useMutation({
-    mutationFn: async (planData: any) => apiRequest('POST', '/api/admin/plans', planData),
+    mutationFn: async (planData: any) => apiRequest('POST', '/api/admin/saas/plans', planData),
     onSuccess: () => {
       toast({ title: 'Success', description: 'Plan created successfully' });
       setCreatePlanOpen(false);
@@ -91,7 +108,7 @@ export default function AdminSaaS() {
         prioritySupport: false,
         isActive: true,
       });
-  queryClient.invalidateQueries({ queryKey: ['/api/admin/plans'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/plans'] });
     },
     onError: (error: any) => toast({ title: 'Error', description: error.message || 'Failed to create plan', variant: 'destructive' }),
   });
