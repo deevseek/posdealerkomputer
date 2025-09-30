@@ -8,7 +8,6 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
-  ensurePlanCode,
   stableStringify,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
@@ -86,31 +85,21 @@ router.post('/clients', async (req, res) => {
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
     const {
-      planCode: resolvedPlanCode,
+      planCode: canonicalPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
-
-    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
-      fallbackName: plan.name,
-      defaultCode: resolvedPlanCode,
-    });
 
     const normalizedPlanLimits = {
       ...normalizedLimits,
       planCode: canonicalPlanCode,
     };
 
-    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
-      const canonicalLimitsJson =
-        canonicalPlanCode === resolvedPlanCode
-          ? normalizedLimitsJson
-          : stableStringify(normalizedPlanLimits);
-
+    if (shouldPersistNormalizedLimits) {
       await db
         .update(plans)
-        .set({ limits: canonicalLimitsJson })
+        .set({ limits: normalizedLimitsJson })
         .where(eq(plans.id, plan.id));
     }
 
@@ -482,31 +471,21 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       ));
 
     const {
-      planCode: resolvedPlanCode,
+      planCode: canonicalPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
-
-    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
-      fallbackName: plan.name,
-      defaultCode: resolvedPlanCode,
-    });
 
     const normalizedPlanLimits = {
       ...normalizedLimits,
       planCode: canonicalPlanCode,
     };
 
-    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
-      const canonicalLimitsJson =
-        canonicalPlanCode === resolvedPlanCode
-          ? normalizedLimitsJson
-          : stableStringify(normalizedPlanLimits);
-
+    if (shouldPersistNormalizedLimits) {
       await db
         .update(plans)
-        .set({ limits: canonicalLimitsJson })
+        .set({ limits: normalizedLimitsJson })
         .where(eq(plans.id, plan.id));
     }
 

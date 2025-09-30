@@ -29,6 +29,105 @@ const PLAN_CODE_ALIAS_MAP: Record<string, SubscriptionPlan> = {
   unlimited: 'premium',
 };
 
+const PLAN_RECORD_CODE_KEYS = [
+  'planCode',
+  'plan_code',
+  'plan',
+  'planId',
+  'plan_id',
+  'code',
+  'tier',
+  'level',
+  'planName',
+  'plan_name',
+  'planLabel',
+  'plan_label',
+  'planTier',
+  'plan_tier',
+  'subscriptionPlan',
+  'subscription_plan',
+  'subscriptionTier',
+  'subscription_tier',
+  'subscriptionLevel',
+  'subscription_level',
+  'package',
+  'packageName',
+  'package_name',
+  'slug',
+  'identifier',
+  'key',
+] as const;
+
+const collectPlanRecordCandidates = (
+  record: Partial<Record<string, unknown>> | undefined,
+): string[] => {
+  if (!record) {
+    return [];
+  }
+
+  const candidates: string[] = [];
+  for (const key of PLAN_RECORD_CODE_KEYS) {
+    const value = record[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) {
+        candidates.push(trimmed);
+      }
+    }
+  }
+
+  return candidates;
+};
+
+export const resolveCanonicalPlanCode = (
+  planRecord: Partial<Record<string, unknown>> | undefined,
+  initialCandidate: unknown,
+  options: {
+    fallbackName?: string;
+    defaultCode?: SubscriptionPlan;
+    additionalCandidates?: unknown[];
+  } = {},
+): SubscriptionPlan => {
+  const queue: unknown[] = [];
+
+  if (initialCandidate !== undefined) {
+    queue.push(initialCandidate);
+  }
+
+  if (options.additionalCandidates?.length) {
+    queue.push(...options.additionalCandidates);
+  }
+
+  queue.push(...collectPlanRecordCandidates(planRecord));
+
+  if (typeof planRecord?.name === 'string') {
+    queue.push(planRecord.name);
+  }
+
+  const { fallbackName = typeof planRecord?.name === 'string' ? planRecord.name : undefined, defaultCode = 'basic' } =
+    options;
+
+  for (const candidate of queue) {
+    const normalized = normalizePlanCode(candidate);
+    if (normalized) {
+      return normalized;
+    }
+
+    if (typeof candidate === 'string') {
+      const derived = derivePlanCodeFromName(candidate, defaultCode);
+      if (derived) {
+        return derived;
+      }
+    }
+  }
+
+  if (fallbackName) {
+    return derivePlanCodeFromName(fallbackName, defaultCode);
+  }
+
+  return defaultCode;
+};
+
 export const normalizePlanCode = (value: unknown): SubscriptionPlan | undefined => {
   if (typeof value !== 'string') {
     return undefined;
@@ -83,7 +182,25 @@ export const ensurePlanCode = (
   return defaultCode;
 };
 
-const PLAN_LIMIT_CODE_KEYS = ['planCode', 'plan_code', 'plan', 'code', 'tier', 'level'] as const;
+const PLAN_LIMIT_CODE_KEYS = [
+  'planCode',
+  'plan_code',
+  'plan',
+  'code',
+  'tier',
+  'level',
+  'planName',
+  'plan_name',
+  'planTier',
+  'plan_tier',
+  'subscriptionPlan',
+  'subscription_plan',
+  'subscriptionTier',
+  'subscription_tier',
+  'package',
+  'packageName',
+  'package_name',
+] as const;
 const PLAN_LIMIT_CODE_KEY_SET = new Set<string>(PLAN_LIMIT_CODE_KEYS);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -294,9 +411,10 @@ export const resolvePlanConfiguration = (
       return normalizePlanCode(candidate);
     }, undefined) ?? derivePlanCodeFromName(plan.name, options.fallbackCode ?? 'basic');
 
-  const canonicalPlanCode = ensurePlanCode(derivedPlanCode, {
+  const canonicalPlanCode = resolveCanonicalPlanCode(planRecord, derivedPlanCode, {
     fallbackName: plan.name,
     defaultCode: options.fallbackCode ?? 'basic',
+    additionalCandidates: planCodeCandidates,
   });
 
   const normalizedLimits = sanitizeLimitsRecord(rawLimits, canonicalPlanCode);

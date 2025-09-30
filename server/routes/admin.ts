@@ -8,8 +8,6 @@ import {
   PLAN_CODE_VALUES as SHARED_PLAN_CODES,
   resolvePlanConfiguration,
   safeParseJson,
-  ensurePlanCode,
-  stableStringify,
 } from '../../shared/saas-schema';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
@@ -228,31 +226,21 @@ router.post('/clients', async (req, res) => {
     }
 
     const {
-      planCode: resolvedPlanCode,
+      planCode: canonicalPlanCode,
       normalizedLimits,
       normalizedLimitsJson,
       shouldPersistNormalizedLimits,
     } = resolvePlanConfiguration(plan);
-
-    const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
-      fallbackName: plan.name,
-      defaultCode: resolvedPlanCode,
-    });
 
     const normalizedPlanLimits = {
       ...normalizedLimits,
       planCode: canonicalPlanCode,
     };
 
-    if (shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode) {
-      const canonicalLimitsJson =
-        canonicalPlanCode === resolvedPlanCode
-          ? normalizedLimitsJson
-          : stableStringify(normalizedPlanLimits);
-
+    if (shouldPersistNormalizedLimits) {
       await db
         .update(plans)
-        .set({ limits: canonicalLimitsJson })
+        .set({ limits: normalizedLimitsJson })
         .where(eq(plans.id, plan.id));
     }
 

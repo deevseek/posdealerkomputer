@@ -46,8 +46,6 @@ import {
   payments,
   resolvePlanConfiguration,
   safeParseJson,
-  ensurePlanCode,
-  stableStringify,
 } from "@shared/saas-schema";
 import {
   getCurrentJakartaTime,
@@ -3771,34 +3769,23 @@ Terima kasih!
 
       const fullDomain = `${subdomain}.profesionalservis.my.id`;
       const {
-        planCode: resolvedPlanCode,
+        planCode: canonicalPlanCode,
         normalizedLimits,
         normalizedLimitsJson,
         shouldPersistNormalizedLimits,
       } = resolvePlanConfiguration(plan);
-
-      const canonicalPlanCode = ensurePlanCode(resolvedPlanCode, {
-        fallbackName: typeof plan.name === "string" ? plan.name : undefined,
-        defaultCode: resolvedPlanCode,
-      });
 
       const normalizedPlanLimits = {
         ...normalizedLimits,
         planCode: canonicalPlanCode,
       };
 
-      const shouldPersistLimits =
-        shouldPersistNormalizedLimits || canonicalPlanCode !== resolvedPlanCode;
+      const shouldPersistLimits = shouldPersistNormalizedLimits;
 
       if (shouldPersistLimits) {
-        const canonicalLimitsJson =
-          canonicalPlanCode === resolvedPlanCode
-            ? normalizedLimitsJson
-            : stableStringify(normalizedPlanLimits);
-
         await db
           .update(plans)
-          .set({ limits: canonicalLimitsJson })
+          .set({ limits: normalizedLimitsJson })
           .where(eq(plans.id, plan.id));
       }
 
