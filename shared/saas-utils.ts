@@ -1,6 +1,6 @@
-import { subscriptionPlanEnum } from './saas-schema';
+import { PLAN_CODE_VALUES } from './saas-schema';
 
-type SubscriptionPlanSlug = (typeof subscriptionPlanEnum.enumValues)[number];
+type SubscriptionPlanSlug = (typeof PLAN_CODE_VALUES)[number];
 
 const PLAN_NAME_MAP: Record<string, SubscriptionPlanSlug> = {
   basic: 'basic',
@@ -34,7 +34,7 @@ function mapToPlanSlug(planName: string | null | undefined): SubscriptionPlanSlu
     }
   }
 
-  if ((subscriptionPlanEnum.enumValues as readonly string[]).includes(normalizedName as SubscriptionPlanSlug)) {
+  if ((PLAN_CODE_VALUES as readonly string[]).includes(normalizedName as SubscriptionPlanSlug)) {
     return normalizedName as SubscriptionPlanSlug;
   }
 

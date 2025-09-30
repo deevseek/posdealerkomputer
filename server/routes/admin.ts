@@ -279,6 +279,9 @@ router.post('/clients', async (req, res) => {
     const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
     const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
 
+    settingsPayload.planName = planDisplayName;
+    settingsPayload.planSlug = planSlug;
+
     const newClient = await db.transaction(async (tx) => {
       const [createdClient] = await tx
         .insert(clients)
@@ -286,66 +289,33 @@ router.post('/clients', async (req, res) => {
           name,
           subdomain,
           email,
+          phone: phone || null,
+          address: address || null,
           customDomain: fullDomain,
           status: 'trial',
           trialEndsAt,
-          settings: JSON.stringify({
-            planId: plan.id,
-            planName: planDisplayName,
-            planSlug,
-            maxUsers: plan.maxUsers || 10,
-            maxStorage: plan.maxStorageGB || 1000,
-            domain: fullDomain
-          })
+          settings: JSON.stringify(settingsPayload),
         })
         .returning();
 
-      await tx
-        .insert(subscriptions)
-        .values({
-          clientId: createdClient.id,
-          planId: plan.id,
-          planName: planDisplayName,
-          plan: planSlug,
-          amount: plan.price.toString(),
-          paymentStatus: 'pending',
-          startDate: new Date(),
-          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        });
+      const subscriptionStart = new Date();
+      const subscriptionEnd = new Date(subscriptionStart);
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
+
+      await tx.insert(subscriptions).values({
+        clientId: createdClient.id,
+        planId: plan.id,
+        planName: planDisplayName,
+        plan: subscriptionPlan,
+        amount: plan.price.toString(),
+        currency: plan.currency ?? 'IDR',
+        paymentStatus: 'pending',
+        startDate: subscriptionStart,
+        endDate: subscriptionEnd,
+        trialEndDate: trialEndsAt,
+      });
 
       return createdClient;
-
-    const [newClient] = await db
-      .insert(clients)
-      .values({
-        name,
-        subdomain,
-        email,
-        phone: phone || null,
-        address: address || null,
-        customDomain: fullDomain,
-        status: 'trial',
-        trialEndsAt,
-        settings: JSON.stringify(settingsPayload),
-      })
-      .returning();
-
-    const subscriptionStart = new Date();
-    const subscriptionEnd = new Date(subscriptionStart);
-    subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1);
-
-    await db.insert(subscriptions).values({
-      clientId: newClient.id,
-      planId: plan.id,
-      planName: plan.name,
-      plan: subscriptionPlan,
-      amount: plan.price.toString(),
-      currency: plan.currency ?? 'IDR',
-      paymentStatus: 'pending',
-      startDate: subscriptionStart,
-      endDate: subscriptionEnd,
-      trialEndDate: trialEndsAt,
-
     });
 
     res.json({

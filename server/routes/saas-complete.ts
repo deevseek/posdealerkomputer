@@ -2,7 +2,6 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 
-import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
 import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 
 import {
@@ -64,7 +63,6 @@ router.post('/clients', async (req, res) => {
     const validatedData = createClientSchema.parse(req.body);
     const { name, subdomain, email, planId, phone, address, trialDays } = validatedData;
 
-    // Check subdomain availability
     const [existingClient] = await db
       .select()
       .from(clients)
@@ -75,7 +73,6 @@ router.post('/clients', async (req, res) => {
       return res.status(400).json({ message: 'Subdomain already exists' });
     }
 
-    // Get plan details
     const [plan] = await db
       .select()
       .from(plans)
@@ -86,12 +83,49 @@ router.post('/clients', async (req, res) => {
       return res.status(400).json({ message: 'Plan not found' });
     }
 
-    // Calculate trial end date
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
+    const {
+      planCode: canonicalPlanCode,
+      normalizedLimits,
+      normalizedLimitsJson,
+      shouldPersistNormalizedLimits,
+    } = resolvePlanConfiguration(plan);
+
+    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
+      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
+    });
+
+    if (shouldPersistNormalizedLimits) {
+      await db
+        .update(plans)
+        .set({ limits: normalizedLimitsJson })
+        .where(eq(plans.id, plan.id));
+    }
+
+    const normalizedPlanLimits = {
+      ...normalizedLimits,
+      planCode: subscriptionPlan,
+    };
+
+    const parsedFeatures = safeParseJson<unknown>(plan.features);
     const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
-    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+    const displayName = getSubscriptionPlanDisplayName(planSlug);
+
+    const settingsPayload: Record<string, unknown> = {
+      planId: plan.id,
+      planName: displayName,
+      planCode: subscriptionPlan,
+      planSlug,
+      maxUsers: plan.maxUsers || 10,
+      maxStorage: plan.maxStorageGB || 1,
+      limits: normalizedPlanLimits,
+    };
+
+    if (parsedFeatures) {
+      settingsPayload.features = parsedFeatures;
+    }
 
     const newClient = await db.transaction(async (tx) => {
       const [createdClient] = await tx
@@ -105,117 +139,37 @@ router.post('/clients', async (req, res) => {
           status: 'trial',
           trialEndsAt,
           customDomain: `${subdomain}.${MAIN_DOMAIN}`,
-          settings: JSON.stringify({
-            planId: plan.id,
-            planName: planDisplayName,
-            planSlug,
-            maxUsers: plan.maxUsers || 10,
-            maxStorage: plan.maxStorageGB || 1,
-            features: JSON.parse(plan.features || '[]')
-          })
-
-    const {
-      planCode: canonicalPlanCode,
-      normalizedLimits,
-      normalizedLimitsJson,
-      shouldPersistNormalizedLimits,
-    } = resolvePlanConfiguration(plan);
-
-    const subscriptionPlan = ensurePlanCode(canonicalPlanCode, {
-      fallbackName: typeof plan.name === 'string' ? plan.name : undefined,
-    });
-
-    const normalizedPlanLimits = {
-      ...normalizedLimits,
-      planCode: subscriptionPlan,
-    };
-
-    if (shouldPersistNormalizedLimits) {
-      await db
-        .update(plans)
-        .set({ limits: normalizedLimitsJson })
-        .where(eq(plans.id, plan.id));
-    }
-
-    const parsedFeatures = safeParseJson<unknown>(plan.features);
-
-    // Map plan name for display
-    let displayName = plan.name;
-    if (plan.name === 'basic') displayName = 'Basic';
-    else if (plan.name === 'pro') displayName = 'Professional';
-    else if (plan.name === 'premium') displayName = 'Enterprise';
-
-    // Create client
-    const [newClient] = await db
-      .insert(clients)
-      .values({
-        name,
-        subdomain,
-        email,
-        phone,
-        address,
-        status: 'trial',
-        trialEndsAt,
-        customDomain: `${subdomain}.${MAIN_DOMAIN}`,
-        settings: JSON.stringify({
-          planId: plan.id,
-          planName: displayName,
-          planCode: subscriptionPlan,
-          maxUsers: plan.maxUsers || 10,
-          maxStorage: plan.maxStorageGB || 1,
-          limits: normalizedPlanLimits,
-          features: parsedFeatures ?? (plan.features ?? []),
-
+          settings: JSON.stringify(settingsPayload),
         })
         .returning();
 
-
-      await tx
-        .insert(subscriptions)
-        .values({
-          clientId: createdClient.id,
-          planId: plan.id,
-          planName: planDisplayName,
-          plan: planSlug,
-          amount: '0',
-          paymentStatus: 'paid',
-          startDate: new Date(),
-          endDate: trialEndsAt,
-          trialEndDate: trialEndsAt,
-          autoRenew: false
-        });
+      await tx.insert(subscriptions).values({
+        clientId: createdClient.id,
+        planId: plan.id,
+        planName: displayName,
+        plan: subscriptionPlan,
+        amount: '0',
+        paymentStatus: 'paid',
+        startDate: new Date(),
+        endDate: trialEndsAt,
+        trialEndDate: trialEndsAt,
+        autoRenew: false,
+      });
 
       return createdClient;
     });
 
-    // Create initial subscription (trial)
-    await db
-      .insert(subscriptions)
-        .values({
-          clientId: newClient.id,
-          planId: plan.id,
-          planName: displayName,
-          plan: subscriptionPlan,
-          amount: '0', // Trial is free
-          paymentStatus: 'paid',
-        startDate: new Date(),
-        endDate: trialEndsAt,
-        trialEndDate: trialEndsAt,
-        autoRenew: false
-      });
-
-
     res.json({
       message: 'Client created successfully with trial period',
       client: newClient,
-      trialEndsAt
+      trialEndsAt,
     });
   } catch (error) {
     console.error('Error creating client:', error);
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: 'Validation error',
-        errors: error.errors 
+        errors: error.errors,
       });
     }
     res.status(500).json({ message: 'Failed to create client' });
@@ -555,13 +509,8 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       .values({
         clientId: id,
         planId: plan.id,
-
         planName: planDisplayName,
-        plan: planSlug,
-
-        planName: plan.name,
         plan: subscriptionPlan,
-
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
