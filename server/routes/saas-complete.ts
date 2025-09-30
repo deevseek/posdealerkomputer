@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
+
+import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+
 import {
   clients,
   subscriptions,
@@ -11,6 +15,7 @@ import {
   stableStringify,
   ensurePlanCode,
 } from '../../shared/saas-schema';
+
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -85,6 +90,30 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+
+    const newClient = await db.transaction(async (tx) => {
+      const [createdClient] = await tx
+        .insert(clients)
+        .values({
+          name,
+          subdomain,
+          email,
+          phone,
+          address,
+          status: 'trial',
+          trialEndsAt,
+          customDomain: `${subdomain}.${MAIN_DOMAIN}`,
+          settings: JSON.stringify({
+            planId: plan.id,
+            planName: planDisplayName,
+            planSlug,
+            maxUsers: plan.maxUsers || 10,
+            maxStorage: plan.maxStorageGB || 1,
+            features: JSON.parse(plan.features || '[]')
+          })
+
     const {
       planCode: canonicalPlanCode,
       normalizedLimits,
@@ -136,9 +165,28 @@ router.post('/clients', async (req, res) => {
           maxStorage: plan.maxStorageGB || 1,
           limits: normalizedPlanLimits,
           features: parsedFeatures ?? (plan.features ?? []),
+
         })
-      })
-      .returning();
+        .returning();
+
+
+      await tx
+        .insert(subscriptions)
+        .values({
+          clientId: createdClient.id,
+          planId: plan.id,
+          planName: planDisplayName,
+          plan: planSlug,
+          amount: '0',
+          paymentStatus: 'paid',
+          startDate: new Date(),
+          endDate: trialEndsAt,
+          trialEndDate: trialEndsAt,
+          autoRenew: false
+        });
+
+      return createdClient;
+    });
 
     // Create initial subscription (trial)
     await db
@@ -155,6 +203,7 @@ router.post('/clients', async (req, res) => {
         trialEndDate: trialEndsAt,
         autoRenew: false
       });
+
 
     res.json({
       message: 'Client created successfully with trial period',
@@ -499,13 +548,20 @@ router.post('/clients/:id/upgrade', async (req, res) => {
     }
 
     // Create new subscription
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
     const [newSubscription] = await db
       .insert(subscriptions)
       .values({
         clientId: id,
         planId: plan.id,
+
+        planName: planDisplayName,
+        plan: planSlug,
+
         planName: plan.name,
         plan: subscriptionPlan,
+
         amount: plan.price.toString(),
         paymentStatus: paymentMethod === 'manual' ? 'paid' : 'pending',
         startDate: new Date(),
@@ -522,6 +578,10 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       .set({
         status: 'active',
         settings: sql`jsonb_set(
+          jsonb_set(settings::jsonb, '{planName}', '"${planDisplayName}"'),
+          '{planSlug}',
+          '"${planSlug}"'
+
           jsonb_set(
             jsonb_set(settings::jsonb, '{planName}', to_jsonb(${plan.name})),
             '{planCode}',
@@ -529,6 +589,7 @@ router.post('/clients/:id/upgrade', async (req, res) => {
           ),
           '{limits}',
           ${normalizedLimitsJsonForSettings}::jsonb
+
         )`,
         updatedAt: new Date()
       })

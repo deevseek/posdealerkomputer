@@ -39,6 +39,9 @@ import {
   warrantyClaims,
   insertWarrantyClaimSchema
 } from "@shared/schema";
+
+import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from "@shared/saas-utils";
 import {
   plans,
   clients,
@@ -3697,6 +3700,12 @@ Terima kasih!
   // Create new client
   app.post('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
     try {
+
+      const { name, subdomain, email, planId, trialDays = 7, plan: requestedPlanName } = req.body;
+
+      // Validate required fields
+      if (!name || !subdomain || !email || !planId) {
+
       const {
         name: rawName,
         subdomain: rawSubdomain,
@@ -3715,6 +3724,7 @@ Terima kasih!
       const address = sanitizeOptionalText(rawAddress);
 
       if (!name || !subdomain || !email || !selectedPlanId) {
+
         return res.status(400).json({ message: 'All fields are required' });
       }
 
@@ -3815,6 +3825,45 @@ Terima kasih!
         settingsPayload.limits = normalizedPlanLimits;
       }
 
+
+      const planSlug = resolveSubscriptionPlanSlug(plan.name, requestedPlanName);
+      const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+
+      const newClient = await db.transaction(async (tx) => {
+        const [createdClient] = await tx
+          .insert(clients)
+          .values({
+            name,
+            subdomain,
+            email,
+            status: 'trial',
+            trialEndsAt,
+            settings: JSON.stringify({
+              planId: plan.id,
+              planName: planDisplayName,
+              planSlug,
+              maxUsers: plan.maxUsers || 10,
+              maxStorage: plan.maxStorageGB || 1
+            })
+          })
+          .returning();
+
+        await tx
+          .insert(subscriptions)
+          .values({
+            clientId: createdClient.id,
+            planId: plan.id,
+            planName: planDisplayName,
+            plan: planSlug,
+            amount: '0',
+            paymentStatus: 'paid',
+            startDate: new Date(),
+            endDate: trialEndsAt
+          });
+
+        return createdClient;
+      });
+
       const [newClient] = await db
         .insert(clients)
         .values({
@@ -3848,6 +3897,7 @@ Terima kasih!
           endDate: subscriptionEnd,
           trialEndDate: trialEndsAt,
         });
+
 
       realtimeService.broadcast({
         resource: 'saas-clients',

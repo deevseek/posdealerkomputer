@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
+
+import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+import { eq, and, sql } from 'drizzle-orm';
+
 import {
   clients,
   subscriptions,
@@ -11,6 +16,7 @@ import {
   ensurePlanCode,
 } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
+
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
 
@@ -155,6 +161,10 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
+
+        const planSlug = resolveSubscriptionPlanSlug(plan.name);
+        const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+
       const {
         planCode: canonicalPlanCode,
         normalizedLimits,
@@ -180,14 +190,20 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
 
         const parsedPlanFeatures = safeParseJson<unknown>(plan.features);
 
+
         // Create new active subscription
         const [newSubscription] = await db
           .insert(subscriptions)
           .values({
             clientId: client.id,
             planId: plan.id,
+
+            planName: planDisplayName,
+            plan: planSlug,
+
             planName: plan.name,
             plan: subscriptionPlan,
+
             amount: payment.amount.toString(),
             paymentStatus: 'paid',
             startDate: new Date(),
@@ -222,7 +238,15 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
           .update(clients)
           .set({
             status: 'active',
+
+            settings: sql`jsonb_set(
+              jsonb_set(settings::jsonb, '{planName}', '"${planDisplayName}"'),
+              '{planSlug}',
+              '"${planSlug}"'
+            )`,
+
             settings: JSON.stringify(updatedSettings),
+
             updatedAt: new Date()
           })
           .where(eq(clients.id, client.id));

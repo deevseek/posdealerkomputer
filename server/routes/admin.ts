@@ -1,6 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
+
+import { clients, subscriptions, plans } from '../../shared/saas-schema';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+
 import {
   clients,
   subscriptions,
@@ -10,6 +14,7 @@ import {
   safeParseJson,
   ensurePlanCode,
 } from '../../shared/saas-schema';
+
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -270,6 +275,46 @@ router.post('/clients', async (req, res) => {
       settingsPayload.limits = normalizedPlanLimits;
     }
 
+
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
+
+    const newClient = await db.transaction(async (tx) => {
+      const [createdClient] = await tx
+        .insert(clients)
+        .values({
+          name,
+          subdomain,
+          email,
+          customDomain: fullDomain,
+          status: 'trial',
+          trialEndsAt,
+          settings: JSON.stringify({
+            planId: plan.id,
+            planName: planDisplayName,
+            planSlug,
+            maxUsers: plan.maxUsers || 10,
+            maxStorage: plan.maxStorageGB || 1000,
+            domain: fullDomain
+          })
+        })
+        .returning();
+
+      await tx
+        .insert(subscriptions)
+        .values({
+          clientId: createdClient.id,
+          planId: plan.id,
+          planName: planDisplayName,
+          plan: planSlug,
+          amount: plan.price.toString(),
+          paymentStatus: 'pending',
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        });
+
+      return createdClient;
+
     const [newClient] = await db
       .insert(clients)
       .values({
@@ -300,6 +345,7 @@ router.post('/clients', async (req, res) => {
       startDate: subscriptionStart,
       endDate: subscriptionEnd,
       trialEndDate: trialEndsAt,
+
     });
 
     res.json({
