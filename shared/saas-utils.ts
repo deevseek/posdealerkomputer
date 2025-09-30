@@ -20,8 +20,18 @@ const DISPLAY_NAME_MAP: Record<SubscriptionPlanSlug, string> = {
 export function normalizeSubscriptionPlan(planName: string | null | undefined): SubscriptionPlanSlug {
   const normalizedName = (planName ?? '').toLowerCase().trim();
 
+  if (!normalizedName) {
+    return 'basic';
+  }
+
   if (normalizedName in PLAN_NAME_MAP) {
     return PLAN_NAME_MAP[normalizedName];
+  }
+
+  for (const [key, value] of Object.entries(PLAN_NAME_MAP)) {
+    if (normalizedName.includes(key)) {
+      return value;
+    }
   }
 
   if ((subscriptionPlanEnum.enumValues as readonly string[]).includes(normalizedName as SubscriptionPlanSlug)) {
