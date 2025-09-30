@@ -40,7 +40,7 @@ import {
   insertWarrantyClaimSchema
 } from "@shared/schema";
 import { plans, clients, subscriptions, payments } from "@shared/saas-schema";
-import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from "@shared/saas-utils";
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from "@shared/saas-utils";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -3681,7 +3681,7 @@ Terima kasih!
   // Create new client
   app.post('/api/admin/saas/clients', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
     try {
-      const { name, subdomain, email, planId, trialDays = 7 } = req.body;
+      const { name, subdomain, email, planId, trialDays = 7, plan: requestedPlanName } = req.body;
 
       // Validate required fields
       if (!name || !subdomain || !email || !planId) {
@@ -3714,40 +3714,43 @@ Terima kasih!
       const trialEndsAt = new Date();
       trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
-      const planSlug = normalizeSubscriptionPlan(plan.name);
-      const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+      const planSlug = resolveSubscriptionPlanSlug(plan.name, requestedPlanName);
+      const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
 
-      // Create client
-      const [newClient] = await db
-        .insert(clients)
-        .values({
-          name,
-          subdomain,
-          email,
-          status: 'trial',
-          trialEndsAt,
-          settings: JSON.stringify({
+      const newClient = await db.transaction(async (tx) => {
+        const [createdClient] = await tx
+          .insert(clients)
+          .values({
+            name,
+            subdomain,
+            email,
+            status: 'trial',
+            trialEndsAt,
+            settings: JSON.stringify({
+              planId: plan.id,
+              planName: planDisplayName,
+              planSlug,
+              maxUsers: plan.maxUsers || 10,
+              maxStorage: plan.maxStorageGB || 1
+            })
+          })
+          .returning();
+
+        await tx
+          .insert(subscriptions)
+          .values({
+            clientId: createdClient.id,
             planId: plan.id,
             planName: planDisplayName,
-            maxUsers: plan.maxUsers || 10,
-            maxStorage: plan.maxStorageGB || 1
-          })
-        })
-        .returning();
+            plan: planSlug,
+            amount: '0',
+            paymentStatus: 'paid',
+            startDate: new Date(),
+            endDate: trialEndsAt
+          });
 
-      // Create trial subscription
-      await db
-        .insert(subscriptions)
-        .values({
-          clientId: newClient.id,
-          planId: plan.id,
-          planName: planDisplayName,
-          plan: planSlug,
-          amount: '0',
-          paymentStatus: 'paid',
-          startDate: new Date(),
-          endDate: trialEndsAt
-        });
+        return createdClient;
+      });
 
       // Broadcast real-time update
       realtimeService.broadcast({

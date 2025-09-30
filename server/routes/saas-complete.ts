@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
-import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql, sum, isNull, or } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -77,46 +77,49 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + trialDays);
 
-    const planSlug = normalizeSubscriptionPlan(plan.name);
-    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
 
-    // Create client
-    const [newClient] = await db
-      .insert(clients)
-      .values({
-        name,
-        subdomain,
-        email,
-        phone,
-        address,
-        status: 'trial',
-        trialEndsAt,
-        customDomain: `${subdomain}.${MAIN_DOMAIN}`,
-        settings: JSON.stringify({
+    const newClient = await db.transaction(async (tx) => {
+      const [createdClient] = await tx
+        .insert(clients)
+        .values({
+          name,
+          subdomain,
+          email,
+          phone,
+          address,
+          status: 'trial',
+          trialEndsAt,
+          customDomain: `${subdomain}.${MAIN_DOMAIN}`,
+          settings: JSON.stringify({
+            planId: plan.id,
+            planName: planDisplayName,
+            planSlug,
+            maxUsers: plan.maxUsers || 10,
+            maxStorage: plan.maxStorageGB || 1,
+            features: JSON.parse(plan.features || '[]')
+          })
+        })
+        .returning();
+
+      await tx
+        .insert(subscriptions)
+        .values({
+          clientId: createdClient.id,
           planId: plan.id,
           planName: planDisplayName,
-          maxUsers: plan.maxUsers || 10,
-          maxStorage: plan.maxStorageGB || 1,
-          features: JSON.parse(plan.features || '[]')
-        })
-      })
-      .returning();
+          plan: planSlug,
+          amount: '0',
+          paymentStatus: 'paid',
+          startDate: new Date(),
+          endDate: trialEndsAt,
+          trialEndDate: trialEndsAt,
+          autoRenew: false
+        });
 
-    // Create initial subscription (trial)
-    await db
-      .insert(subscriptions)
-      .values({
-        clientId: newClient.id,
-        planId: plan.id,
-        planName: planDisplayName,
-        plan: planSlug,
-        amount: '0', // Trial is free
-        paymentStatus: 'paid',
-        startDate: new Date(),
-        endDate: trialEndsAt,
-        trialEndDate: trialEndsAt,
-        autoRenew: false
-      });
+      return createdClient;
+    });
 
     res.json({
       message: 'Client created successfully with trial period',
@@ -438,8 +441,8 @@ router.post('/clients/:id/upgrade', async (req, res) => {
       ));
 
     // Create new subscription
-    const planSlug = normalizeSubscriptionPlan(plan.name);
-    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
     const [newSubscription] = await db
       .insert(subscriptions)
       .values({
@@ -458,12 +461,12 @@ router.post('/clients/:id/upgrade', async (req, res) => {
     // Update client status to active
     await db
       .update(clients)
-      .set({ 
+      .set({
         status: 'active',
         settings: sql`jsonb_set(
-          settings::jsonb, 
-          '{planName}',
-          '"${planDisplayName}"'
+          jsonb_set(settings::jsonb, '{planName}', '"${planDisplayName}"'),
+          '{planSlug}',
+          '"${planSlug}"'
         )`,
         updatedAt: new Date()
       })

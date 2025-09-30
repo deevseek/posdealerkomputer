@@ -17,11 +17,11 @@ const DISPLAY_NAME_MAP: Record<SubscriptionPlanSlug, string> = {
   premium: 'Enterprise'
 };
 
-export function normalizeSubscriptionPlan(planName: string | null | undefined): SubscriptionPlanSlug {
+function mapToPlanSlug(planName: string | null | undefined): SubscriptionPlanSlug | null {
   const normalizedName = (planName ?? '').toLowerCase().trim();
 
   if (!normalizedName) {
-    return 'basic';
+    return null;
   }
 
   if (normalizedName in PLAN_NAME_MAP) {
@@ -38,11 +38,28 @@ export function normalizeSubscriptionPlan(planName: string | null | undefined): 
     return normalizedName as SubscriptionPlanSlug;
   }
 
+  return null;
+}
+
+export function normalizeSubscriptionPlan(planName: string | null | undefined): SubscriptionPlanSlug {
+  return mapToPlanSlug(planName) ?? 'basic';
+}
+
+export function resolveSubscriptionPlanSlug(
+  ...planNames: Array<string | null | undefined>
+): SubscriptionPlanSlug {
+  for (const name of planNames) {
+    const slug = mapToPlanSlug(name);
+    if (slug) {
+      return slug;
+    }
+  }
+
   return 'basic';
 }
 
-export function getSubscriptionPlanDisplayName(planName: string | null | undefined): string {
-  const planSlug = normalizeSubscriptionPlan(planName);
+export function getSubscriptionPlanDisplayName(planNameOrSlug: string | null | undefined): string {
+  const planSlug = normalizeSubscriptionPlan(planNameOrSlug);
   return DISPLAY_NAME_MAP[planSlug];
 }
 

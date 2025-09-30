@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans } from '../../shared/saas-schema';
-import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 import { users } from '../../shared/schema';
 import { eq, count, and, desc, gte, lt, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
@@ -143,12 +143,6 @@ const createClientSchema = z.object({
 });
 
 router.post('/clients', async (req, res) => {
-    // Map plan name to valid enum value
-    const planEnumMap: Record<string, string> = {
-      'Basic': 'basic',
-      'Professional': 'pro',
-      'Enterprise': 'premium'
-    };
   try {
   const { name, subdomain, email, planId } = createClientSchema.parse(req.body);
   // Always use profesionalservis.my.id as domain suffix for subdomain
@@ -180,42 +174,45 @@ router.post('/clients', async (req, res) => {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 7);
 
-    const planSlug = normalizeSubscriptionPlan(plan.name);
-    const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+    const planSlug = resolveSubscriptionPlanSlug(plan.name, req.body.plan);
+    const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
 
-    // Create client
-    const [newClient] = await db
-      .insert(clients)
-      .values({
-        name,
-        subdomain,
-        email,
-        customDomain: fullDomain,
-        status: 'trial',
-        trialEndsAt,
-        settings: JSON.stringify({
+    const newClient = await db.transaction(async (tx) => {
+      const [createdClient] = await tx
+        .insert(clients)
+        .values({
+          name,
+          subdomain,
+          email,
+          customDomain: fullDomain,
+          status: 'trial',
+          trialEndsAt,
+          settings: JSON.stringify({
+            planId: plan.id,
+            planName: planDisplayName,
+            planSlug,
+            maxUsers: plan.maxUsers || 10,
+            maxStorage: plan.maxStorageGB || 1000,
+            domain: fullDomain
+          })
+        })
+        .returning();
+
+      await tx
+        .insert(subscriptions)
+        .values({
+          clientId: createdClient.id,
           planId: plan.id,
           planName: planDisplayName,
-          maxUsers: plan.maxUsers || 10,
-          maxStorage: plan.maxStorageGB || 1000,
-          domain: fullDomain
-        })
-      })
-      .returning();
+          plan: planSlug,
+          amount: plan.price.toString(),
+          paymentStatus: 'pending',
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        });
 
-    // Create initial subscription record (pending payment)
-    await db
-      .insert(subscriptions)
-      .values({
-        clientId: newClient.id,
-        planId: plan.id,
-        planName: planDisplayName,
-        plan: planSlug,
-        amount: plan.price.toString(),
-        paymentStatus: 'pending',
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-      });
+      return createdClient;
+    });
 
     res.json({
       message: 'Client created successfully',

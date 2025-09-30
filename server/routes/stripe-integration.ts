@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
 import { clients, subscriptions, plans, payments } from '../../shared/saas-schema';
-import { normalizeSubscriptionPlan, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
-import { eq, and } from 'drizzle-orm';
+import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
+import { eq, and, sql } from 'drizzle-orm';
 import type { Request, Response, NextFunction } from 'express';
 // Note: Stripe will be added when user provides API keys
 
@@ -148,8 +148,8 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         .limit(1);
 
       if (plan) {
-        const planSlug = normalizeSubscriptionPlan(plan.name);
-        const planDisplayName = getSubscriptionPlanDisplayName(plan.name);
+        const planSlug = resolveSubscriptionPlanSlug(plan.name);
+        const planDisplayName = getSubscriptionPlanDisplayName(planSlug);
         // Create new active subscription
         const [newSubscription] = await db
           .insert(subscriptions)
@@ -175,8 +175,13 @@ router.post('/payments/confirm/:paymentId', async (req, res) => {
         // Update client status to active
         await db
           .update(clients)
-          .set({ 
+          .set({
             status: 'active',
+            settings: sql`jsonb_set(
+              jsonb_set(settings::jsonb, '{planName}', '"${planDisplayName}"'),
+              '{planSlug}',
+              '"${planSlug}"'
+            )`,
             updatedAt: new Date()
           })
           .where(eq(clients.id, client.id));
