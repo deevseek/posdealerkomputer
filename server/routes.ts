@@ -14,7 +14,7 @@ import {
 import XLSX from 'xlsx';
 import multer from 'multer';
 import { db } from "./db";
-import { eq, and, gte, lte, lt, desc, count, sql, isNull, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, lt, desc, count, sql, isNull, inArray, or } from "drizzle-orm";
 import {
   products,
   categories, 
@@ -4017,7 +4017,7 @@ Terima kasih!
       const { id } = req.params;
       const { status } = req.body;
 
-      if (!['active', 'suspended', 'expired', 'trial'].includes(status)) {
+      if (!['active', 'suspended', 'expired', 'trial', 'pending'].includes(status)) {
         return res.status(400).json({ message: 'Invalid status' });
       }
 
@@ -4084,8 +4084,23 @@ Terima kasih!
         .where(gte(clients.createdAt, firstDayOfMonth));
       const newClientsThisMonth = newClientsResult.count;
 
-      // Revenue calculation (mock for now)
-      const monthlyRevenue = activeClients * 199000; // Assuming average Rp 199k per client
+      // Revenue calculation based on paid invoices in the current month
+      const [monthlyRevenueResult] = await db
+        .select({
+          total: sql<number>`coalesce(sum(${payments.amount}), 0)`
+        })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.status, 'paid'),
+            or(
+              gte(payments.paidAt, firstDayOfMonth),
+              and(isNull(payments.paidAt), gte(payments.createdAt, firstDayOfMonth))
+            )
+          )
+        );
+
+      const monthlyRevenue = monthlyRevenueResult?.total ?? 0;
 
       // Expiring trials (trials ending in next 7 days)
       const nextWeek = new Date();

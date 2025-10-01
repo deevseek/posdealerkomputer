@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../db';
 import { clients, subscriptions, payments, planFeatures } from '../../shared/saas-schema';
 import { insertClientSchema, insertSubscriptionSchema } from '../../shared/saas-schema';
-import { eq, and, desc, count } from 'drizzle-orm';
+import { eq, and, desc, count, gte, sql, isNull, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
 import { storage } from '../storage';
 
@@ -334,7 +334,7 @@ export class SaasController {
       const { clientId } = req.params;
       const { status } = req.body;
 
-      if (!['active', 'suspended', 'expired', 'trial'].includes(status)) {
+      if (!['active', 'suspended', 'expired', 'trial', 'pending'].includes(status)) {
         return res.status(400).json({ error: 'Invalid status' });
       }
 
@@ -374,12 +374,33 @@ export class SaasController {
         .from(clients)
         .where(eq(clients.status, 'trial'));
 
-      const totalRevenue = await db
-        .select()
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const [totalRevenueResult] = await db
+        .select({
+          total: sql<number>`coalesce(sum(${payments.amount}), 0)`
+        })
         .from(payments)
         .where(eq(payments.status, 'paid'));
 
-      const revenue = totalRevenue.reduce((sum, payment) => sum + payment.amount, 0);
+      const [monthlyRevenueResult] = await db
+        .select({
+          total: sql<number>`coalesce(sum(${payments.amount}), 0)`
+        })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.status, 'paid'),
+            or(
+              gte(payments.paidAt, firstDayOfMonth),
+              and(isNull(payments.paidAt), gte(payments.createdAt, firstDayOfMonth))
+            )
+          )
+        );
+
+      const totalRevenue = totalRevenueResult?.total ?? 0;
+      const monthlyRevenue = monthlyRevenueResult?.total ?? 0;
 
       res.json({
         stats: {
@@ -387,8 +408,9 @@ export class SaasController {
           activeClients: activeClients[0].count,
           trialClients: trialClients[0].count,
           suspendedClients: totalClients[0].count - activeClients[0].count - trialClients[0].count,
-          totalRevenue: revenue,
-          avgRevenuePerClient: activeClients[0].count > 0 ? revenue / activeClients[0].count : 0
+          totalRevenue,
+          monthlyRevenue,
+          avgRevenuePerClient: activeClients[0].count > 0 ? totalRevenue / activeClients[0].count : 0
         }
       });
 
