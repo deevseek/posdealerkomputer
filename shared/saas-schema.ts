@@ -3,7 +3,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 
 // Enums for SaaS system
-export const clientStatusEnum = pgEnum('client_status', ['active', 'suspended', 'expired', 'trial']);
+export const clientStatusEnum = pgEnum('client_status', ['active', 'suspended', 'expired', 'trial', 'pending']);
 export const paymentStatusEnum = pgEnum('payment_status', ['pending', 'paid', 'failed', 'cancelled']);
 
 export const PLAN_CODE_VALUES = ['basic', 'pro', 'premium'] as const;

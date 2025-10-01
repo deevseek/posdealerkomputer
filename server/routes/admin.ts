@@ -340,7 +340,7 @@ router.patch('/clients/:id/status', async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!['active', 'suspended', 'expired', 'trial'].includes(status)) {
+    if (!['active', 'suspended', 'expired', 'trial', 'pending'].includes(status)) {
       return res.status(400).json({ message: 'Invalid status' });
     }
 
