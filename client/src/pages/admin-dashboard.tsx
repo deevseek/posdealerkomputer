@@ -32,7 +32,7 @@ interface Client {
   name: string;
   subdomain: string;
   email: string;
-  status: 'active' | 'suspended' | 'expired' | 'trial';
+  status: 'active' | 'suspended' | 'expired' | 'trial' | 'pending';
   createdAt: string;
   trialEndsAt?: string;
   subscription?: {
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
   // Update client status mutation
   const updateClientStatusMutation = useMutation({
     mutationFn: async ({ clientId, status }: { clientId: string; status: string }) => {
-      return await apiRequest('PATCH', `/api/admin/clients/${clientId}/status`, { status });
+      return await apiRequest('PUT', `/api/admin/clients/${clientId}/status`, { status });
     },
     onSuccess: () => {
       toast({
@@ -137,6 +137,7 @@ export default function AdminDashboard() {
   const getStatusBadge = (status: string) => {
     const variants = {
       active: { variant: "default" as const, label: "Aktif", icon: CheckCircle },
+      pending: { variant: "secondary" as const, label: "Pending", icon: Clock },
       trial: { variant: "secondary" as const, label: "Trial", icon: Clock },
       expired: { variant: "destructive" as const, label: "Expired", icon: XCircle },
       suspended: { variant: "outline" as const, label: "Suspended", icon: XCircle }

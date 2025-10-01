@@ -360,7 +360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/damaged-goods', isAuthenticated, async (req: any, res) => {
     try {
       // Get client ID from authenticated session for multi-tenant security
-      const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || req.session?.user?.clientId || null;
       
       // Build where conditions for multi-tenant filtering
       const whereConditions = [
@@ -471,7 +471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/reports/stock-movements', isAuthenticated, async (req: any, res) => {
     try {
       // Get client ID from authenticated session for multi-tenant security
-      const clientId = req.tenant?.clientId || req.session?.user?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || req.session?.user?.clientId || null;
       
       // Build where conditions for multi-tenant filtering ONLY 
       const whereConditions = [
@@ -3215,7 +3215,7 @@ Terima kasih!
   app.get('/api/setup/status', async (req: any, res) => {
     try {
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
-      const clientId = req.tenant?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || null;
       
       let config = null;
       let userCount = 0;
@@ -3283,7 +3283,7 @@ Terima kasih!
       }
 
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
-      const clientId = req.tenant?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || null;
       
       const existingConfig = await storage.getStoreConfig(clientId);
       const setupSteps = existingConfig?.setupSteps ? JSON.parse(existingConfig.setupSteps) : {};
@@ -3321,32 +3321,59 @@ Terima kasih!
       }
 
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
-      const clientId = req.tenant?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || null;
 
-      // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username);
-      if (existingUser) {
-        return res.status(400).json({ message: 'User already exists' });
+      const existingUserByUsername = await storage.getUserByUsername(username);
+      const existingUserByEmail = await storage.getUserByEmail(email);
+
+      const isDifferentClient = (user: any) => {
+        if (!user) return false;
+        if (!clientId && !user.clientId) return false;
+        if (!clientId) return Boolean(user.clientId);
+        return user.clientId !== clientId;
+      };
+
+      if (isDifferentClient(existingUserByUsername)) {
+        return res.status(400).json({ message: 'Username already used by another tenant' });
       }
 
-      const emailExists = await storage.getUserByEmail(email);
-      if (emailExists) {
-        return res.status(400).json({ message: 'Email already exists' });
+      if (isDifferentClient(existingUserByEmail)) {
+        return res.status(400).json({ message: 'Email already used by another tenant' });
       }
 
-      // Hash password and create user with tenant isolation
+      const userToUpdate = existingUserByEmail && !isDifferentClient(existingUserByEmail)
+        ? existingUserByEmail
+        : existingUserByUsername && !isDifferentClient(existingUserByUsername)
+          ? existingUserByUsername
+          : null;
+
+      // Hash password and persist user with tenant isolation
       const hashedPassword = await hashPassword(password);
-      
-      await storage.createUser({
-        username,
-        password: hashedPassword,
-        email,
-        firstName: firstName || 'System',
-        lastName: lastName || 'Administrator',
-        role: 'admin',
-        isActive: true,
-        profileImageUrl: null
-      }, clientId);
+
+      if (userToUpdate) {
+        await storage.updateUser(userToUpdate.id, {
+          username,
+          password: hashedPassword,
+          email,
+          firstName: firstName || 'System',
+          lastName: lastName || 'Administrator',
+          role: 'admin',
+          isActive: true,
+          profileImageUrl: null,
+          clientId: clientId || null,
+        });
+      } else {
+        await storage.createUser({
+          username,
+          password: hashedPassword,
+          email,
+          firstName: firstName || 'System',
+          lastName: lastName || 'Administrator',
+          role: 'admin',
+          isActive: true,
+          profileImageUrl: null
+        }, clientId || undefined);
+      }
 
       // Update setup steps
       const config = await storage.getStoreConfig(clientId || undefined);
@@ -3527,7 +3554,7 @@ Terima kasih!
   app.post('/api/setup/complete', async (req: any, res) => {
     try {
       // Extract clientId from tenant info (SaaS mode) or use null (single-tenant mode)
-      const clientId = req.tenant?.clientId || null;
+      const clientId = req.tenant?.id || req.tenant?.clientId || null;
       
       const config = await storage.getStoreConfig(clientId || undefined);
       
