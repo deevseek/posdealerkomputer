@@ -60,7 +60,7 @@ import {
   type WarrantyClaim,
   type InsertWarrantyClaim,
 } from "@shared/schema";
-import { db } from "./db";
+import { db, getCurrentTenantContext } from "./db";
 import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, gt } from "drizzle-orm";
 import {
   getCurrentJakartaTime,
@@ -232,21 +232,37 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   protected readonly db = db;
 
+  private resolveClientId(explicitClientId?: string | null) {
+    if (typeof explicitClientId !== 'undefined') {
+      return explicitClientId;
+    }
+
+    const tenantContext = getCurrentTenantContext();
+    return tenantContext?.clientId ?? null;
+  }
+
   // User operations (mandatory for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const clientId = this.resolveClientId();
+    const conditions = clientId ? and(eq(users.id, id), eq(users.clientId, clientId)) : eq(users.id, id);
+    const [user] = await db.select().from(users).where(conditions);
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const clientId = this.resolveClientId();
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(clientId ? and(eq(users.username, username), eq(users.clientId, clientId)) : eq(users.username, username));
     return user;
   }
 
   async createUser(userData: InsertUser, clientId?: string): Promise<User> {
+    const resolvedClientId = this.resolveClientId(clientId);
     const userDataWithClient = {
       ...userData,
-      clientId: clientId || null
+      clientId: resolvedClientId
     };
     const [user] = await db
       .insert(users)
@@ -293,16 +309,25 @@ export class DatabaseStorage implements IStorage {
 
   // User management
   async getUsers(): Promise<User[]> {
+    const clientId = this.resolveClientId();
+    if (clientId) {
+      return await db
+        .select()
+        .from(users)
+        .where(eq(users.clientId, clientId))
+        .orderBy(desc(users.createdAt));
+    }
     return await db.select().from(users).orderBy(desc(users.createdAt));
   }
 
   async getUserCount(clientId?: string): Promise<number> {
-    if (clientId) {
+    const resolvedClientId = this.resolveClientId(clientId);
+    if (resolvedClientId) {
       // Multi-tenant mode: count users for specific client
       const result = await db
         .select({ count: count() })
         .from(users)
-        .where(eq(users.clientId, clientId));
+        .where(eq(users.clientId, resolvedClientId));
       return result[0]?.count || 0;
     } else {
       // Single-tenant mode: count all users (legacy behavior)
@@ -314,21 +339,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const clientId = this.resolveClientId();
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(clientId ? and(eq(users.email, email), eq(users.clientId, clientId)) : eq(users.email, email));
     return user;
   }
 
   async updateUser(id: string, userData: Partial<InsertUser>): Promise<User> {
+    const clientId = this.resolveClientId();
+    const conditions = clientId ? and(eq(users.id, id), eq(users.clientId, clientId)) : eq(users.id, id);
+    const updateData: Partial<InsertUser> = { ...userData, updatedAt: new Date() };
+    if (clientId) {
+      updateData.clientId = clientId;
+    }
+
     const [user] = await db
       .update(users)
-      .set({ ...userData, updatedAt: new Date() })
-      .where(eq(users.id, id))
+      .set(updateData)
+      .where(conditions)
       .returning();
     return user;
   }
 
   async deleteUser(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
+    const clientId = this.resolveClientId();
+    const conditions = clientId ? and(eq(users.id, id), eq(users.clientId, clientId)) : eq(users.id, id);
+    await db.delete(users).where(conditions);
   }
 
   // Role management
