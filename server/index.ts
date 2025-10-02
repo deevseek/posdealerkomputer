@@ -5,6 +5,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./middleware/tenant";
 import saasRoutes from "./routes/saas";
 import adminRoutes from "./routes/admin";
+import { databaseContextMiddleware } from "./db";
 
 const app = express();
 import session from 'express-session';
@@ -18,6 +19,7 @@ app.use(session({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(databaseContextMiddleware);
 
 app.use((req, res, next) => {
   const start = Date.now();
