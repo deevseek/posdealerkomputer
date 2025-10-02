@@ -114,15 +114,14 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       '/api/whatsapp'
     ];
     
-    // Setup routes are only for super admins - require proper tenant detection
-    const superAdminOnlyRoutes = ['/api/setup', '/api/admin'];
-    
+    // Admin routes remain super-admin only, but allow setup routes for tenant onboarding
+    const superAdminOnlyRoutes = ['/api/admin'];
+
     if (superAdminOnlyRoutes.some(route => req.path.startsWith(route))) {
-      // Setup routes require super admin access
       if (subdomain !== 'admin' && subdomain !== 'main' && !req.path.startsWith('/api/admin')) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           error: 'Access denied',
-          message: 'Setup dan admin panel hanya dapat diakses oleh super admin.'
+          message: 'Admin panel hanya dapat diakses oleh super admin.'
         });
       }
       req.isSuperAdmin = true;
