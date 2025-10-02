@@ -23,7 +23,31 @@ type ParsedDatabaseUrl = {
   ssl?: boolean;
 };
 
+
+export class TenantProvisioningError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+    public detail?: string,
+  ) {
+    super(message);
+    this.name = 'TenantProvisioningError';
+  }
+}
+
 const provisionedTenantDatabases = new Set<string>();
+
+type ProvisionFailureRecord = {
+  error: TenantProvisioningError;
+  lastAttempt: number;
+  attempts: number;
+};
+
+const failedTenantProvisionAttempts = new Map<string, ProvisionFailureRecord>();
+const DEFAULT_PROVISION_RETRY_DELAY_MS = 60_000;
+
+const provisionedTenantDatabases = new Set<string>();
+
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -263,6 +287,52 @@ const runDrizzlePush = async (connectionString: string) => {
 
 const primaryConnectionParts = parseDatabaseUrlParts(process.env.DATABASE_URL!);
 
+const resolveProvisionerConnectionString = () => {
+  const envConnection =
+    process.env.TENANT_DATABASE_ADMIN_URL ||
+    process.env.TENANT_DATABASE_PROVISIONER_URL ||
+    process.env.TENANT_DB_ADMIN_URL;
+
+  if (envConnection) {
+    return envConnection;
+  }
+
+  return (
+    buildConnectionStringFromParts({
+      host: primaryConnectionParts.host,
+      port: primaryConnectionParts.port,
+      database: primaryConnectionParts.database || 'postgres',
+      user: primaryConnectionParts.user,
+      password: primaryConnectionParts.password,
+      ssl: primaryConnectionParts.ssl,
+    }) ?? process.env.DATABASE_URL!
+  );
+};
+
+const toTenantProvisioningError = (error: unknown, databaseName: string) => {
+  if (error instanceof TenantProvisioningError) {
+    return error;
+  }
+
+  const code = typeof (error as any)?.code === 'string' ? ((error as any).code as string) : undefined;
+  const detail = typeof (error as any)?.detail === 'string' ? ((error as any).detail as string) : undefined;
+
+  let message = `Failed to provision tenant database "${databaseName}".`;
+
+  if (code === '42501') {
+    message +=
+      ' The configured database role does not have permission to create databases. ' +
+      'Grant the role CREATEDB privileges or provide a superuser connection string via TENANT_DATABASE_ADMIN_URL.';
+  }
+
+  if (error instanceof Error && error.message) {
+    message += ` ${error.message}`;
+  }
+
+  return new TenantProvisioningError(message.trim(), code, detail);
+};
+
+
 export const buildDefaultTenantConnection = (tenantIdentifier: string) => {
   const databaseName = generateTenantDatabaseName(tenantIdentifier);
   const connectionString = buildConnectionStringFromParts({
@@ -310,8 +380,53 @@ export const autoProvisionTenantDatabase = async (
 
   const { connectionString, databaseName } = fallback;
 
+  const previousFailure = failedTenantProvisionAttempts.get(databaseName);
+  if (previousFailure) {
+    const retryDelay = Number(process.env.TENANT_DB_PROVISION_RETRY_MS ?? DEFAULT_PROVISION_RETRY_DELAY_MS);
+    if (Number.isNaN(retryDelay) || retryDelay < 0) {
+      failedTenantProvisionAttempts.delete(databaseName);
+    } else if (Date.now() - previousFailure.lastAttempt < retryDelay) {
+      throw previousFailure.error;
+    } else {
+      failedTenantProvisionAttempts.delete(databaseName);
+    }
+  }
+
+
+
   if (provisionedTenantDatabases.has(databaseName)) {
     return { connectionString, databaseName, created: false };
+  }
+
+  const adminConnectionString = resolveProvisionerConnectionString();
+  let created = false;
+
+  try {
+    const adminPool = new Pool({ connectionString: adminConnectionString });
+    try {
+      const existing = await adminPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName]);
+      if (existing.rowCount === 0) {
+        await adminPool.query(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
+        created = true;
+      }
+    } finally {
+      await adminPool.end();
+    }
+
+    await runDrizzlePush(connectionString);
+    provisionedTenantDatabases.add(databaseName);
+    failedTenantProvisionAttempts.delete(databaseName);
+
+    return { connectionString, databaseName, created };
+  } catch (error) {
+    const provisioningError = toTenantProvisioningError(error, databaseName);
+    const existing = failedTenantProvisionAttempts.get(databaseName);
+    failedTenantProvisionAttempts.set(databaseName, {
+      error: provisioningError,
+      lastAttempt: Date.now(),
+      attempts: existing ? existing.attempts + 1 : 1,
+    });
+    throw provisioningError;
   }
 
   const adminConnectionString = buildConnectionStringFromParts({
@@ -340,6 +455,7 @@ export const autoProvisionTenantDatabase = async (
   provisionedTenantDatabases.add(databaseName);
 
   return { connectionString, databaseName, created };
+
 };
 
 export type TenantDbResolutionResult = {
@@ -356,7 +472,14 @@ export const ensureTenantDbForSettings = async (
   let created: boolean | undefined;
   let databaseName: string | undefined;
 
+
+  const autoProvisionEnabled =
+    options.autoProvision ?? ((process.env.TENANT_DB_AUTO_PROVISION ?? 'true').toLowerCase() !== 'false');
+
+  if (!connectionString && autoProvisionEnabled) {
+
   if (!connectionString && options.autoProvision !== false) {
+
     const provisionResult = await autoProvisionTenantDatabase(tenantIdentifier);
     connectionString = provisionResult.connectionString;
     created = provisionResult.created;
