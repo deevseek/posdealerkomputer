@@ -210,10 +210,47 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     const normalizedSettings = typeof settings === 'object' && settings !== null ? settings : {};
 
     try {
-      const { db: tenantDb, connectionString } = await ensureTenantDbForSettings(
+      const { db: tenantDb, connectionString, created, databaseName } = await ensureTenantDbForSettings(
         clientData.subdomain,
         normalizedSettings as Record<string, unknown>,
+        { autoProvision: true },
       );
+
+      const existingDatabaseSettings =
+        normalizedSettings.database && typeof normalizedSettings.database === 'object'
+          ? (normalizedSettings.database as Record<string, unknown>)
+          : {};
+
+      const existingDatabaseName =
+        typeof existingDatabaseSettings === 'object' && existingDatabaseSettings !== null && 'name' in existingDatabaseSettings
+          ? existingDatabaseSettings.name
+          : undefined;
+
+      const existingConnectionString =
+        typeof existingDatabaseSettings === 'object' && existingDatabaseSettings !== null &&
+        'connectionString' in existingDatabaseSettings
+          ? existingDatabaseSettings.connectionString
+          : undefined;
+
+      const settingsMissingConnection =
+        !existingConnectionString || existingConnectionString !== connectionString;
+
+      if (settingsMissingConnection || created) {
+        const updatedDatabaseSettings = {
+          ...existingDatabaseSettings,
+          connectionString,
+          name: databaseName ?? (existingDatabaseName as string | undefined),
+          autoProvisioned: true,
+        };
+
+        normalizedSettings.database = updatedDatabaseSettings;
+
+        await primaryDb
+          .update(clients)
+          .set({ settings: JSON.stringify(normalizedSettings) })
+          .where(eq(clients.id, clientData.id));
+      }
+
       setTenantDbForRequest(tenantDb, { clientId: clientData.id, connectionString });
       req.tenant = {
         id: clientData.id,
