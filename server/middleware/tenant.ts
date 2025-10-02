@@ -215,7 +215,11 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       const { db: tenantDb, connectionString, created, databaseName } = await ensureTenantDbForSettings(
         clientData.subdomain,
         normalizedSettings as Record<string, unknown>,
+
         { autoProvision: shouldAutoProvision },
+
+        { autoProvision: true },
+
       );
 
       const existingDatabaseSettings =

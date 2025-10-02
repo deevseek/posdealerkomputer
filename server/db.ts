@@ -23,6 +23,7 @@ type ParsedDatabaseUrl = {
   ssl?: boolean;
 };
 
+
 export class TenantProvisioningError extends Error {
   constructor(
     message: string,
@@ -44,6 +45,9 @@ type ProvisionFailureRecord = {
 
 const failedTenantProvisionAttempts = new Map<string, ProvisionFailureRecord>();
 const DEFAULT_PROVISION_RETRY_DELAY_MS = 60_000;
+
+const provisionedTenantDatabases = new Set<string>();
+
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
@@ -328,6 +332,7 @@ const toTenantProvisioningError = (error: unknown, databaseName: string) => {
   return new TenantProvisioningError(message.trim(), code, detail);
 };
 
+
 export const buildDefaultTenantConnection = (tenantIdentifier: string) => {
   const databaseName = generateTenantDatabaseName(tenantIdentifier);
   const connectionString = buildConnectionStringFromParts({
@@ -387,6 +392,8 @@ export const autoProvisionTenantDatabase = async (
     }
   }
 
+
+
   if (provisionedTenantDatabases.has(databaseName)) {
     return { connectionString, databaseName, created: false };
   }
@@ -421,6 +428,34 @@ export const autoProvisionTenantDatabase = async (
     });
     throw provisioningError;
   }
+
+  const adminConnectionString = buildConnectionStringFromParts({
+    host: primaryConnectionParts.host,
+    port: primaryConnectionParts.port,
+    database: primaryConnectionParts.database || 'postgres',
+    user: primaryConnectionParts.user,
+    password: primaryConnectionParts.password,
+    ssl: primaryConnectionParts.ssl,
+  }) ?? process.env.DATABASE_URL!;
+
+  const adminPool = new Pool({ connectionString: adminConnectionString });
+  let created = false;
+
+  try {
+    const existing = await adminPool.query('SELECT 1 FROM pg_database WHERE datname = $1', [databaseName]);
+    if (existing.rowCount === 0) {
+      await adminPool.query(`CREATE DATABASE ${quoteIdentifier(databaseName)}`);
+      created = true;
+    }
+  } finally {
+    await adminPool.end();
+  }
+
+  await runDrizzlePush(connectionString);
+  provisionedTenantDatabases.add(databaseName);
+
+  return { connectionString, databaseName, created };
+
 };
 
 export type TenantDbResolutionResult = {
@@ -437,10 +472,14 @@ export const ensureTenantDbForSettings = async (
   let created: boolean | undefined;
   let databaseName: string | undefined;
 
+
   const autoProvisionEnabled =
     options.autoProvision ?? ((process.env.TENANT_DB_AUTO_PROVISION ?? 'true').toLowerCase() !== 'false');
 
   if (!connectionString && autoProvisionEnabled) {
+
+  if (!connectionString && options.autoProvision !== false) {
+
     const provisionResult = await autoProvisionTenantDatabase(tenantIdentifier);
     connectionString = provisionResult.connectionString;
     created = provisionResult.created;

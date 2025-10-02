@@ -1,5 +1,9 @@
 import { Request, Response } from 'express';
+
 import { TenantProvisioningError, autoProvisionTenantDatabase, db, getTenantDb } from '../db';
+
+import { autoProvisionTenantDatabase, db, getTenantDb } from '../db';
+
 import { clients, subscriptions, payments, planFeatures } from '../../shared/saas-schema';
 import { insertClientSchema, insertSubscriptionSchema } from '../../shared/saas-schema';
 import { eq, and, desc, count, gte, sql, isNull, or } from 'drizzle-orm';
@@ -129,6 +133,7 @@ export class SaasController {
         console.error('Tenant provisioning error:', error);
         await db.delete(clients).where(eq(clients.id, clientRecord.id));
 
+
         if (error instanceof TenantProvisioningError) {
           return res.status(500).json({
             error: 'Tenant database setup failed',
@@ -136,6 +141,8 @@ export class SaasController {
             code: error.code,
           });
         }
+
+
 
         return res.status(500).json({
           error: 'Tenant database setup failed',
