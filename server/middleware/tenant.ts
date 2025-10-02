@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { db } from '../db';
+import { primaryDb, ensureTenantDbForSettings, setTenantDbForRequest } from '../db';
 import { clients, subscriptions } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -10,10 +10,13 @@ declare global {
       tenant?: {
         id: string;
         subdomain: string;
-        name: string;
-        status: string;
-        subscription?: any;
-        settings?: any;
+      name: string;
+      status: string;
+      subscription?: any;
+      settings?: any;
+      database?: {
+        connectionString: string;
+      };
       };
       isSuperAdmin?: boolean;
     }
@@ -133,7 +136,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     // Find client by subdomain
-    const client = await db
+    const client = await primaryDb
       .select()
       .from(clients)
       .where(eq(clients.subdomain, subdomain))
@@ -166,7 +169,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     // Get active subscription
-    const subscription = await db
+    const subscription = await primaryDb
       .select()
       .from(subscriptions)
       .where(
@@ -181,9 +184,9 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     // Check subscription expiry
     if (subscription.length && subscription[0].endDate < new Date()) {
       // Update client status to expired
-      await db
+      await primaryDb
         .update(clients)
-        .set({ 
+        .set({
           status: 'expired',
           updatedAt: new Date()
         })
@@ -197,22 +200,41 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     // Parse settings
-    let settings = {};
+    let settings: any = {};
     try {
       settings = clientData.settings ? JSON.parse(clientData.settings) : {};
     } catch (e) {
       console.error('Error parsing client settings:', e);
     }
 
-    // Attach tenant info to request
-    req.tenant = {
-      id: clientData.id,
-      subdomain: clientData.subdomain,
-      name: clientData.name,
-      status: clientData.status,
-      subscription: subscription[0] || null,
-      settings
-    };
+    const normalizedSettings = typeof settings === 'object' && settings !== null ? settings : {};
+
+    try {
+      const { db: tenantDb, connectionString } = await ensureTenantDbForSettings(
+        clientData.subdomain,
+        normalizedSettings as Record<string, unknown>,
+      );
+      setTenantDbForRequest(tenantDb, { clientId: clientData.id, connectionString });
+      req.tenant = {
+        id: clientData.id,
+        subdomain: clientData.subdomain,
+        name: clientData.name,
+        status: clientData.status,
+        subscription: subscription[0] || null,
+        settings: normalizedSettings,
+        database: {
+          connectionString,
+        },
+      };
+    } catch (dbError) {
+      console.error('Failed to establish tenant database connection:', dbError);
+      return res.status(500).json({
+        error: 'Tenant database unavailable',
+        message: 'Konfigurasi database tenant tidak valid atau database tidak dapat dihubungi.'
+      });
+    }
+
+    // Tenant information already attached with database context above
 
     console.log('Tenant loaded:', req.tenant.name, req.tenant.subdomain);
     next();
