@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { db } from '../db';
+import { TenantProvisioningError, autoProvisionTenantDatabase, db, getTenantDb } from '../db';
 import { clients, subscriptions, payments, planFeatures } from '../../shared/saas-schema';
 import { insertClientSchema, insertSubscriptionSchema } from '../../shared/saas-schema';
 import { eq, and, desc, count, gte, sql, isNull, or } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { storage } from '../storage';
+import { users, roles } from '../../shared/schema';
+import { defaultRoleConfigs } from '../defaultRoles';
 
 export class SaasController {
   
@@ -50,12 +51,108 @@ export class SaasController {
         })
         .returning();
 
+      const clientRecord = newClient[0];
+
+      // Provision dedicated tenant database
+      let tenantConnectionString: string | undefined;
+      let tenantDatabaseName: string | undefined;
+
+      try {
+        const provision = await autoProvisionTenantDatabase(clientRecord.subdomain);
+        tenantConnectionString = provision.connectionString;
+        tenantDatabaseName = provision.databaseName;
+
+        // Persist database connection details in client settings
+        let existingSettings: Record<string, any> = {};
+        if (clientRecord.settings) {
+          try {
+            const parsed = JSON.parse(clientRecord.settings);
+            if (parsed && typeof parsed === 'object') {
+              existingSettings = parsed as Record<string, any>;
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse client settings, resetting to defaults:', parseError);
+          }
+        }
+
+        const existingDatabaseSettings =
+          existingSettings.database && typeof existingSettings.database === 'object'
+            ? (existingSettings.database as Record<string, unknown>)
+            : {};
+
+        existingSettings.database = {
+          ...existingDatabaseSettings,
+          name: tenantDatabaseName,
+          connectionString: tenantConnectionString,
+          autoProvisioned: true,
+        };
+
+        await db
+          .update(clients)
+          .set({ settings: JSON.stringify(existingSettings) })
+          .where(eq(clients.id, clientRecord.id));
+
+        const tenantDb = await getTenantDb(tenantConnectionString);
+
+        // Ensure default roles exist in the tenant database
+        for (const roleConfig of defaultRoleConfigs) {
+          const existingRole = await tenantDb
+            .select({ id: roles.id })
+            .from(roles)
+            .where(eq(roles.name, roleConfig.name))
+            .limit(1);
+
+          if (existingRole.length === 0) {
+            await tenantDb.insert(roles).values({
+              name: roleConfig.name,
+              displayName: roleConfig.displayName,
+              description: roleConfig.description,
+              permissions: roleConfig.permissions,
+              isActive: true,
+            });
+          }
+        }
+
+        // Create default admin user for the tenant
+        const hashedPassword = await bcrypt.hash('admin123', 10);
+        await tenantDb.insert(users).values({
+          username: 'admin',
+          email: validatedData.email,
+          firstName: 'Admin',
+          lastName: 'User',
+          password: hashedPassword,
+          role: 'admin',
+          isActive: true,
+          clientId: clientRecord.id,
+        });
+      } catch (error) {
+        console.error('Tenant provisioning error:', error);
+        await db.delete(clients).where(eq(clients.id, clientRecord.id));
+
+        if (error instanceof TenantProvisioningError) {
+          return res.status(500).json({
+            error: 'Tenant database setup failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        return res.status(500).json({
+          error: 'Tenant database setup failed',
+          message: 'Unable to provision tenant database automatically. Please try again or contact support.',
+        });
+      }
+
+      if (!tenantConnectionString) {
+        throw new Error('Tenant database connection could not be established');
+      }
+
       // Create trial subscription (7 days)
       const trialEndDate = new Date();
       trialEndDate.setDate(trialEndDate.getDate() + 7);
 
       await db.insert(subscriptions).values({
-        clientId: newClient[0].id,
+        clientId: clientRecord.id,
         plan: 'basic',
         planName: 'Trial - Basic',
         startDate: new Date(),
@@ -66,28 +163,17 @@ export class SaasController {
         autoRenew: false
       });
 
-      // Create default admin user for the tenant
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await storage.createUser(
-        {
-          username: 'admin',
-          email: validatedData.email,
-          firstName: 'Admin',
-          lastName: 'User',
-          password: hashedPassword,
-          role: 'admin',
-          isActive: true
-        },
-        newClient[0].id
-      );
-
       res.status(201).json({
         success: true,
         client: {
-          id: newClient[0].id,
-          name: newClient[0].name,
-          subdomain: newClient[0].subdomain,
-          status: newClient[0].status
+          id: clientRecord.id,
+          name: clientRecord.name,
+          subdomain: clientRecord.subdomain,
+          status: clientRecord.status,
+          database: {
+            name: tenantDatabaseName,
+            connectionString: tenantConnectionString
+          }
         },
         message: 'Client registered successfully. You have 7 days of free trial.',
         accessUrl: `http://${validatedData.subdomain}.laptoppos.com`

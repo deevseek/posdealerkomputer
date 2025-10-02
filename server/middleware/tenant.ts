@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { primaryDb, ensureTenantDbForSettings, setTenantDbForRequest } from '../db';
+import { primaryDb, ensureTenantDbForSettings, setTenantDbForRequest, TenantProvisioningError } from '../db';
 import { clients, subscriptions } from '../../shared/saas-schema';
 import { eq, and } from 'drizzle-orm';
 
@@ -209,11 +209,50 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
 
     const normalizedSettings = typeof settings === 'object' && settings !== null ? settings : {};
 
+    const shouldAutoProvision = (process.env.TENANT_DB_AUTO_PROVISION ?? 'true').toLowerCase() !== 'false';
+
     try {
-      const { db: tenantDb, connectionString } = await ensureTenantDbForSettings(
+      const { db: tenantDb, connectionString, created, databaseName } = await ensureTenantDbForSettings(
         clientData.subdomain,
         normalizedSettings as Record<string, unknown>,
+        { autoProvision: shouldAutoProvision },
       );
+
+      const existingDatabaseSettings =
+        normalizedSettings.database && typeof normalizedSettings.database === 'object'
+          ? (normalizedSettings.database as Record<string, unknown>)
+          : {};
+
+      const existingDatabaseName =
+        typeof existingDatabaseSettings === 'object' && existingDatabaseSettings !== null && 'name' in existingDatabaseSettings
+          ? existingDatabaseSettings.name
+          : undefined;
+
+      const existingConnectionString =
+        typeof existingDatabaseSettings === 'object' && existingDatabaseSettings !== null &&
+        'connectionString' in existingDatabaseSettings
+          ? existingDatabaseSettings.connectionString
+          : undefined;
+
+      const settingsMissingConnection =
+        !existingConnectionString || existingConnectionString !== connectionString;
+
+      if (settingsMissingConnection || created) {
+        const updatedDatabaseSettings = {
+          ...existingDatabaseSettings,
+          connectionString,
+          name: databaseName ?? (existingDatabaseName as string | undefined),
+          autoProvisioned: true,
+        };
+
+        normalizedSettings.database = updatedDatabaseSettings;
+
+        await primaryDb
+          .update(clients)
+          .set({ settings: JSON.stringify(normalizedSettings) })
+          .where(eq(clients.id, clientData.id));
+      }
+
       setTenantDbForRequest(tenantDb, { clientId: clientData.id, connectionString });
       req.tenant = {
         id: clientData.id,
@@ -228,6 +267,15 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       };
     } catch (dbError) {
       console.error('Failed to establish tenant database connection:', dbError);
+
+      if (dbError instanceof TenantProvisioningError) {
+        return res.status(503).json({
+          error: 'Tenant database provisioning failed',
+          message: dbError.message,
+          code: dbError.code,
+        });
+      }
+
       return res.status(500).json({
         error: 'Tenant database unavailable',
         message: 'Konfigurasi database tenant tidak valid atau database tidak dapat dihubungi.'
