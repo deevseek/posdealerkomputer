@@ -52,13 +52,13 @@ export const validateCancellationBusinessRules = {
       return { isValid: false, errors };
     }
     
-    if (ticket.status === 'cancelled') {
+    if (ticket.status === 'cencel') {
       errors.push("Service ticket sudah dibatalkan sebelumnya");
       return { isValid: false, errors };
     }
-    
+
     // Additional business rules can be added here
-    if (ticket.status === 'delivered' && ticket.deliveredAt) {
+    if (ticket.status === 'sudah_diambil' && ticket.deliveredAt) {
       const deliveredDate = new Date(ticket.deliveredAt);
       const now = new Date();
       const daysDifference = Math.floor((now.getTime() - deliveredDate.getTime()) / (1000 * 60 * 60 * 24));

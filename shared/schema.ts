@@ -35,7 +35,15 @@ export const sessions = pgTable(
 export const userRoleEnum = pgEnum('user_role', ['super_admin', 'admin', 'kasir', 'teknisi', 'purchasing', 'finance', 'owner']);
 export const transactionTypeEnum = pgEnum('transaction_type', ['sale', 'service', 'purchase', 'return']);
 export const paymentMethodEnum = pgEnum('payment_method', ['cash', 'transfer', 'qris', 'installment']);
-export const serviceStatusEnum = pgEnum('service_status', ['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts', 'completed', 'delivered', 'cancelled', 'warranty_claim']);
+export const serviceStatusEnum = pgEnum('service_status', [
+  'sedang_dicek',
+  'menunggu_konfirmasi',
+  'menunggu_sparepart',
+  'sedang_dikerjakan',
+  'selesai',
+  'sudah_diambil',
+  'cencel'
+]);
 export const stockMovementTypeEnum = pgEnum('stock_movement_type', ['in', 'out', 'adjustment']);
 export const stockReferenceTypeEnum = pgEnum('stock_reference_type', ['sale', 'service', 'purchase', 'adjustment', 'return']);
 export const warrantyClaimTypeEnum = pgEnum('warranty_claim_type', ['service', 'sales_return']);
@@ -271,7 +279,7 @@ export const serviceTickets = pgTable("service_tickets", {
   actualCost: decimal("actual_cost", { precision: 12, scale: 2 }),
   laborCost: decimal("labor_cost", { precision: 12, scale: 2 }),
   partsCost: decimal("parts_cost", { precision: 12, scale: 2 }),
-  status: serviceStatusEnum("status").default('pending'),
+  status: serviceStatusEnum("status").default('sedang_dicek'),
   technicianId: varchar("technician_id").references(() => users.id),
   estimatedCompletion: timestamp("estimated_completion", { withTimezone: true }).default(sql`now()`),
   completedAt: timestamp("completed_at", { withTimezone: true }).default(sql`now()`),

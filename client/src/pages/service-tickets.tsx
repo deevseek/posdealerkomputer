@@ -36,7 +36,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Wrench, Receipt, TestTube, FileText, CreditCard, XCircle } from "lucide-react";
+import { Plus, Search, Laptop, Edit, Trash2, Clock, AlertCircle, CheckCircle, Calendar, User, Package, Settings, Receipt, FileText, CreditCard, XCircle } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -100,34 +101,33 @@ interface ServicePart {
   stock: number;
 }
 
-type ServiceTicketStatus = "pending" | "checking" | "in-progress" | "waiting-technician" | "testing" | "waiting-confirmation" | "waiting-parts" | "completed" | "delivered" | "cancelled";
+type ServiceTicketStatus =
+  | "sedang_dicek"
+  | "menunggu_konfirmasi"
+  | "menunggu_sparepart"
+  | "sedang_dikerjakan"
+  | "selesai"
+  | "sudah_diambil"
+  | "cencel";
 
-const statusColors = {
-  pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: Clock },
-  checking: { bg: "bg-sky-100", text: "text-sky-800", icon: AlertCircle },
-  "in-progress": { bg: "bg-blue-100", text: "text-blue-800", icon: Settings },
-  "waiting-technician": { bg: "bg-gray-100", text: "text-gray-800", icon: AlertCircle },
-  testing: { bg: "bg-indigo-100", text: "text-indigo-800", icon: TestTube },
-  "waiting-confirmation": { bg: "bg-red-100", text: "text-red-800", icon: FileText },
-  "waiting-parts": { bg: "bg-orange-100", text: "text-orange-800", icon: Package },
-  completed: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
-  delivered: { bg: "bg-purple-100", text: "text-purple-800", icon: CheckCircle },
-  cancelled: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
-  warranty_claim: { bg: "bg-teal-100", text: "text-teal-800", icon: FileText },
+const statusColors: Record<ServiceTicketStatus, { bg: string; text: string; icon: LucideIcon }> = {
+  sedang_dicek: { bg: "bg-yellow-100", text: "text-yellow-800", icon: Clock },
+  menunggu_konfirmasi: { bg: "bg-red-100", text: "text-red-800", icon: FileText },
+  menunggu_sparepart: { bg: "bg-orange-100", text: "text-orange-800", icon: Package },
+  sedang_dikerjakan: { bg: "bg-blue-100", text: "text-blue-800", icon: Settings },
+  selesai: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
+  sudah_diambil: { bg: "bg-purple-100", text: "text-purple-800", icon: CheckCircle },
+  cencel: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
 };
 
-const statusLabels = {
-  pending: "Belum Cek",
-  checking: "Sedang Cek", 
-  "in-progress": "Sedang Dikerjakan",
-  "waiting-technician": "Ditunggu MITRA Teknik",
-  testing: "Sedang Tes",
-  "waiting-confirmation": "Menunggu Konfirmasi",
-  "waiting-parts": "Menunggu Sparepart",
-  completed: "Selesai",
-  delivered: "Sudah Diambil",
-  cancelled: "Dibatalkan",
-  warranty_claim: "Klaim Garansi",
+const statusLabels: Record<ServiceTicketStatus, string> = {
+  sedang_dicek: "Sedang Dicek",
+  menunggu_konfirmasi: "Menunggu Konfirmasi",
+  menunggu_sparepart: "Menunggu Sparepart",
+  sedang_dikerjakan: "Sedang Dikerjakan",
+  selesai: "Selesai",
+  sudah_diambil: "Sudah Diambil",
+  cencel: "Cencel",
 };
 
 
@@ -190,7 +190,7 @@ export default function ServiceTickets() {
       problem: "",
       diagnosis: "",
       solution: "",
-      status: "pending",
+      status: "sedang_dicek",
       estimatedCost: "",
       laborCost: "",
       warrantyDuration: "",
@@ -226,7 +226,7 @@ export default function ServiceTickets() {
         problem: "",
         diagnosis: "",
         solution: "",
-        status: "pending",
+        status: "sedang_dicek",
         estimatedCost: "",
         laborCost: "",
       });
@@ -311,7 +311,7 @@ export default function ServiceTickets() {
         problem: "",
         diagnosis: "",
         solution: "",
-        status: "pending",
+        status: "sedang_dicek",
         estimatedCost: "",
         laborCost: "",
       });
@@ -397,26 +397,23 @@ export default function ServiceTickets() {
     console.log('Checking cancellation eligibility for ticket:', ticket.id, 'status:', ticket.status);
     
     // Cannot cancel already cancelled tickets
-    if (ticket.status === 'cancelled') {
+    if (ticket.status === 'cencel') {
       console.log('Cannot cancel - already cancelled');
       return false;
     }
-    
+
     // Can cancel tickets in these statuses
     const cancellableStatuses = [
-      'pending',
-      'checking', 
-      'in-progress',
-      'waiting-technician',
-      'testing',
-      'waiting-confirmation',
-      'waiting-parts',
-      'completed',
-      'delivered'
+      'sedang_dicek',
+      'menunggu_konfirmasi',
+      'menunggu_sparepart',
+      'sedang_dikerjakan',
+      'selesai',
+      'sudah_diambil'
     ];
-    
-    const canCancel = cancellableStatuses.includes(ticket.status || 'pending');
-    console.log('Can cancel ticket:', canCancel, 'Status in cancellable list:', cancellableStatuses.includes(ticket.status || 'pending'));
+
+    const canCancel = cancellableStatuses.includes((ticket.status || 'sedang_dicek') as ServiceTicketStatus);
+    console.log('Can cancel ticket:', canCancel, 'Status in cancellable list:', cancellableStatuses.includes((ticket.status || 'sedang_dicek') as ServiceTicketStatus));
     
     return canCancel;
   };
@@ -450,9 +447,9 @@ export default function ServiceTickets() {
       return;
     }
 
-    // Calculate warranty dates if status is delivered and warranty duration is provided
+    // Calculate warranty dates if status is sudah diambil and warranty duration is provided
     let warrantyData = {};
-    if (data.status === "delivered" && data.warrantyDuration) {
+    if (data.status === "sudah_diambil" && data.warrantyDuration) {
       const warrantyDurationNum = parseInt(data.warrantyDuration);
       if (warrantyDurationNum > 0) {
         const startDate = getCurrentJakartaTime();
@@ -516,7 +513,7 @@ export default function ServiceTickets() {
       problem: ticket.problem,
       diagnosis: ticket.diagnosis || "",
       solution: ticket.solution || "",
-      status: ticket.status || "pending",
+      status: ticket.status || "sedang_dicek",
       estimatedCost: ticket.estimatedCost ? ticket.estimatedCost.toString() : "",
       laborCost: ticket.laborCost ? ticket.laborCost.toString() : "",
     });
@@ -556,7 +553,7 @@ export default function ServiceTickets() {
       problem: "",
       diagnosis: "",
       solution: "",
-      status: "pending",
+      status: "sedang_dicek",
       estimatedCost: "",
       laborCost: "",
     });
@@ -611,16 +608,13 @@ export default function ServiceTickets() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Semua Status</SelectItem>
-                    <SelectItem value="pending">Belum Cek</SelectItem>
-                    <SelectItem value="checking">Sedang Cek</SelectItem>
-                    <SelectItem value="in-progress">Sedang Dikerjakan</SelectItem>
-                    <SelectItem value="waiting-technician">Ditunggu MITRA Teknik</SelectItem>
-                    <SelectItem value="testing">Sedang Tes</SelectItem>
-                    <SelectItem value="waiting-confirmation">Menunggu Konfirmasi</SelectItem>
-                    <SelectItem value="waiting-parts">Menunggu Sparepart</SelectItem>
-                    <SelectItem value="completed">Selesai</SelectItem>
-                    <SelectItem value="delivered">Sudah Diambil</SelectItem>
-                    <SelectItem value="cancelled">Dibatalkan</SelectItem>
+                    <SelectItem value="sedang_dicek">Sedang Dicek</SelectItem>
+                    <SelectItem value="menunggu_konfirmasi">Menunggu Konfirmasi</SelectItem>
+                    <SelectItem value="menunggu_sparepart">Menunggu Sparepart</SelectItem>
+                    <SelectItem value="sedang_dikerjakan">Sedang Dikerjakan</SelectItem>
+                    <SelectItem value="selesai">Selesai</SelectItem>
+                    <SelectItem value="sudah_diambil">Sudah Diambil</SelectItem>
+                    <SelectItem value="cencel">Cencel</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -666,7 +660,7 @@ export default function ServiceTickets() {
                   <TableBody>
                     {filteredTickets.map((ticket: ServiceTicket) => {
                       const customer = (customers as Customer[]).find(c => c.id === ticket.customerId);
-                      const statusConfig = statusColors[ticket.status || 'pending'];
+                      const statusConfig = statusColors[(ticket.status || 'sedang_dicek') as ServiceTicketStatus];
                       const StatusIcon = statusConfig.icon;
 
                       return (
@@ -705,7 +699,7 @@ export default function ServiceTickets() {
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${statusConfig.bg} w-fit`}>
                               <StatusIcon className={`w-3 h-3 ${statusConfig.text}`} />
                               <span className={`text-xs font-medium ${statusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
-                                {statusLabels[ticket.status || 'pending']}
+                                {statusLabels[(ticket.status || 'sedang_dicek') as ServiceTicketStatus]}
                               </span>
                             </div>
                           </TableCell>
@@ -748,8 +742,8 @@ export default function ServiceTickets() {
                               >
                                 <Receipt className="w-4 h-4" />
                               </Button>
-                              {/* Payment Receipt Button - Only show for completed/delivered */}
-                              {(ticket.status === 'completed' || ticket.status === 'delivered') && (
+                              {/* Payment Receipt Button - Only show for selesai/sudah_diambil */}
+                              {(ticket.status === 'selesai' || ticket.status === 'sudah_diambil') && (
                                 <Button
                                   variant="outline"
                                   size="sm"
@@ -1012,16 +1006,13 @@ export default function ServiceTickets() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="pending">Belum Cek</SelectItem>
-                          <SelectItem value="checking">Sedang Cek</SelectItem>
-                          <SelectItem value="in-progress">Sedang Dikerjakan</SelectItem>
-                          <SelectItem value="waiting-technician">Ditunggu MITRA Teknik</SelectItem>
-                          <SelectItem value="testing">Sedang Tes</SelectItem>
-                          <SelectItem value="waiting-confirmation">Menunggu Konfirmasi</SelectItem>
-                          <SelectItem value="waiting-parts">Menunggu Sparepart</SelectItem>
-                          <SelectItem value="completed">Selesai</SelectItem>
-                          <SelectItem value="delivered">Sudah Diambil</SelectItem>
-                          <SelectItem value="cancelled">Dibatalkan</SelectItem>
+                          <SelectItem value="sedang_dicek">Sedang Dicek</SelectItem>
+                          <SelectItem value="menunggu_konfirmasi">Menunggu Konfirmasi</SelectItem>
+                          <SelectItem value="menunggu_sparepart">Menunggu Sparepart</SelectItem>
+                          <SelectItem value="sedang_dikerjakan">Sedang Dikerjakan</SelectItem>
+                          <SelectItem value="selesai">Selesai</SelectItem>
+                          <SelectItem value="sudah_diambil">Sudah Diambil</SelectItem>
+                          <SelectItem value="cencel">Cencel</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1068,8 +1059,8 @@ export default function ServiceTickets() {
                 />
               </div>
 
-              {/* Warranty Section - Only show when status is delivered */}
-              {form.watch("status") === "delivered" && (
+      {/* Warranty Section - Only show when status is sudah diambil */}
+      {form.watch("status") === "sudah_diambil" && (
                 <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg space-y-4">
                   <h3 className="text-lg font-semibold text-orange-800">Informasi Garansi</h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -1180,7 +1171,7 @@ export default function ServiceTickets() {
                 diagnosis: receiptData.diagnosis || undefined,
                 solution: receiptData.solution || undefined,
                 estimatedCost: receiptData.estimatedCost || undefined,
-                status: receiptData.status || 'pending',
+                status: receiptData.status || 'sedang_dicek',
                 technicianId: receiptData.technicianId || undefined,
                 warrantyDuration: receiptData.warrantyDuration ?? undefined,
                 warrantyStartDate: receiptData.warrantyStartDate ? (receiptData.warrantyStartDate instanceof Date ? receiptData.warrantyStartDate.toISOString() : receiptData.warrantyStartDate) : undefined,
@@ -1247,7 +1238,7 @@ export default function ServiceTickets() {
             actualCost: paymentReceiptData.actualCost || undefined,
             partsCost: paymentReceiptData.partsCost || undefined,
             laborCost: paymentReceiptData.laborCost || undefined,
-            status: paymentReceiptData.status || 'pending',
+            status: paymentReceiptData.status || 'sedang_dicek',
             warrantyDuration: paymentReceiptData.warrantyDuration ?? undefined,
             warrantyStartDate: paymentReceiptData.warrantyStartDate ? (paymentReceiptData.warrantyStartDate instanceof Date ? paymentReceiptData.warrantyStartDate.toISOString() : paymentReceiptData.warrantyStartDate) : undefined,
             warrantyEndDate: paymentReceiptData.warrantyEndDate ? (paymentReceiptData.warrantyEndDate instanceof Date ? paymentReceiptData.warrantyEndDate.toISOString() : paymentReceiptData.warrantyEndDate) : undefined,
@@ -1285,7 +1276,7 @@ export default function ServiceTickets() {
           isOpen={showStatusTracker}
           onClose={() => setShowStatusTracker(false)}
           serviceNumber={statusTrackerData.ticketNumber}
-          currentStatus={statusTrackerData.status || 'pending'}
+          currentStatus={statusTrackerData.status || 'sedang_dicek'}
         />
       )}
 

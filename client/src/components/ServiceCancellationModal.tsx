@@ -52,15 +52,15 @@ const getCancellationScenarios = (ticket: any): CancellationType[] => {
   const status = ticket.status;
   const hasWarranty = ticket.warrantyDuration && ticket.warrantyDuration > 0;
   
-  // For tickets not yet completed (pending, checking, in-progress, waiting-*)
-  if (['pending', 'checking', 'in-progress', 'waiting-technician', 'testing', 'waiting-confirmation', 'waiting-parts'].includes(status)) {
+  // For tickets not yet selesai/sudah_diambil
+  if (['sedang_dicek', 'menunggu_konfirmasi', 'menunggu_sparepart', 'sedang_dikerjakan'].includes(status)) {
     return ['before_completed'];
   }
-  
-  // For completed/delivered tickets
-  if (['completed', 'delivered'].includes(status)) {
+
+  // For selesai/sudah diambil tickets
+  if (['selesai', 'sudah_diambil'].includes(status)) {
     const scenarios: CancellationType[] = ['after_completed'];
-    
+
     // Add warranty refund option if ticket has warranty
     if (hasWarranty) {
       scenarios.push('warranty_refund');
