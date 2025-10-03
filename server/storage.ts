@@ -2237,7 +2237,7 @@ export class DatabaseStorage implements IStorage {
       const [posSummary] = await db
         .select({
           totalSales: sql<string>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
-          totalCOGS: sql<string>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, 0)::numeric), 0)`
+          totalCOGS: sql<string>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, 0)::numeric), 0)`
         })
         .from(transactionItems)
         .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
