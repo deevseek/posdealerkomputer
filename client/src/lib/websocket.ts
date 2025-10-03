@@ -175,15 +175,24 @@ class WebSocketManager {
       whatsapp: ['/api/whatsapp/status'],
       inventory: ['/api/products', '/api/categories', '/api/reports/stock-movements'],
       'purchase-orders': ['/api/purchase-orders', '/api/purchase-orders/outstanding-items'],
-      'stock-movements': ['/api/reports/stock-movements', '/api/products']
+      'purchase_orders': ['/api/purchase-orders', '/api/purchase-orders/outstanding-items'],
+      'purchase_order_items': ['/api/purchase-orders', '/api/purchase-orders/outstanding-items'],
+      'stock-movements': ['/api/reports/stock-movements', '/api/products'],
+      'saas-clients': ['/api/admin/saas/clients', '/api/admin/clients', '/api/admin/saas/stats', '/api/admin/stats'],
+      'saas-plans': ['/api/admin/saas/plans', '/api/admin/plans']
     };
 
     // Invalidate relevant queries to trigger refetch
     const queryKeys = queryKeyMap[message.resource] || [];
-    
+
     queryKeys.forEach(queryKey => {
       this.queryClient.invalidateQueries({ queryKey: [queryKey] });
     });
+
+    // Handle dynamic invalidations that depend on payload data
+    if (message.resource === 'purchase_order_items' && message.data?.purchaseOrderId) {
+      this.queryClient.invalidateQueries({ queryKey: ['/api/purchase-orders', message.data.purchaseOrderId, 'items'] });
+    }
 
     // Also invalidate dashboard stats for most updates
     if (message.resource !== 'dashboard') {
@@ -196,11 +205,20 @@ class WebSocketManager {
         users: 'User',
         customers: 'Customer',
         products: 'Produk',
+        categories: 'Kategori',
+        inventory: 'Inventaris',
         'service-tickets': 'Tiket Servis',
         suppliers: 'Supplier',
         transactions: 'Transaksi',
         'warranty-claims': 'Garansi',
-        roles: 'Role'
+        roles: 'Role',
+        whatsapp: 'WhatsApp',
+        'purchase-orders': 'Purchase Order',
+        'purchase_orders': 'Purchase Order',
+        'purchase_order_items': 'Item Purchase Order',
+        'stock-movements': 'Pergerakan Stok',
+        'saas-clients': 'Client SaaS',
+        'saas-plans': 'Paket SaaS'
       };
       
       const actionNames = {
