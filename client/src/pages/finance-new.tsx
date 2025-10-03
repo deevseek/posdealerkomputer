@@ -39,6 +39,8 @@ interface FinancialSummary {
   totalExpense: string;
   totalRefunds: string; // Track refunds separately from income
   netProfit: string;
+  totalSalesRevenue: string;
+  totalCOGS: string;
   transactionCount: number;
   inventoryValue: string;
   inventoryCount: number;
@@ -469,6 +471,9 @@ export default function FinanceNew() {
             <div className="text-2xl font-bold text-blue-600">
               {formatCurrency(summary?.netProfit || '0')}
             </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              = {formatCurrency(summary?.totalSalesRevenue || '0')} - {formatCurrency(summary?.totalCOGS || '0')} (HPP)
+            </div>
           </CardContent>
         </Card>
 
@@ -546,10 +551,12 @@ export default function FinanceNew() {
             </div>
             <div className="p-3 bg-green-50 rounded-lg">
               <p className="text-sm text-green-800">
-                <strong>Data Terkini:</strong> Total Pendapatan mencakup semua pemasukan dari penjualan produk (POS) dan layanan service. 
-                Saat ini ada {summary?.breakdown?.sources ? 
-                  Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} transaksi pemasukan 
+                <strong>Data Terkini:</strong> Total Pendapatan mencakup semua pemasukan dari penjualan produk (POS) dan layanan service.
+                Saat ini ada {summary?.breakdown?.sources ?
+                  Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} transaksi pemasukan
                 dengan total {formatCurrency(summary?.totalIncome || '0')}.
+                Laba bersih dihitung dari total harga jual sebesar {formatCurrency(summary?.totalSalesRevenue || '0')} dikurangi HPP
+                (harga pokok penjualan) {formatCurrency(summary?.totalCOGS || '0')}.
               </p>
             </div>
             <div className="p-3 bg-orange-50 rounded-lg">

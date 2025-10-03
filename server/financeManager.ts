@@ -563,6 +563,9 @@ export class FinanceManager {
     totalIncome: string;
     totalExpense: string;
     netProfit: string;
+    totalSalesRevenue: string;
+    totalCOGS: string;
+    totalRefunds: string;
     transactionCount: number;
     inventoryValue: string;
     inventoryCount: number;
@@ -617,7 +620,7 @@ export class FinanceManager {
 
     // Exclude inventory purchases AND cancellation expenses from expense calculation 
     // (cancellation expenses are already netted from revenue above)
-    const actualExpenses = allExpenses.filter((expense: { category: string; amount: string }) => 
+    const actualExpenses = allExpenses.filter((expense: { category: string; amount: string }) =>
       expense.category !== 'Inventory Purchase' &&
       expense.category !== 'Service Cancellation' &&
       expense.category !== 'Warranty Refund' &&
@@ -626,7 +629,23 @@ export class FinanceManager {
     );
 
     const totalExpenseAmount = actualExpenses.reduce((sum: number, expense: { amount: string }) => sum + Number(expense.amount), 0);
-    const expenseResult = { total: totalExpenseAmount };
+
+    const grossIncome = Number(incomeResult.total || 0);
+    const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
+    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
+    const totalExpense = totalExpenseAmount;
+
+    const [cogsResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.type, 'expense'),
+        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+        whereClauseWithStatus
+      ));
+
+    const totalSalesRevenue = totalIncome;
+    const totalCOGS = Number(cogsResult?.total || 0);
 
     // Count
     const [countResult] = await db
@@ -720,10 +739,6 @@ export class FinanceManager {
         whereClauseWithStatus
       ));
 
-    const grossIncome = Number(incomeResult.total || 0);
-    const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
-    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
-    const totalExpense = totalExpenseAmount;
     const totalRefunds = Number(refundResult.total || 0);
 
     // Process category breakdown
@@ -792,7 +807,10 @@ export class FinanceManager {
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
-      netProfit: (totalIncome - totalExpense).toString(), // Profit excludes refunds
+      netProfit: (totalSalesRevenue - totalCOGS).toString(),
+      totalSalesRevenue: totalSalesRevenue.toString(),
+      totalCOGS: totalCOGS.toString(),
+      totalRefunds: totalRefunds.toString(),
       transactionCount: countResult.count,
       inventoryValue: totalInventoryValue.toString(),
       inventoryCount: totalInventoryCount,
