@@ -130,6 +130,20 @@ const statusLabels: Record<ServiceTicketStatus, string> = {
   cencel: "Cencel",
 };
 
+const FALLBACK_STATUS: ServiceTicketStatus = "sedang_dicek";
+
+const normalizeStatusKey = (value?: string | null): ServiceTicketStatus | null => {
+  if (!value) return null;
+
+  const normalized = value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  return (normalized in statusColors ? normalized as ServiceTicketStatus : null);
+};
+
 
 export default function ServiceTickets() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -660,16 +674,17 @@ export default function ServiceTickets() {
                   <TableBody>
                     {filteredTickets.map((ticket: ServiceTicket) => {
                       const customer = (customers as Customer[]).find(c => c.id === ticket.customerId);
-                      const rawStatus = (ticket.status || 'sedang_dicek') as string;
-                      const isKnownStatus = rawStatus in statusColors;
-                      const safeStatus = (isKnownStatus
-                        ? rawStatus
-                        : 'sedang_dicek') as ServiceTicketStatus;
-                      const statusConfig = statusColors[safeStatus];
-                      const StatusIcon = statusConfig.icon;
-                      const statusLabel = isKnownStatus
-                        ? statusLabels[safeStatus]
-                        : 'Status Tidak Dikenal';
+
+                      const normalizedStatus = normalizeStatusKey(ticket.status);
+                      const effectiveStatus = normalizedStatus ?? FALLBACK_STATUS;
+                      const statusConfig = statusColors[effectiveStatus] ?? statusColors[FALLBACK_STATUS];
+                      const safeStatusConfig = statusConfig ?? { bg: "bg-gray-100", text: "text-gray-600", icon: Clock };
+                      const StatusIcon = safeStatusConfig.icon ?? Clock;
+                      const statusLabel = normalizedStatus
+                        ? statusLabels[effectiveStatus]
+                        : ticket.status
+                          ? `Status Tidak Dikenal (${ticket.status})`
+                          : 'Status Tidak Dikenal';
 
                       return (
                         <TableRow key={ticket.id}>
@@ -704,9 +719,9 @@ export default function ServiceTickets() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${statusConfig.bg} w-fit`}>
-                              <StatusIcon className={`w-3 h-3 ${statusConfig.text}`} />
-                              <span className={`text-xs font-medium ${statusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
+                            <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${safeStatusConfig.bg} w-fit`}>
+                              <StatusIcon className={`w-3 h-3 ${safeStatusConfig.text}`} />
+                              <span className={`text-xs font-medium ${safeStatusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
                                 {statusLabel}
                               </span>
                             </div>
