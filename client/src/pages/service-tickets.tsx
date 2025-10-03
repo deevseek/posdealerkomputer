@@ -660,8 +660,16 @@ export default function ServiceTickets() {
                   <TableBody>
                     {filteredTickets.map((ticket: ServiceTicket) => {
                       const customer = (customers as Customer[]).find(c => c.id === ticket.customerId);
-                      const statusConfig = statusColors[(ticket.status || 'sedang_dicek') as ServiceTicketStatus];
+                      const rawStatus = (ticket.status || 'sedang_dicek') as string;
+                      const isKnownStatus = rawStatus in statusColors;
+                      const safeStatus = (isKnownStatus
+                        ? rawStatus
+                        : 'sedang_dicek') as ServiceTicketStatus;
+                      const statusConfig = statusColors[safeStatus];
                       const StatusIcon = statusConfig.icon;
+                      const statusLabel = isKnownStatus
+                        ? statusLabels[safeStatus]
+                        : 'Status Tidak Dikenal';
 
                       return (
                         <TableRow key={ticket.id}>
@@ -699,7 +707,7 @@ export default function ServiceTickets() {
                             <div className={`flex items-center space-x-2 px-2 py-1 rounded-full ${statusConfig.bg} w-fit`}>
                               <StatusIcon className={`w-3 h-3 ${statusConfig.text}`} />
                               <span className={`text-xs font-medium ${statusConfig.text}`} data-testid={`ticket-status-${ticket.id}`}>
-                                {statusLabels[(ticket.status || 'sedang_dicek') as ServiceTicketStatus]}
+                                {statusLabel}
                               </span>
                             </div>
                           </TableCell>
