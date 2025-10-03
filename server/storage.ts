@@ -2621,7 +2621,6 @@ export class DatabaseStorage implements IStorage {
       monthlySalesProfit = fallbackGrossProfit;
     }
 
-    if (monthlySalesProfit === 0) {
     if (monthlyProfit === 0 && fallbackGrossProfit !== 0) {
       monthlyProfit = fallbackGrossProfit;
     }
@@ -2663,7 +2662,15 @@ export class DatabaseStorage implements IStorage {
 
         const monthlyIncome = Number(monthlyIncomeResult.total || 0);
         const monthlyCOGS = Number(monthlyCogsResult.total || 0);
-        monthlySalesProfit = Number((monthlyIncome - monthlyCOGS).toFixed(2));
+        const fallbackProfitValue = Number((monthlyIncome - monthlyCOGS).toFixed(2));
+
+        if (monthlySalesProfit === 0) {
+          monthlySalesProfit = fallbackProfitValue;
+        }
+
+        if (monthlyProfit === 0) {
+          monthlyProfit = fallbackProfitValue;
+        }
       } catch (fallbackError) {
         console.error("Error calculating monthly profit from financial records:", fallbackError);
       }
@@ -2695,9 +2702,6 @@ export class DatabaseStorage implements IStorage {
       if (clientId) {
         serviceIncomeConditions.push(eq(financialRecords.clientId, clientId));
         serviceCostConditions.push(eq(financialRecords.clientId, clientId));
-        monthlyProfit = monthlyIncome - monthlyCOGS;
-      } catch (fallbackError) {
-        console.error("Error calculating monthly profit from financial records:", fallbackError);
       }
 
       const [serviceIncomeResult] = await db
@@ -2717,7 +2721,7 @@ export class DatabaseStorage implements IStorage {
       console.error("Error calculating monthly service profit:", error);
     }
 
-    const monthlyProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
+    monthlyProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
 
     // Get WhatsApp connection status from store config
     const storeConfig = await this.getStoreConfig();
