@@ -201,7 +201,15 @@ export interface IStorage {
   // Reports
   getSalesReport(startDate: Date, endDate: Date): Promise<{ totalSales: string; transactions: any[] }>;
   getServiceReport(startDate: Date, endDate: Date): Promise<{ totalServices: number; tickets: any[] }>;
-  getFinancialReport(startDate: Date, endDate: Date): Promise<{ totalIncome: string; totalExpense: string; profit: string; records: any[] }>;
+  getFinancialReport(startDate: Date, endDate: Date): Promise<{
+    totalIncome: string;
+    totalExpense: string;
+    profit: string;
+    netProfit: string;
+    totalSalesRevenue: string;
+    totalCOGS: string;
+    records: any[];
+  }>;
   getInventoryReport(): Promise<{ lowStockCount: number; lowStockProducts: any[]; totalProducts: number }>;
   
   // Enhanced Accounting Reports
@@ -2202,6 +2210,7 @@ export class DatabaseStorage implements IStorage {
     totalIncome: string;
     totalExpense: string;
     profit: string;
+    netProfit: string;
     totalSalesRevenue: string;
     totalCOGS: string;
     records: any[];
@@ -2218,7 +2227,8 @@ export class DatabaseStorage implements IStorage {
       return {
         totalIncome: summary.totalIncome,
         totalExpense: summary.totalExpense,
-        profit: summary.netProfit,
+        profit: summary.grossProfit,
+        netProfit: summary.netProfit,
         totalSalesRevenue: summary.totalSalesRevenue,
         totalCOGS: summary.totalCOGS,
         records
@@ -2248,6 +2258,30 @@ export class DatabaseStorage implements IStorage {
           )
         );
 
+      const [cogsResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'expense'),
+            sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      const [salesRevenueResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
+            sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
       const records = await db
         .select()
         .from(financialRecords)
@@ -2261,13 +2295,16 @@ export class DatabaseStorage implements IStorage {
 
       const totalIncome = Number(incomeResult.total || 0);
       const totalExpense = Number(expenseResult.total || 0);
+      const totalCOGS = Number(cogsResult.total || 0);
+      const totalSalesRevenue = Number(salesRevenueResult.total || 0);
 
       return {
         totalIncome: totalIncome.toString(),
         totalExpense: totalExpense.toString(),
-        profit: (totalIncome - totalExpense).toString(),
-        totalSalesRevenue: totalIncome.toString(),
-        totalCOGS: '0',
+        profit: (totalSalesRevenue - totalCOGS).toString(),
+        netProfit: (totalIncome - totalExpense).toString(),
+        totalSalesRevenue: totalSalesRevenue.toString(),
+        totalCOGS: totalCOGS.toString(),
         records
       };
     }
@@ -2388,7 +2425,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const { financeManager } = await import('./financeManager');
       const summary = await financeManager.getSummary(startOfMonth, new Date());
-      monthlyProfit = Number(summary.netProfit || 0);
+      monthlyProfit = Number(summary.grossProfit || 0);
     } catch (error) {
       console.error("Error getting monthly profit from finance manager:", error);
       // Fallback to simplified financial record calculation (harga jual - HPP)

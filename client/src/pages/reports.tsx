@@ -89,6 +89,7 @@ interface FinancialReportSummary {
   totalIncome: string;
   totalExpense: string;
   profit: string;
+  netProfit?: string;
   totalSalesRevenue: string;
   totalCOGS: string;
   records: FinancialRecordSummary[];
@@ -195,15 +196,15 @@ export default function Reports() {
         yPos += 8;
         doc.text(`Total Pengeluaran: Rp ${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
-        doc.text(`Harga Jual: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        doc.text(`Harga Jual Produk: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
-        doc.text(`HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
+        doc.text(`HPP (Modal): Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
-        doc.text(`Laba Bersih: Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
+        doc.text(`Laba Penjualan (Harga Jual - HPP): Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
-        doc.text(`Perhitungan: Pendapatan (${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}) - Pengeluaran (${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')})`, 20, yPos);
+        doc.text(`Laba Bersih (Pendapatan - Pengeluaran): Rp ${Number(financialReport?.netProfit || financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
-        doc.text(`Harga jual produk: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
+        doc.text(`Perhitungan Laba Bersih: Pendapatan (${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}) - Pengeluaran (${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')})`, 20, yPos);
         yPos += 12;
         
         // Laporan Servis
@@ -477,18 +478,21 @@ export default function Reports() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground">Profit</p>
+                        <p className="text-sm font-medium text-muted-foreground">Laba Penjualan (Harga Jual - HPP)</p>
                         <p className="text-2xl font-bold text-green-600">
                           {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
-                          Laba bersih = total pendapatan - total pengeluaran.
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Pendapatan: Rp {Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')} • Pengeluaran: Rp {Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}
+                          Laba penjualan dihitung dari total harga jual produk dikurangi HPP (modal).
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Harga jual produk: Rp {Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp {Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Laba bersih (pendapatan - pengeluaran): Rp {Number(financialReport?.netProfit || financialReport?.profit || 0).toLocaleString('id-ID')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Pendapatan: Rp {Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')} • Pengeluaran: Rp {Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}
                         </p>
                       </div>
                       <TrendingUp className="w-8 h-8 text-green-600" />

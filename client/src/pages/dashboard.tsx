@@ -153,7 +153,7 @@ export default function Dashboard() {
             <StatCard
               title="Profit Bulanan"
               value={statsLoading ? "Memuat..." : `Rp ${Number((stats as any)?.monthlyProfit || 0).toLocaleString('id-ID')}`}
-              change="+8% bulan ini"
+              change="Harga jual - HPP"
               icon="chart-line"
               color="accent"
               data-testid="stat-monthly-profit"
