@@ -478,10 +478,14 @@ export default function Reports() {
                           {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
+
                           Laba bersih = harga jual - HPP (Cost of Goods Sold).
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Harga jual: Rp {Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp {Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
+
+                          Laba bersih = total harga jual - HPP (Cost of Goods Sold).
+
                         </p>
                       </div>
                       <TrendingUp className="w-8 h-8 text-green-600" />
