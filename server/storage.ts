@@ -61,7 +61,7 @@ import {
   type InsertWarrantyClaim,
 } from "@shared/schema";
 import { db, getCurrentTenantContext } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt, ne } from "drizzle-orm";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -2215,9 +2215,51 @@ export class DatabaseStorage implements IStorage {
     totalCOGS: string;
     records: any[];
   }> {
+    const clientId = this.resolveClientId();
+
+    let totalSalesRevenueValue = 0;
+    let totalCOGSValue = 0;
+
+    try {
+      const salesWhere = clientId
+        ? and(
+            eq(transactions.type, 'sale'),
+            gte(transactions.createdAt, startDate),
+            lte(transactions.createdAt, endDate),
+            eq(transactions.clientId, clientId)
+          )
+        : and(
+            eq(transactions.type, 'sale'),
+            gte(transactions.createdAt, startDate),
+            lte(transactions.createdAt, endDate)
+          );
+
+      const [posSummary] = await db
+        .select({
+          totalSales: sql<string>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
+          totalCOGS: sql<string>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, 0)::numeric), 0)`
+        })
+        .from(transactionItems)
+        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+        .innerJoin(products, eq(transactionItems.productId, products.id))
+        .where(salesWhere);
+
+      if (posSummary) {
+        totalSalesRevenueValue = Number(posSummary.totalSales ?? 0);
+        totalCOGSValue = Number(posSummary.totalCOGS ?? 0);
+      }
+    } catch (error) {
+      console.error("Error calculating POS gross profit from transactions:", error);
+    }
+
+    const grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+    const totalSalesRevenue = totalSalesRevenueValue.toString();
+    const totalCOGS = totalCOGSValue.toString();
+    const grossProfit = grossProfitValue.toString();
+
     try {
       const { financeManager } = await import('./financeManager');
-      
+
       const summary = await financeManager.getSummary(startDate, endDate);
       const records = await financeManager.getTransactions({
         startDate,
@@ -2227,6 +2269,10 @@ export class DatabaseStorage implements IStorage {
       return {
         totalIncome: summary.totalIncome,
         totalExpense: summary.totalExpense,
+        profit: grossProfit,
+        netProfit: summary.netProfit ?? grossProfit,
+        totalSalesRevenue,
+        totalCOGS,
         profit: summary.grossProfit,
         netProfit: summary.netProfit,
         totalSalesRevenue: summary.totalSalesRevenue,
@@ -2235,28 +2281,53 @@ export class DatabaseStorage implements IStorage {
       };
     } catch (error) {
       console.error("Error getting financial report from finance manager:", error);
-      // Fallback to old method
-      const [incomeResult] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(
-          and(
+      // Fallback to financial records aggregation
+      const incomeWhere = clientId
+        ? and(
+            eq(financialRecords.type, 'income'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.clientId, clientId)
+          )
+        : and(
             eq(financialRecords.type, 'income'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate)
+          );
+
+      const expenseWhere = clientId
+        ? and(
+            eq(financialRecords.type, 'expense'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.clientId, clientId)
           )
-        );
+        : and(
+            eq(financialRecords.type, 'expense'),
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          );
+
+      const recordsWhere = clientId
+        ? and(
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.clientId, clientId)
+          )
+        : and(
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          );
+
+      const [incomeResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(incomeWhere);
 
       const [expenseResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'expense'),
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        );
+        .where(expenseWhere);
 
       const [cogsResult] = await db
         .select({ total: sum(financialRecords.amount) })
@@ -2285,12 +2356,7 @@ export class DatabaseStorage implements IStorage {
       const records = await db
         .select()
         .from(financialRecords)
-        .where(
-          and(
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        )
+        .where(recordsWhere)
         .orderBy(desc(financialRecords.createdAt));
 
       const totalIncome = Number(incomeResult.total || 0);
@@ -2301,6 +2367,10 @@ export class DatabaseStorage implements IStorage {
       return {
         totalIncome: totalIncome.toString(),
         totalExpense: totalExpense.toString(),
+        profit: grossProfit,
+        netProfit: (totalIncome - totalExpense).toString(),
+        totalSalesRevenue,
+        totalCOGS,
         profit: (totalSalesRevenue - totalCOGS).toString(),
         netProfit: (totalIncome - totalExpense).toString(),
         totalSalesRevenue: totalSalesRevenue.toString(),
@@ -2376,93 +2446,184 @@ export class DatabaseStorage implements IStorage {
     monthlyProfit: string;
     whatsappConnected: boolean;
   }> {
+    const clientId = this.resolveClientId();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
+    const now = new Date();
+
     // Today's product sales (POS transactions only)
+    const todaySalesWhere = clientId
+      ? and(
+          eq(transactions.type, 'sale'),
+          gte(transactions.createdAt, today),
+          eq(transactions.clientId, clientId)
+        )
+      : and(
+          eq(transactions.type, 'sale'),
+          gte(transactions.createdAt, today)
+        );
+
     const [todayProductSalesResult] = await db
       .select({ total: sum(transactions.total) })
       .from(transactions)
-      .where(
-        and(
-          eq(transactions.type, 'sale'),
-          gte(transactions.createdAt, today)
-        )
-      );
-    
+      .where(todaySalesWhere);
+
     // Today's total revenue (all income including services)
+    const todayRevenueWhere = clientId
+      ? and(
+          eq(financialRecords.type, 'income'),
+          gte(financialRecords.createdAt, today),
+          eq(financialRecords.clientId, clientId)
+        )
+      : and(
+          eq(financialRecords.type, 'income'),
+          gte(financialRecords.createdAt, today)
+        );
+
     const [todayRevenueResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
-      .where(
-        and(
-          eq(financialRecords.type, 'income'),
-          gte(financialRecords.createdAt, today)
-        )
-      );
-    
+      .where(todayRevenueWhere);
+
     // Active services
+    const activeServicesWhere = clientId
+      ? and(
+          ne(serviceTickets.status, 'completed'),
+          ne(serviceTickets.status, 'cancelled'),
+          eq(serviceTickets.clientId, clientId)
+        )
+      : and(
+          ne(serviceTickets.status, 'completed'),
+          ne(serviceTickets.status, 'cancelled')
+        );
+
     const [activeServicesResult] = await db
       .select({ count: count() })
       .from(serviceTickets)
-      .where(sql`${serviceTickets.status} != 'completed' AND ${serviceTickets.status} != 'cancelled'`);
-    
+      .where(activeServicesWhere);
+
     // Low stock count
+    const lowStockWhere = clientId
+      ? and(
+          eq(products.isActive, true),
+          sql`${products.stock} <= ${products.minStock}`,
+          eq(products.clientId, clientId)
+        )
+      : and(
+          eq(products.isActive, true),
+          sql`${products.stock} <= ${products.minStock}`
+        );
+
     const [lowStockResult] = await db
       .select({ count: count() })
       .from(products)
-      .where(
-        and(
-          eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
-        )
-      );
-    
-    // Monthly profit from finance manager
+      .where(lowStockWhere);
+
+    // Monthly profit calculated from POS transactions (harga jual - HPP)
     let monthlyProfit = 0;
+    let monthlyProfitFromSales = false;
+
     try {
+      const monthlySalesWhere = clientId
+        ? and(
+            eq(transactions.type, 'sale'),
+            gte(transactions.createdAt, startOfMonth),
+            lte(transactions.createdAt, now),
+            eq(transactions.clientId, clientId)
+          )
+        : and(
+            eq(transactions.type, 'sale'),
+            gte(transactions.createdAt, startOfMonth),
+            lte(transactions.createdAt, now)
+          );
+
+      const [monthlyPosSummary] = await db
+        .select({
+          totalSales: sql<string>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
+          totalCOGS: sql<string>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, 0)::numeric), 0)`
+        })
+        .from(transactionItems)
+        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+        .innerJoin(products, eq(transactionItems.productId, products.id))
+        .where(monthlySalesWhere);
+
+      if (monthlyPosSummary) {
+        const monthlySalesValue = Number(monthlyPosSummary.totalSales ?? 0);
+        const monthlyCOGSValue = Number(monthlyPosSummary.totalCOGS ?? 0);
+        monthlyProfit = Number((monthlySalesValue - monthlyCOGSValue).toFixed(2));
+        monthlyProfitFromSales = true;
+      }
       const { financeManager } = await import('./financeManager');
       const summary = await financeManager.getSummary(startOfMonth, new Date());
       monthlyProfit = Number(summary.grossProfit || 0);
     } catch (error) {
-      console.error("Error getting monthly profit from finance manager:", error);
-      // Fallback to simplified financial record calculation (harga jual - HPP)
-      const confirmedCondition = eq(financialRecords.status, 'confirmed');
-      const [monthlyIncomeResult] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(and(
-          eq(financialRecords.type, 'income'),
-          gte(financialRecords.createdAt, startOfMonth),
-          confirmedCondition
-        ));
-
-      const [monthlyCogsResult] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(and(
-          eq(financialRecords.type, 'expense'),
-          sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
-          gte(financialRecords.createdAt, startOfMonth),
-          confirmedCondition
-        ));
-
-      const monthlyIncome = Number(monthlyIncomeResult.total || 0);
-      const monthlyCOGS = Number(monthlyCogsResult.total || 0);
-      monthlyProfit = monthlyIncome - monthlyCOGS;
+      console.error("Error calculating monthly POS profit from transactions:", error);
     }
-    
+
+    if (!monthlyProfitFromSales) {
+      try {
+        const { financeManager } = await import('./financeManager');
+        const summary = await financeManager.getSummary(startOfMonth, now);
+        monthlyProfit = Number(summary.grossProfit || 0);
+      } catch (error) {
+        console.error("Error getting monthly profit from finance manager:", error);
+        // Fallback to simplified financial record calculation (harga jual - HPP)
+        const confirmedCondition = eq(financialRecords.status, 'confirmed');
+        const monthlyIncomeWhere = clientId
+          ? and(
+              eq(financialRecords.type, 'income'),
+              gte(financialRecords.createdAt, startOfMonth),
+              confirmedCondition,
+              eq(financialRecords.clientId, clientId)
+            )
+          : and(
+              eq(financialRecords.type, 'income'),
+              gte(financialRecords.createdAt, startOfMonth),
+              confirmedCondition
+            );
+
+        const monthlyCogsWhere = clientId
+          ? and(
+              eq(financialRecords.type, 'expense'),
+              sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+              gte(financialRecords.createdAt, startOfMonth),
+              confirmedCondition,
+              eq(financialRecords.clientId, clientId)
+            )
+          : and(
+              eq(financialRecords.type, 'expense'),
+              sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+              gte(financialRecords.createdAt, startOfMonth),
+              confirmedCondition
+            );
+
+        const [monthlyIncomeResult] = await db
+          .select({ total: sum(financialRecords.amount) })
+          .from(financialRecords)
+          .where(monthlyIncomeWhere);
+
+        const [monthlyCogsResult] = await db
+          .select({ total: sum(financialRecords.amount) })
+          .from(financialRecords)
+          .where(monthlyCogsWhere);
+
+        const monthlyIncome = Number(monthlyIncomeResult.total || 0);
+        const monthlyCOGS = Number(monthlyCogsResult.total || 0);
+        monthlyProfit = monthlyIncome - monthlyCOGS;
+      }
+    }
+
     // Get WhatsApp connection status from store config
     const storeConfig = await this.getStoreConfig();
     const whatsappConnected = storeConfig?.whatsappConnected || false;
-    
+
     return {
-      todaySales: todayProductSalesResult.total || '0',
-      todayRevenue: todayRevenueResult.total || '0',
-      activeServices: activeServicesResult.count,
-      lowStockCount: lowStockResult.count,
+      todaySales: todayProductSalesResult?.total || '0',
+      todayRevenue: todayRevenueResult?.total || '0',
+      activeServices: activeServicesResult?.count || 0,
+      lowStockCount: lowStockResult?.count || 0,
       monthlyProfit: monthlyProfit.toString(),
       whatsappConnected,
     };
