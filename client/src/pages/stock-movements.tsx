@@ -18,20 +18,112 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Package, Filter, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 
-const OUTBOUND_MOVEMENT_TYPES = ['out', 'warranty_exchange'] as const;
-const INBOUND_MOVEMENT_TYPES = ['in', 'warranty_return'] as const;
+type StockMovement = {
+  id: string;
+  productId: string;
+  productName?: string | null;
+  movementType: string;
+  quantity: number;
+  referenceType?: string | null;
+  reference?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  userName?: string | null;
+};
 
-const isOutboundMovement = (type: string | null | undefined) =>
-  type ? OUTBOUND_MOVEMENT_TYPES.includes(type as (typeof OUTBOUND_MOVEMENT_TYPES)[number]) : false;
+type StockMovementResponse = {
+  movements?: StockMovement[];
+};
 
-const isInboundMovement = (type: string | null | undefined) =>
-  type ? INBOUND_MOVEMENT_TYPES.includes(type as (typeof INBOUND_MOVEMENT_TYPES)[number]) : false;
+type MovementDirection = 'inbound' | 'outbound' | 'neutral';
+
+const MOVEMENT_DIRECTION_BY_MOVEMENT_TYPE: Record<string, MovementDirection> = {
+  in: 'inbound',
+  out: 'outbound',
+  adjustment: 'neutral',
+  warranty_return: 'inbound',
+  warranty_exchange: 'outbound',
+};
+
+const MOVEMENT_DIRECTION_BY_REFERENCE_TYPE: Record<string, MovementDirection> = {
+  purchase: 'inbound',
+  purchase_order: 'inbound',
+  purchase_refund: 'inbound',
+  refund_recovery: 'inbound',
+  sale: 'outbound',
+  service: 'outbound',
+  adjustment: 'neutral',
+  return: 'inbound',
+  warranty_return: 'inbound',
+  warranty_return_damaged: 'outbound',
+  warranty_exchange: 'outbound',
+};
+
+const getMovementDirection = (
+  movement: Pick<StockMovement, 'movementType' | 'referenceType'>
+): MovementDirection => {
+  const primaryDirection = movement.movementType
+    ? MOVEMENT_DIRECTION_BY_MOVEMENT_TYPE[movement.movementType]
+    : undefined;
+
+  if (primaryDirection && primaryDirection !== 'neutral') {
+    return primaryDirection;
+  }
+
+  const referenceDirection = movement.referenceType
+    ? MOVEMENT_DIRECTION_BY_REFERENCE_TYPE[movement.referenceType]
+    : undefined;
+
+  if (referenceDirection) {
+    return referenceDirection;
+  }
+
+  return primaryDirection || 'inbound';
+};
+
+const REFERENCE_TYPE_CONFIG: Record<string, { label: string; variant: BadgeProps['variant']; summaryKey: string }> = {
+  purchase: { label: 'Pembelian', variant: 'secondary', summaryKey: 'purchase' },
+  purchase_order: { label: 'Pembelian', variant: 'secondary', summaryKey: 'purchase' },
+  purchase_refund: { label: 'Retur Pembelian', variant: 'outline', summaryKey: 'purchase' },
+  refund_recovery: { label: 'Pemulihan Refund', variant: 'outline', summaryKey: 'purchase' },
+  sale: { label: 'Penjualan', variant: 'default', summaryKey: 'sale' },
+  service: { label: 'Servis', variant: 'destructive', summaryKey: 'service' },
+  adjustment: { label: 'Penyesuaian', variant: 'outline', summaryKey: 'adjustment' },
+  return: { label: 'Retur', variant: 'secondary', summaryKey: 'return' },
+  warranty_return: { label: 'Retur Garansi', variant: 'secondary', summaryKey: 'return' },
+  warranty_return_damaged: { label: 'Retur Garansi (Rusak)', variant: 'destructive', summaryKey: 'return' },
+  warranty_exchange: { label: 'Tukar Garansi', variant: 'secondary', summaryKey: 'return' },
+  unknown: { label: 'Lainnya', variant: 'outline', summaryKey: 'unknown' }
+};
+
+type ReferenceTypeKey = keyof typeof REFERENCE_TYPE_CONFIG;
+
+const resolveReferenceTypeConfig = (type?: string | null) => {
+  if (!type) {
+    return REFERENCE_TYPE_CONFIG.unknown;
+  }
+
+  if (type in REFERENCE_TYPE_CONFIG) {
+    return REFERENCE_TYPE_CONFIG[type as ReferenceTypeKey];
+  }
+
+  return REFERENCE_TYPE_CONFIG.unknown;
+};
+
+const SUMMARY_DISPLAY_CONFIG: Record<string, { label: string; direction: MovementDirection }> = {
+  purchase: { label: 'Dari Pembelian', direction: 'inbound' },
+  sale: { label: 'Untuk Penjualan', direction: 'outbound' },
+  service: { label: 'Untuk Servis', direction: 'outbound' },
+  adjustment: { label: 'Penyesuaian', direction: 'neutral' },
+  return: { label: 'Retur & Garansi', direction: 'inbound' },
+  unknown: { label: 'Lainnya', direction: 'neutral' }
+};
 
 export default function StockMovements() {
   const [startDate, setStartDate] = useState(
@@ -42,24 +134,6 @@ export default function StockMovements() {
   );
   const [productFilter, setProductFilter] = useState("");
   const [referenceTypeFilter, setReferenceTypeFilter] = useState("");
-
-  // Fetch stock movements with filters
-  interface StockMovement {
-    id: string;
-    productId: string;
-    productName?: string | null;
-    movementType: string;
-    quantity: number;
-    referenceType?: string | null;
-    reference?: string | null;
-    notes?: string | null;
-    createdAt: string;
-    userName?: string | null;
-  }
-
-  interface StockMovementResponse {
-    movements?: StockMovement[];
-  }
 
   const {
     data: stockData,
@@ -95,19 +169,23 @@ export default function StockMovements() {
     const totals: Record<string, { totalIn: number; totalOut: number; count: number }> = {};
 
     for (const movement of movements) {
-      const referenceType = movement.referenceType || 'unknown';
       const quantity = Number(movement.quantity) || 0;
-      if (!totals[referenceType]) {
-        totals[referenceType] = { totalIn: 0, totalOut: 0, count: 0 };
+      const config = resolveReferenceTypeConfig(movement.referenceType);
+      const summaryKey = config.summaryKey;
+
+      if (!totals[summaryKey]) {
+        totals[summaryKey] = { totalIn: 0, totalOut: 0, count: 0 };
       }
 
-      if (isInboundMovement(movement.movementType)) {
-        totals[referenceType].totalIn += quantity;
-      } else if (isOutboundMovement(movement.movementType)) {
-        totals[referenceType].totalOut += quantity;
+      const direction = getMovementDirection(movement);
+
+      if (direction === 'outbound') {
+        totals[summaryKey].totalOut += quantity;
+      } else {
+        totals[summaryKey].totalIn += quantity;
       }
 
-      totals[referenceType].count += 1;
+      totals[summaryKey].count += 1;
     }
 
     return {
@@ -131,39 +209,40 @@ export default function StockMovements() {
     });
   };
 
-  const getReferenceTypeBadge = (type: string) => {
-    const variants = {
-      service: "destructive",
-      sale: "default",
-      purchase: "secondary", 
-      adjustment: "outline",
-      return: "secondary"
-    } as const;
-    
-    const labels = {
-      service: "Servis",
-      sale: "Penjualan", 
-      purchase: "Pembelian",
-      adjustment: "Penyesuaian",
-      return: "Retur"
-    };
-    
+  const getReferenceTypeBadge = (type?: string | null) => {
+    const config = resolveReferenceTypeConfig(type);
     return (
-      <Badge variant={variants[type as keyof typeof variants] || "outline"}>
-        {labels[type as keyof typeof labels] || type}
+      <Badge variant={config.variant || 'default'}>
+        {config.label}
       </Badge>
     );
   };
 
-  const getMovementIcon = (type: string) => {
-    return isOutboundMovement(type) ? (
-      <ArrowDown className="h-4 w-4 text-red-500" />
-    ) : (
-      <ArrowUp className="h-4 w-4 text-green-500" />
-    );
+  const getMovementIcon = (movement: StockMovement) => {
+    const direction = getMovementDirection(movement);
+    if (direction === 'outbound') {
+      return <ArrowDown className="h-4 w-4 text-red-500" />;
+    }
+
+    if (direction === 'neutral') {
+      return <Package className="h-4 w-4 text-muted-foreground" />;
+    }
+
+    return <ArrowUp className="h-4 w-4 text-green-500" />;
   };
 
-  const getMovementLabel = (type: string) => (isOutboundMovement(type) ? 'Keluar' : 'Masuk');
+  const getMovementLabel = (movement: StockMovement) => {
+    const direction = getMovementDirection(movement);
+    if (direction === 'outbound') {
+      return 'Keluar';
+    }
+
+    if (direction === 'neutral') {
+      return 'Penyesuaian';
+    }
+
+    return 'Masuk';
+  };
 
   const handleFilter = () => {
     refetch();
@@ -225,33 +304,43 @@ export default function StockMovements() {
                   </CardContent>
                 </Card>
 
-                {Object.entries(summaryByReferenceType).map(([refType, data]) => (
-                  <Card key={refType}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {refType === 'service' ? 'Untuk Servis' :
-                         refType === 'sale' ? 'Untuk Penjualan' :
-                         refType === 'purchase' ? 'Dari Pembelian' :
-                         refType === 'adjustment' ? 'Penyesuaian' :
-                         refType === 'return' ? 'Retur' :
-                         refType === 'unknown' ? 'Lainnya' :
-                         refType}
-                      </CardTitle>
-                      {refType === 'service' ?
-                        <ArrowDown className="h-4 w-4 text-red-500" /> :
-                        <ArrowUp className="h-4 w-4 text-green-500" />
-                      }
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">
-                        {data.totalOut || data.totalIn || 0}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {data.count} transaksi
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
+                {Object.entries(summaryByReferenceType).map(([summaryKey, data]) => {
+                  const summaryConfig = SUMMARY_DISPLAY_CONFIG[summaryKey] ?? {
+                    label: summaryKey,
+                    direction: 'neutral' as MovementDirection,
+                  };
+
+                  const icon = summaryConfig.direction === 'outbound'
+                    ? <ArrowDown className="h-4 w-4 text-red-500" />
+                    : summaryConfig.direction === 'inbound'
+                      ? <ArrowUp className="h-4 w-4 text-green-500" />
+                      : <Package className="h-4 w-4 text-muted-foreground" />;
+
+                  const displayValue = summaryConfig.direction === 'outbound'
+                    ? data.totalOut
+                    : summaryConfig.direction === 'inbound'
+                      ? data.totalIn
+                      : (data.totalIn || data.totalOut);
+
+                  return (
+                    <Card key={summaryKey}>
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">
+                          {summaryConfig.label}
+                        </CardTitle>
+                        {icon}
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {displayValue || 0}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {data.count} transaksi
+                        </p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
 
               {/* Filters */}
@@ -364,17 +453,32 @@ export default function StockMovements() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  {getMovementIcon(movement.movementType)}
-                                  <span className="capitalize">{getMovementLabel(movement.movementType)}</span>
+                                  {getMovementIcon(movement)}
+                                  <span className="capitalize">{getMovementLabel(movement)}</span>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                {getReferenceTypeBadge(movement.referenceType || '')}
+                                {getReferenceTypeBadge(movement.referenceType)}
                               </TableCell>
                               <TableCell className="font-bold">
-                                <span className={isOutboundMovement(movement.movementType) ? 'text-red-600' : 'text-green-600'}>
-                                  {isOutboundMovement(movement.movementType) ? '-' : '+'}{movement.quantity}
-                                </span>
+                                {(() => {
+                                  const direction = getMovementDirection(movement);
+                                  const className = direction === 'outbound'
+                                    ? 'text-red-600'
+                                    : direction === 'inbound'
+                                      ? 'text-green-600'
+                                      : 'text-muted-foreground';
+                                  const prefix = direction === 'outbound'
+                                    ? '-'
+                                    : direction === 'inbound'
+                                      ? '+'
+                                      : '';
+                                  return (
+                                    <span className={className}>
+                                      {prefix}{movement.quantity}
+                                    </span>
+                                  );
+                                })()}
                               </TableCell>
                               <TableCell className="font-mono text-sm">
                                 {movement.reference || '-'}

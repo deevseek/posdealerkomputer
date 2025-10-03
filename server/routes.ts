@@ -472,14 +472,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Get client ID from authenticated session for multi-tenant security
       const clientId = req.tenant?.id || req.tenant?.clientId || req.session?.user?.clientId || null;
-      
-      // Build where conditions for multi-tenant filtering ONLY 
-      const whereConditions = [
-        // Multi-tenant filtering - filter by clientId if in multi-tenant mode
-        // In single-tenant mode (clientId is null), show all records with null clientId
-        clientId ? eq(stockMovements.clientId, clientId) : isNull(stockMovements.clientId)
-      ].filter(Boolean);
-      
+
+      const startDate = typeof req.query.startDate === 'string' ? req.query.startDate : undefined;
+      const endDate = typeof req.query.endDate === 'string' ? req.query.endDate : undefined;
+      const productId = typeof req.query.productId === 'string' ? req.query.productId : undefined;
+      const referenceType = typeof req.query.referenceType === 'string' ? req.query.referenceType : undefined;
+
+      // Build where conditions for multi-tenant filtering and optional filters
+      const whereConditions = [] as any[];
+
+      // Multi-tenant filtering - include records owned by tenant and historical null-tenant records
+      const tenantCondition = clientId
+        ? or(eq(stockMovements.clientId, clientId), isNull(stockMovements.clientId))
+        : isNull(stockMovements.clientId);
+      whereConditions.push(tenantCondition);
+
+      if (startDate) {
+        const parsedStart = getStartOfDayJakarta(parseWithTimezone(startDate, false));
+        whereConditions.push(gte(stockMovements.createdAt, parsedStart));
+      }
+
+      if (endDate) {
+        const parsedEnd = getEndOfDayJakarta(parseWithTimezone(endDate, false));
+        whereConditions.push(lte(stockMovements.createdAt, parsedEnd));
+      }
+
+      if (productId && productId !== 'all') {
+        whereConditions.push(eq(stockMovements.productId, productId));
+      }
+
+      if (referenceType && referenceType !== 'all') {
+        const referenceFilters: string[] = [];
+
+        switch (referenceType) {
+          case 'purchase':
+            referenceFilters.push('purchase', 'purchase_order', 'purchase_refund', 'refund_recovery');
+            break;
+          case 'return':
+            referenceFilters.push('return', 'warranty_return', 'warranty_return_damaged', 'warranty_exchange');
+            break;
+          default:
+            referenceFilters.push(referenceType);
+        }
+
+        if (referenceFilters.length === 1) {
+          whereConditions.push(eq(stockMovements.referenceType, referenceFilters[0]));
+        } else {
+          whereConditions.push(inArray(stockMovements.referenceType, referenceFilters));
+        }
+      }
+
+      const whereClause = whereConditions.length ? and(...whereConditions) : undefined;
+
       // Get stock movements with product names and readable references
       const movementData = await db
         .select({
@@ -502,27 +546,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           `,
           notes: stockMovements.notes,
           createdAt: stockMovements.createdAt,
-          userName: sql<string>`'Admin'`, // Add userName field
+          userName: sql<string>`
+            COALESCE(
+              NULLIF(TRIM(COALESCE(${users.firstName}, '') || ' ' || COALESCE(${users.lastName}, '')), ''),
+              ${users.username},
+              'User'
+            )
+          `,
         })
         .from(stockMovements)
         .leftJoin(products, and(
           eq(stockMovements.productId, products.id),
           // Add clientId filtering to joined tables for complete tenant isolation
-          clientId ? eq(products.clientId, clientId) : isNull(products.clientId)
+          clientId ? or(eq(products.clientId, clientId), isNull(products.clientId)) : isNull(products.clientId)
         ))
         .leftJoin(purchaseOrders, and(
           eq(stockMovements.referenceId, purchaseOrders.id),
-          clientId ? eq(purchaseOrders.clientId, clientId) : isNull(purchaseOrders.clientId)
+          clientId ? or(eq(purchaseOrders.clientId, clientId), isNull(purchaseOrders.clientId)) : isNull(purchaseOrders.clientId)
         ))
         .leftJoin(transactions, and(
           eq(stockMovements.referenceId, transactions.id),
-          clientId ? eq(transactions.clientId, clientId) : isNull(transactions.clientId)
+          clientId ? or(eq(transactions.clientId, clientId), isNull(transactions.clientId)) : isNull(transactions.clientId)
         ))
         .leftJoin(serviceTickets, and(
           eq(stockMovements.referenceId, serviceTickets.id),
-          clientId ? eq(serviceTickets.clientId, clientId) : isNull(serviceTickets.clientId)
+          clientId ? or(eq(serviceTickets.clientId, clientId), isNull(serviceTickets.clientId)) : isNull(serviceTickets.clientId)
         ))
-        .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+        .leftJoin(users, eq(stockMovements.userId, users.id))
+        .where(whereClause)
         .orderBy(desc(stockMovements.createdAt));
       
       // Frontend expects { movements: [...] } structure
