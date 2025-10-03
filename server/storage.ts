@@ -2267,16 +2267,16 @@ export class DatabaseStorage implements IStorage {
       });
 
       return {
-        totalIncome: summary.totalIncome,
-        totalExpense: summary.totalExpense,
-        profit: grossProfit,
-        netProfit: summary.netProfit ?? grossProfit,
-        totalSalesRevenue,
-        totalCOGS,
-        profit: summary.grossProfit,
-        netProfit: summary.netProfit,
-        totalSalesRevenue: summary.totalSalesRevenue,
-        totalCOGS: summary.totalCOGS,
+        totalIncome: String(summary.totalIncome ?? '0'),
+        totalExpense: String(summary.totalExpense ?? '0'),
+        profit: String(summary.grossProfit ?? grossProfit),
+        netProfit: String(
+          summary.netProfit ?? summary.grossProfit ?? grossProfit
+        ),
+        totalSalesRevenue: String(
+          summary.totalSalesRevenue ?? totalSalesRevenue
+        ),
+        totalCOGS: String(summary.totalCOGS ?? totalCOGS),
         records
       };
     } catch (error) {
@@ -2361,20 +2361,20 @@ export class DatabaseStorage implements IStorage {
 
       const totalIncome = Number(incomeResult.total || 0);
       const totalExpense = Number(expenseResult.total || 0);
-      const totalCOGS = Number(cogsResult.total || 0);
-      const totalSalesRevenue = Number(salesRevenueResult.total || 0);
+      const totalCOGSNumber = Number(cogsResult.total || 0);
+      const totalSalesRevenueNumber = Number(salesRevenueResult.total || 0);
+      const netProfitValue = totalIncome - totalExpense;
+      const fallbackGrossProfit = Number(
+        (totalSalesRevenueNumber - totalCOGSNumber).toFixed(2)
+      );
 
       return {
         totalIncome: totalIncome.toString(),
         totalExpense: totalExpense.toString(),
-        profit: grossProfit,
-        netProfit: (totalIncome - totalExpense).toString(),
-        totalSalesRevenue,
-        totalCOGS,
-        profit: (totalSalesRevenue - totalCOGS).toString(),
-        netProfit: (totalIncome - totalExpense).toString(),
-        totalSalesRevenue: totalSalesRevenue.toString(),
-        totalCOGS: totalCOGS.toString(),
+        profit: fallbackGrossProfit.toString(),
+        netProfit: netProfitValue.toString(),
+        totalSalesRevenue: totalSalesRevenueNumber.toString(),
+        totalCOGS: totalCOGSNumber.toString(),
         records
       };
     }
