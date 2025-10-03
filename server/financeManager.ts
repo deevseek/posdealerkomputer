@@ -1128,12 +1128,69 @@ export class FinanceManager {
     });
 
     const totalIncomeValue = Number(totalRevenue.toFixed(2));
-    const totalExpenseValue = Number(totalExpenseNet.toFixed(2));
-    const netProfitValue = Number((totalIncomeValue - totalExpenseValue).toFixed(2));
+    let totalExpenseValue = Number(totalExpenseNet.toFixed(2));
     const totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
-    const totalCOGSValue = Number(totalCOGS.toFixed(2));
-    const grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+    let totalCOGSValue = Number(totalCOGS.toFixed(2));
+    let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
     const totalRefundsValue = Number(totalRefunds.toFixed(2));
+
+    // Fallback to financial records when ledger-based COGS is missing (e.g. legacy data without journal entries)
+    if (totalCOGSValue === 0) {
+      const cogsConditions = [
+        eq(financialRecords.status, 'confirmed'),
+        eq(financialRecords.type, 'expense'),
+        sql`(
+          LOWER(${financialRecords.category}) LIKE '%cost of goods%' OR
+          LOWER(${financialRecords.category}) LIKE '%hpp%' OR
+          LOWER(${financialRecords.category}) LIKE '%harga pokok%' OR
+          LOWER(${financialRecords.subcategory}) LIKE '%cost of goods%' OR
+          LOWER(${financialRecords.subcategory}) LIKE '%hpp%' OR
+          LOWER(${financialRecords.description}) LIKE '%harga pokok%'
+        )`
+      ];
+
+      if (startDate) {
+        cogsConditions.push(gte(financialRecords.createdAt, startDate));
+      }
+
+      if (endDate) {
+        cogsConditions.push(lte(financialRecords.createdAt, endDate));
+      }
+
+      const [cogsFallback] = await db
+        .select({
+          total: sum(financialRecords.amount),
+          count: count()
+        })
+        .from(financialRecords)
+        .where(and(...cogsConditions));
+
+      const fallbackCOGSTotal = Number(cogsFallback?.total ?? 0);
+
+      if (fallbackCOGSTotal > 0) {
+        totalCOGSValue = Number(fallbackCOGSTotal.toFixed(2));
+        grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+        totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
+
+        const cogsCategoryKey = 'Cost Of Goods Sold';
+        const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
+        categories[cogsCategoryKey] = {
+          income: existingCategory.income,
+          expense: Number((existingCategory.expense + totalCOGSValue).toFixed(2)),
+          count: existingCategory.count + Number(cogsFallback?.count ?? 0)
+        };
+
+        const fallbackSubcategoryKey = 'Cost Of Goods Sold (Fallback)';
+        const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
+        subcategories[fallbackSubcategoryKey] = {
+          amount: Number((existingSubcategory.amount + totalCOGSValue).toFixed(2)),
+          type: 'expense',
+          count: existingSubcategory.count + Number(cogsFallback?.count ?? 0)
+        };
+      }
+    }
+
+    const netProfitValue = Number((totalIncomeValue - totalExpenseValue).toFixed(2));
 
     return {
       totalIncome: totalIncomeValue.toString(),
