@@ -595,23 +595,41 @@ export default function Inventory() {
     refetchInterval: 8000, // Auto-refresh every 8 seconds
   });
 
+  const getNumericValue = (value: unknown) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  };
+
   const getStockStatus = (product: any) => {
     // Calculate stock from all movements, including warranty
     const movements = stockMovements.filter((m: any) => m.productId === product.id);
-    let stock = 0;
-    movements.forEach((m: any) => {
-      if (
-        m.movementType === 'in' ||
-        m.movementType === 'warranty_return'
-      ) {
-        stock += m.quantity;
-      } else if (
-        m.movementType === 'out' ||
-        m.movementType === 'warranty_exchange'
-      ) {
-        stock -= m.quantity;
+    const movementStock = movements.reduce((total: number, movement: any) => {
+      const quantity = getNumericValue(movement.quantity) ?? 0;
+
+      if (movement.movementType === 'in' || movement.movementType === 'warranty_return') {
+        return total + quantity;
       }
-    });
+
+      if (movement.movementType === 'out' || movement.movementType === 'warranty_exchange') {
+        return total - quantity;
+      }
+
+      return total;
+    }, 0);
+
+    const directStockSources = [
+      product.stock,
+      product.totalStock,
+      product.availableStock,
+      product.currentStock,
+    ]
+      .map(getNumericValue)
+      .filter((value): value is number => value !== null);
+
+    const hasMovements = movements.length > 0;
+    const directStock = directStockSources.length > 0 ? directStockSources[0] : null;
+    const stock = hasMovements ? movementStock : (directStock ?? movementStock);
+
     const minStock = product.minStock || 5;
     if (stock <= 0) {
       return { text: "Stok Habis", variant: "destructive" as const, color: "text-red-600", stock };
@@ -628,9 +646,9 @@ export default function Inventory() {
   );
 
   const lowStockProducts = products.filter((product: any) => {
-  const stock = getStockStatus(product).stock;
-  const minStock = product.minStock || 5;
-  return stock <= minStock;
+    const stock = getStockStatus(product).stock;
+    const minStock = product.minStock || 5;
+    return stock <= minStock;
   });
 
   const incomingStock = (purchaseOrders as any[]).filter((po: any) => 
