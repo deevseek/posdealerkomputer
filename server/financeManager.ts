@@ -864,6 +864,7 @@ export class FinanceManager {
     totalIncome: string;
     totalExpense: string;
     netProfit: string;
+    grossProfit: string;
     totalSalesRevenue: string;
     totalCOGS: string;
     totalRefunds: string;
@@ -1129,6 +1130,7 @@ export class FinanceManager {
     const totalIncomeValue = Number(totalRevenue.toFixed(2));
     const totalExpenseValue = Number(totalExpenseNet.toFixed(2));
     const netProfitValue = Number((totalIncomeValue - totalExpenseValue).toFixed(2));
+    const grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
     const totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
     const totalCOGSValue = Number(totalCOGS.toFixed(2));
     const totalRefundsValue = Number(totalRefunds.toFixed(2));
@@ -1137,6 +1139,7 @@ export class FinanceManager {
       totalIncome: totalIncomeValue.toString(),
       totalExpense: totalExpenseValue.toString(),
       netProfit: netProfitValue.toString(),
+      grossProfit: grossProfitValue.toString(),
       totalSalesRevenue: totalSalesRevenueValue.toString(),
       totalCOGS: totalCOGSValue.toString(),
       totalRefunds: totalRefundsValue.toString(),

@@ -136,8 +136,14 @@ function generateReportHTML(reportData: any, startDate: string, endDate: string)
         </div>
         
         <div class="stat-card" style="margin-top: 20px;">
-          <h3>Laba Bersih</h3>
+          <h3>Laba Penjualan (Harga Jual - HPP)</h3>
           <div class="value income">Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}</div>
+          <p style="margin-top: 8px; font-size: 12px; color: #6B7280;">
+            Harga jual produk: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
+          </p>
+          <p style="margin-top: 4px; font-size: 12px; color: #6B7280;">
+            Laba bersih (pendapatan - pengeluaran): Rp ${Number(financialReport?.netProfit || 0).toLocaleString('id-ID')}
+          </p>
         </div>
       </div>
       
@@ -618,7 +624,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ['Omset Servis', Number(serviceReport?.totalRevenue || 0)],
         ['Total Pemasukan', Number(financialReport?.totalIncome || 0)],
         ['Total Pengeluaran', Number(financialReport?.totalExpense || 0)],
-        ['Laba Bersih', Number(financialReport?.profit || 0)],
+        ['Harga Jual Produk', Number(financialReport?.totalSalesRevenue || 0)],
+        ['HPP (Modal)', Number(financialReport?.totalCOGS || 0)],
+        ['Laba Penjualan (Harga Jual - HPP)', Number(financialReport?.profit || 0)],
+        ['Laba Bersih (Pendapatan - Pengeluaran)', Number(financialReport?.netProfit || 0)],
         []
       ];
 
