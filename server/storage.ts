@@ -2551,6 +2551,7 @@ export class DatabaseStorage implements IStorage {
     // Monthly profit calculated from POS transactions (harga jual - HPP)
     let monthlySalesRevenueValue = 0;
     let monthlyCOGSValue = 0;
+    let monthlySalesProfit = 0;
     let monthlyProfit = 0;
 
     try {
@@ -2610,11 +2611,17 @@ export class DatabaseStorage implements IStorage {
             ? fallbackSummaryGrossProfitValue
             : summaryGrossProfitValue;
 
+      monthlySalesProfit = resolvedGrossProfitValue;
       monthlyProfit = resolvedGrossProfitValue;
     } catch (error) {
       console.error("Error getting monthly profit from finance manager:", error);
     }
 
+    if (monthlySalesProfit === 0 && fallbackGrossProfit !== 0) {
+      monthlySalesProfit = fallbackGrossProfit;
+    }
+
+    if (monthlySalesProfit === 0) {
     if (monthlyProfit === 0 && fallbackGrossProfit !== 0) {
       monthlyProfit = fallbackGrossProfit;
     }
@@ -2623,33 +2630,26 @@ export class DatabaseStorage implements IStorage {
       try {
         // Fallback to simplified financial record calculation (harga jual - HPP)
         const confirmedCondition = eq(financialRecords.status, 'confirmed');
-        const monthlyIncomeWhere = clientId
-          ? and(
-              eq(financialRecords.type, 'income'),
-              gte(financialRecords.createdAt, startOfMonth),
-              confirmedCondition,
-              eq(financialRecords.clientId, clientId)
-            )
-          : and(
-              eq(financialRecords.type, 'income'),
-              gte(financialRecords.createdAt, startOfMonth),
-              confirmedCondition
-            );
+        const saleIncomeConditions = [
+          eq(financialRecords.type, 'income'),
+          eq(financialRecords.referenceType, 'sale'),
+          gte(financialRecords.createdAt, startOfMonth),
+          confirmedCondition
+        ];
+        const saleExpenseConditions = [
+          eq(financialRecords.type, 'expense'),
+          eq(financialRecords.referenceType, 'sale'),
+          gte(financialRecords.createdAt, startOfMonth),
+          confirmedCondition
+        ];
 
-        const monthlyCogsWhere = clientId
-          ? and(
-              eq(financialRecords.type, 'expense'),
-              sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
-              gte(financialRecords.createdAt, startOfMonth),
-              confirmedCondition,
-              eq(financialRecords.clientId, clientId)
-            )
-          : and(
-              eq(financialRecords.type, 'expense'),
-              sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
-              gte(financialRecords.createdAt, startOfMonth),
-              confirmedCondition
-            );
+        if (clientId) {
+          saleIncomeConditions.push(eq(financialRecords.clientId, clientId));
+          saleExpenseConditions.push(eq(financialRecords.clientId, clientId));
+        }
+
+        const monthlyIncomeWhere = and(...saleIncomeConditions);
+        const monthlyCogsWhere = and(...saleExpenseConditions);
 
         const [monthlyIncomeResult] = await db
           .select({ total: sum(financialRecords.amount) })
@@ -2663,11 +2663,61 @@ export class DatabaseStorage implements IStorage {
 
         const monthlyIncome = Number(monthlyIncomeResult.total || 0);
         const monthlyCOGS = Number(monthlyCogsResult.total || 0);
-        monthlyProfit = monthlyIncome - monthlyCOGS;
+        monthlySalesProfit = Number((monthlyIncome - monthlyCOGS).toFixed(2));
       } catch (fallbackError) {
         console.error("Error calculating monthly profit from financial records:", fallbackError);
       }
     }
+
+    let monthlyServiceProfit = 0;
+
+    try {
+      const confirmedCondition = eq(financialRecords.status, 'confirmed');
+      const serviceIncomeConditions = [
+        eq(financialRecords.type, 'income'),
+        or(
+          eq(financialRecords.referenceType, 'service_labor'),
+          eq(financialRecords.referenceType, 'service_parts_revenue')
+        ),
+        gte(financialRecords.createdAt, startOfMonth),
+        lte(financialRecords.createdAt, now),
+        confirmedCondition
+      ];
+
+      const serviceCostConditions = [
+        eq(financialRecords.type, 'expense'),
+        eq(financialRecords.referenceType, 'service_parts_cost'),
+        gte(financialRecords.createdAt, startOfMonth),
+        lte(financialRecords.createdAt, now),
+        confirmedCondition
+      ];
+
+      if (clientId) {
+        serviceIncomeConditions.push(eq(financialRecords.clientId, clientId));
+        serviceCostConditions.push(eq(financialRecords.clientId, clientId));
+        monthlyProfit = monthlyIncome - monthlyCOGS;
+      } catch (fallbackError) {
+        console.error("Error calculating monthly profit from financial records:", fallbackError);
+      }
+
+      const [serviceIncomeResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(and(...serviceIncomeConditions));
+
+      const [serviceCostResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(and(...serviceCostConditions));
+
+      const serviceIncomeTotal = Number(serviceIncomeResult.total || 0);
+      const serviceCostTotal = Number(serviceCostResult.total || 0);
+      monthlyServiceProfit = Number((serviceIncomeTotal - serviceCostTotal).toFixed(2));
+    } catch (error) {
+      console.error("Error calculating monthly service profit:", error);
+    }
+
+    const monthlyProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
 
     // Get WhatsApp connection status from store config
     const storeConfig = await this.getStoreConfig();
