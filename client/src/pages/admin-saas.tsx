@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,8 @@ import { CreateClientForm } from '@/components/CreateClientForm';
 import { FeatureConfigurationManager } from '@/components/FeatureConfigurationManager';
 import ClientTable from '@/components/ClientTable';
 import PlanCard from '@/components/PlanCard';
+import { useLocation } from 'wouter';
+import { isPrimaryDomainClient } from '@/lib/domain';
 
 // Enum mapping for plans
 type PlanCode = 'basic' | 'pro' | 'premium';
@@ -133,6 +135,7 @@ type PlanSummary = {
 };
 
 export default function AdminSaaS() {
+  const [, setLocation] = useLocation();
   const [selectedTab, setSelectedTab] = useState('overview');
   const [createClientOpen, setCreateClientOpen] = useState(false);
   const [createPlanOpen, setCreatePlanOpen] = useState(false);
@@ -149,8 +152,29 @@ export default function AdminSaaS() {
     }
   };
 
+  const isPrimaryDomain = isPrimaryDomainClient();
+
+  useEffect(() => {
+    if (!isPrimaryDomain) {
+      setLocation('/');
+    }
+  }, [isPrimaryDomain, setLocation]);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  if (!isPrimaryDomain) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Akses Ditolak</CardTitle>
+            <CardDescription>SaaS management hanya tersedia di domain utama.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
 
   // Queries
 

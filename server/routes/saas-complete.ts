@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db';
+import { PRIMARY_DOMAIN } from '@shared/constants/domains';
 
 import { resolveSubscriptionPlanSlug, getSubscriptionPlanDisplayName } from '../../shared/saas-utils';
 
@@ -47,7 +48,6 @@ router.use(requireSuperAdmin);
 // Route moved to admin.ts to fix routing conflicts
 
 // Create new client with trial period
-const MAIN_DOMAIN = 'profesionalservis.my.id';
 const createClientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   subdomain: z.string().min(1, 'Subdomain is required').regex(/^[a-z0-9-]+$/, 'Invalid subdomain format'),
@@ -138,7 +138,7 @@ router.post('/clients', async (req, res) => {
           address,
           status: 'trial',
           trialEndsAt,
-          customDomain: `${subdomain}.${MAIN_DOMAIN}`,
+          customDomain: `${subdomain}.${PRIMARY_DOMAIN}`,
           settings: JSON.stringify(settingsPayload),
         })
         .returning();
