@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Laptop, Clock, CheckCircle, AlertTriangle, Package } from "lucide-react";
+import { Laptop, Clock, CheckCircle, AlertTriangle, Package, Settings } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateShort } from '@shared/utils/timezone';
+import { SERVICE_STATUS_LABELS, normalizeServiceStatus, type ServiceStatus } from "@shared/service-status";
 
 export default function ServiceStatus() {
   const { data: serviceTickets, isLoading } = useQuery({
@@ -15,21 +16,23 @@ export default function ServiceStatus() {
     retry: false,
   });
 
-  const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock; label: string }> = {
-    sedang_dicek: { variant: "secondary", icon: Clock, label: "Sedang Dicek" },
-    menunggu_konfirmasi: { variant: "destructive", icon: AlertTriangle, label: "Menunggu Konfirmasi" },
-    menunggu_sparepart: { variant: "secondary", icon: Package, label: "Menunggu Sparepart" },
-    sedang_dikerjakan: { variant: "default", icon: Clock, label: "Sedang Dikerjakan" },
-    selesai: { variant: "default", icon: CheckCircle, label: "Selesai" },
-    sudah_diambil: { variant: "secondary", icon: CheckCircle, label: "Sudah Diambil" },
-    cencel: { variant: "destructive", icon: AlertTriangle, label: "Cencel" },
+  const statusConfig: Record<ServiceStatus, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock; label: string }> = {
+    pending: { variant: "secondary", icon: Clock, label: SERVICE_STATUS_LABELS.pending },
+    checking: { variant: "secondary", icon: Clock, label: SERVICE_STATUS_LABELS.checking },
+    "waiting-technician": { variant: "outline", icon: AlertTriangle, label: SERVICE_STATUS_LABELS["waiting-technician"] },
+    "waiting-confirmation": { variant: "destructive", icon: AlertTriangle, label: SERVICE_STATUS_LABELS["waiting-confirmation"] },
+    "waiting-parts": { variant: "secondary", icon: Package, label: SERVICE_STATUS_LABELS["waiting-parts"] },
+    "in-progress": { variant: "default", icon: Settings, label: SERVICE_STATUS_LABELS["in-progress"] },
+    testing: { variant: "default", icon: Settings, label: SERVICE_STATUS_LABELS.testing },
+    completed: { variant: "default", icon: CheckCircle, label: SERVICE_STATUS_LABELS.completed },
+    delivered: { variant: "secondary", icon: CheckCircle, label: SERVICE_STATUS_LABELS.delivered },
+    cancelled: { variant: "destructive", icon: AlertTriangle, label: SERVICE_STATUS_LABELS.cancelled },
   };
 
-  const getStatusColor = (status: string) => statusConfig[status]?.variant || 'secondary';
-
-  const getStatusIcon = (status: string) => statusConfig[status]?.icon || AlertTriangle;
-
-  const getStatusText = (status: string) => statusConfig[status]?.label || 'Status Tidak Dikenal';
+  const getStatusConfig = (status: string | null | undefined) => {
+    const normalized = normalizeServiceStatus(status) ?? 'pending';
+    return statusConfig[normalized];
+  };
 
   return (
     <Card className="shadow-sm">
@@ -50,7 +53,8 @@ export default function ServiceStatus() {
         ) : (
           <div className="space-y-4">
             {serviceTickets.slice(0, 5).map((ticket: any) => {
-              const StatusIcon = getStatusIcon(ticket.status);
+              const status = getStatusConfig(ticket.status);
+              const StatusIcon = status?.icon || AlertTriangle;
               
               return (
                 <div 
@@ -72,12 +76,12 @@ export default function ServiceStatus() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <Badge 
-                      variant={getStatusColor(ticket.status)}
+                    <Badge
+                      variant={status?.variant || 'secondary'}
                       className="flex items-center"
                     >
                       <StatusIcon className="w-3 h-3 mr-1" />
-                      {getStatusText(ticket.status)}
+                      {status?.label || 'Status Tidak Dikenal'}
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {ticket.estimatedCompletion 

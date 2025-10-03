@@ -2218,14 +2218,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Status-specific validation based on cancellation type  
-      if (cancellationType === 'after_completed' && existingTicket.status !== 'selesai' && existingTicket.status !== 'sudah_diambil') {
+      if (cancellationType === 'after_completed' && existingTicket.status !== 'completed' && existingTicket.status !== 'delivered') {
         return res.status(400).json({
           message: "Cannot cancel with 'after_completed' type - service ticket is not completed"
         });
       }
 
       if (cancellationType === 'warranty_refund') {
-        if (existingTicket.status !== 'selesai' && existingTicket.status !== 'sudah_diambil') {
+        if (existingTicket.status !== 'completed' && existingTicket.status !== 'delivered') {
           return res.status(400).json({
             message: "Cannot cancel with 'warranty_refund' type - service ticket must be completed or under warranty claim"
           });

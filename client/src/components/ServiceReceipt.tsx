@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { formatDateWithTime, formatDateShort } from '@shared/utils/timezone';
+import { SERVICE_STATUS_LABELS, normalizeServiceStatus } from "@shared/service-status";
 import { Printer, Download, FileText } from "lucide-react";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -47,14 +48,9 @@ interface ServiceReceiptProps {
   };
 }
 
-const statusConfig = {
-  sedang_dicek: 'Sedang Dicek',
-  menunggu_konfirmasi: 'Menunggu Konfirmasi',
-  menunggu_sparepart: 'Menunggu Sparepart',
-  sedang_dikerjakan: 'Sedang Dikerjakan',
-  selesai: 'Selesai',
-  sudah_diambil: 'Sudah Diambil',
-  cencel: 'Cencel',
+const getStatusText = (status: string) => {
+  const normalized = normalizeServiceStatus(status) ?? 'pending';
+  return SERVICE_STATUS_LABELS[normalized];
 };
 
 const paperSizes = {
@@ -291,7 +287,7 @@ export default function ServiceReceipt({ serviceData, storeConfig }: ServiceRece
                 )}
                 <div className="flex justify-between">
                   <span className="font-bold">Status:</span>
-                  <span data-testid="text-service-status">{statusConfig[serviceData.status as keyof typeof statusConfig]}</span>
+                  <span data-testid="text-service-status">{getStatusText(serviceData.status)}</span>
                 </div>
               </div>
 

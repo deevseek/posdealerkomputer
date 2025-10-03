@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Printer, Download, X } from 'lucide-react';
 import QRCode from 'qrcode';
 import { formatDateShort, formatDateWithTime, formatDateForDisplay } from '@shared/utils/timezone';
+import { SERVICE_STATUS_LABELS, normalizeServiceStatus } from "@shared/service-status";
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -583,8 +584,7 @@ export default function ServicePaymentReceipt({
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status:</span>
                       <span className="font-semibold text-green-600">
-                        {serviceTicket.status === 'selesai' ? 'SELESAI' :
-                         serviceTicket.status === 'sudah_diambil' ? 'DIAMBIL' : 'SELESAI'}
+                        {(SERVICE_STATUS_LABELS[normalizeServiceStatus(serviceTicket.status) ?? 'completed'] || 'Selesai').toUpperCase()}
                       </span>
                     </div>
                     {technician && (

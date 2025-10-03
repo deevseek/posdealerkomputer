@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CheckCircle, Clock, Package, Settings, FileText, X } from 'lucide-react';
+import { normalizeServiceStatus, SERVICE_STATUS_LABELS, type ServiceStatus } from "@shared/service-status";
 
 interface ServiceStep {
-  id: string;
+  id: ServiceStatus;
   label: string;
   status: 'completed' | 'current' | 'pending' | 'waiting';
   icon: React.ComponentType<any>;
@@ -23,48 +24,48 @@ interface ServiceStatusTrackerProps {
 
 const serviceSteps: ServiceStep[] = [
   {
-    id: 'sedang_dicek',
-    label: 'Sedang Dicek',
+    id: 'pending',
+    label: SERVICE_STATUS_LABELS.pending,
     status: 'pending',
     icon: Clock,
     color: 'text-blue-700',
     bgColor: 'bg-blue-100'
   },
   {
-    id: 'menunggu_konfirmasi',
-    label: 'Menunggu Konfirmasi',
+    id: 'waiting-confirmation',
+    label: SERVICE_STATUS_LABELS['waiting-confirmation'],
     status: 'pending',
     icon: FileText,
     color: 'text-red-700',
     bgColor: 'bg-red-100'
   },
   {
-    id: 'menunggu_sparepart',
-    label: 'Menunggu Sparepart',
+    id: 'waiting-parts',
+    label: SERVICE_STATUS_LABELS['waiting-parts'],
     status: 'pending',
     icon: Package,
     color: 'text-orange-700',
     bgColor: 'bg-orange-100'
   },
   {
-    id: 'sedang_dikerjakan',
-    label: 'Sedang Dikerjakan',
+    id: 'in-progress',
+    label: SERVICE_STATUS_LABELS['in-progress'],
     status: 'pending',
     icon: Settings,
     color: 'text-green-700',
     bgColor: 'bg-green-100'
   },
   {
-    id: 'selesai',
-    label: 'Selesai',
+    id: 'completed',
+    label: SERVICE_STATUS_LABELS.completed,
     status: 'pending',
     icon: CheckCircle,
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-100'
   },
   {
-    id: 'sudah_diambil',
-    label: 'Sudah Diambil',
+    id: 'delivered',
+    label: SERVICE_STATUS_LABELS.delivered,
     status: 'pending',
     icon: CheckCircle,
     color: 'text-purple-700',
@@ -72,15 +73,17 @@ const serviceSteps: ServiceStep[] = [
   }
 ];
 
-// Map status dari database ke langkah-langkah service
-const statusMapping: Record<string, number> = {
-  sedang_dicek: 0,
-  menunggu_konfirmasi: 1,
-  menunggu_sparepart: 2,
-  sedang_dikerjakan: 3,
-  selesai: 4,
-  sudah_diambil: 5,
-  cencel: -1,
+const statusMapping: Record<ServiceStatus, number> = {
+  pending: 0,
+  checking: 0,
+  'waiting-technician': 1,
+  'waiting-confirmation': 1,
+  'waiting-parts': 2,
+  'in-progress': 3,
+  testing: 3,
+  completed: 4,
+  delivered: 5,
+  cancelled: -1,
 };
 
 export default function ServiceStatusTracker({ 
@@ -91,13 +94,14 @@ export default function ServiceStatusTracker({
 }: ServiceStatusTrackerProps) {
   
   const getCurrentStepIndex = () => {
-    return statusMapping[currentStatus] || 0;
+    const normalized = normalizeServiceStatus(currentStatus) ?? 'pending';
+    return statusMapping[normalized] ?? 0;
   };
 
   const getStepStatus = (stepIndex: number): 'completed' | 'current' | 'pending' | 'waiting' => {
     const currentIndex = getCurrentStepIndex();
-    
-    if (currentStatus === 'cencel') {
+
+    if (normalizeServiceStatus(currentStatus) === 'cancelled') {
       return 'waiting';
     }
     
