@@ -22,8 +22,12 @@ export function useSetup() {
   });
 
   const isSetupCompleted = setupStatus?.setupCompleted ?? false;
-  // Show setup if not completed OR if there's an error (assume fresh installation)
-  const needsSetup = (!isSetupCompleted && !isSetupLoading) || (!setupStatus && !isSetupLoading);
+
+  // Only show the setup wizard when the API explicitly tells us setup isn't complete.
+  // When the status request fails (e.g. server offline), fall back to regular auth flow
+  // so the app doesn't get stuck on a blank setup screen.
+  const needsSetup =
+    !isSetupLoading && setupStatus ? !isSetupCompleted : false;
 
   // Debug logging for development
   if (process.env.NODE_ENV === 'development') {
