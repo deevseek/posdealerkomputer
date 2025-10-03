@@ -52,7 +52,11 @@ async function createDefaultAdminUser() {
       const hashedPassword = await hashPassword(adminPassword);
       
       await storage.createUser({
-        id: 'admin-' + Date.now(),
+        // Use a stable identifier so foreign key references (e.g. requested_by on
+        // purchase orders) always point to an existing user record. Previously the
+        // ID was generated with Date.now(), which could change between deployments
+        // and leave orphaned references when a new default admin was created.
+        id: 'admin-local-default',
         username: adminUsername,
         email: adminEmail,
         firstName: 'System',
