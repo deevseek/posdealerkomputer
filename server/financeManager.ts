@@ -9,6 +9,8 @@ import {
   journalEntries,
   journalEntryLines,
   serviceTickets,
+  transactions,
+  transactionItems,
   type InsertFinancialRecord,
   type FinancialRecord,
   type InsertEmployee,
@@ -1129,7 +1131,7 @@ export class FinanceManager {
 
     const totalIncomeValue = Number(totalRevenue.toFixed(2));
     let totalExpenseValue = Number(totalExpenseNet.toFixed(2));
-    const totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
+    let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
     let totalCOGSValue = Number(totalCOGS.toFixed(2));
     let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
     const totalRefundsValue = Number(totalRefunds.toFixed(2));
@@ -1187,6 +1189,62 @@ export class FinanceManager {
           type: 'expense',
           count: existingSubcategory.count + Number(cogsFallback?.count ?? 0)
         };
+      }
+
+      if (totalCOGSValue === 0) {
+        const transactionConditions = [eq(transactions.type, 'sale')];
+
+        if (startDate) {
+          transactionConditions.push(gte(transactions.createdAt, startDate));
+        }
+
+        if (endDate) {
+          transactionConditions.push(lte(transactions.createdAt, endDate));
+        }
+
+        const whereSales = transactionConditions.length > 1
+          ? and(...transactionConditions)
+          : transactionConditions[0];
+
+        const [posSummary] = await db
+          .select({
+            totalSales: sql<number>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
+            totalCOGS: sql<number>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, 0)::numeric), 0)`
+          })
+          .from(transactionItems)
+          .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+          .innerJoin(products, eq(transactionItems.productId, products.id))
+          .where(whereSales);
+
+        const posCOGSTotal = Number(posSummary?.totalCOGS ?? 0);
+        const posSalesTotal = Number(posSummary?.totalSales ?? 0);
+
+        if (posCOGSTotal > 0) {
+          totalCOGSValue = Number(posCOGSTotal.toFixed(2));
+
+          if (totalSalesRevenueValue === 0 && posSalesTotal > 0) {
+            totalSalesRevenueValue = Number(posSalesTotal.toFixed(2));
+          }
+
+          grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+          totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
+
+          const cogsCategoryKey = 'Cost Of Goods Sold';
+          const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
+          categories[cogsCategoryKey] = {
+            income: existingCategory.income,
+            expense: Number((existingCategory.expense + totalCOGSValue).toFixed(2)),
+            count: existingCategory.count + 1
+          };
+
+          const fallbackSubcategoryKey = 'Cost Of Goods Sold (POS Fallback)';
+          const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
+          subcategories[fallbackSubcategoryKey] = {
+            amount: Number((existingSubcategory.amount + totalCOGSValue).toFixed(2)),
+            type: 'expense',
+            count: existingSubcategory.count + 1
+          };
+        }
       }
     }
 
