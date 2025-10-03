@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Laptop, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { Laptop, Clock, CheckCircle, AlertTriangle, Package } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateShort } from '@shared/utils/timezone';
 
@@ -15,50 +15,21 @@ export default function ServiceStatus() {
     retry: false,
   });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'secondary';
-      case 'in_progress':
-        return 'default';
-      case 'completed':
-        return 'secondary';
-      case 'delivered':
-        return 'secondary';
-      default:
-        return 'destructive';
-    }
+  const statusConfig: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock; label: string }> = {
+    sedang_dicek: { variant: "secondary", icon: Clock, label: "Sedang Dicek" },
+    menunggu_konfirmasi: { variant: "destructive", icon: AlertTriangle, label: "Menunggu Konfirmasi" },
+    menunggu_sparepart: { variant: "secondary", icon: Package, label: "Menunggu Sparepart" },
+    sedang_dikerjakan: { variant: "default", icon: Clock, label: "Sedang Dikerjakan" },
+    selesai: { variant: "default", icon: CheckCircle, label: "Selesai" },
+    sudah_diambil: { variant: "secondary", icon: CheckCircle, label: "Sudah Diambil" },
+    cencel: { variant: "destructive", icon: AlertTriangle, label: "Cencel" },
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return Clock;
-      case 'in_progress':
-        return Clock;
-      case 'completed':
-        return CheckCircle;
-      case 'delivered':
-        return CheckCircle;
-      default:
-        return AlertTriangle;
-    }
-  };
+  const getStatusColor = (status: string) => statusConfig[status]?.variant || 'secondary';
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return 'Menunggu';
-      case 'in_progress':
-        return 'Dikerjakan';
-      case 'completed':
-        return 'Selesai';
-      case 'delivered':
-        return 'Terkirim';
-      default:
-        return 'Tertunda';
-    }
-  };
+  const getStatusIcon = (status: string) => statusConfig[status]?.icon || AlertTriangle;
+
+  const getStatusText = (status: string) => statusConfig[status]?.label || 'Status Tidak Dikenal';
 
   return (
     <Card className="shadow-sm">

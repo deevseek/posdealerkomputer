@@ -48,12 +48,13 @@ interface ServiceReceiptProps {
 }
 
 const statusConfig = {
-  pending: 'Menunggu',
-  'in-progress': 'Dikerjakan',
-  'waiting-parts': 'Menunggu Sparepart',
-  'waiting-payment': 'Menunggu Pembayaran',
-  completed: 'Selesai',
-  cancelled: 'Dibatalkan',
+  sedang_dicek: 'Sedang Dicek',
+  menunggu_konfirmasi: 'Menunggu Konfirmasi',
+  menunggu_sparepart: 'Menunggu Sparepart',
+  sedang_dikerjakan: 'Sedang Dikerjakan',
+  selesai: 'Selesai',
+  sudah_diambil: 'Sudah Diambil',
+  cencel: 'Cencel',
 };
 
 const paperSizes = {

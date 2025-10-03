@@ -290,15 +290,14 @@ export class WhatsAppService {
 
     // Status label
     const statusLabels = {
-      'pending': 'Menunggu Pemeriksaan',
-      'checking': 'Sedang Dicek',
-      'in-progress': 'Sedang Dikerjakan',
-      'waiting-parts': 'Menunggu Sparepart',
-      'waiting-payment': 'Menunggu Pembayaran',
-      'completed': 'Selesai',
-      'delivered': 'Sudah Diambil',
-      'cancelled': 'Dibatalkan'
-    };
+      sedang_dicek: 'Sedang Dicek',
+      menunggu_konfirmasi: 'Menunggu Konfirmasi',
+      menunggu_sparepart: 'Menunggu Sparepart',
+      sedang_dikerjakan: 'Sedang Dikerjakan',
+      selesai: 'Selesai',
+      sudah_diambil: 'Sudah Diambil',
+      cencel: 'Dibatalkan'
+    } as const;
 
     // Build spare parts info if available
     let sparepartsInfo = '';
@@ -415,37 +414,32 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
     let nextSteps = '';
     let estimatedCostInfo = '';
     switch (serviceTicket.status) {
-      case 'checking':
+      case 'sedang_dicek':
         statusText = 'SEDANG DICEK';
         emoji = '🔍';
         nextSteps = 'Tim teknisi kami sedang memeriksa perangkat Anda untuk menentukan kerusakan dan solusi yang tepat.';
         break;
-      case 'in-progress':
+      case 'sedang_dikerjakan':
         statusText = 'SEDANG DIKERJAKAN';
         emoji = '🔧';
         nextSteps = 'Perangkat Anda sedang dalam proses perbaikan. Tim teknisi kami bekerja untuk menyelesaikan masalah.';
         break;
-      case 'completed':
+      case 'selesai':
         statusText = 'SELESAI DIKERJAKAN';
         emoji = '✅';
         nextSteps = 'Perbaikan telah selesai! Perangkat siap diambil. Silakan datang ke toko dengan membawa tanda terima.';
         break;
-      case 'cancelled':
+      case 'cencel':
         statusText = 'DIBATALKAN';
         emoji = '❌';
         nextSteps = 'Service dibatalkan sesuai permintaan. Jika ada pertanyaan, silakan hubungi kami.';
         break;
-      case 'waiting-parts':
+      case 'menunggu_sparepart':
         statusText = 'MENUNGGU SPAREPART';
         emoji = '📦';
         nextSteps = 'Kami sedang memesan sparepart yang diperlukan. Akan ada update setelah sparepart tersedia.';
         break;
-      case 'waiting-payment':
-        statusText = 'MENUNGGU PEMBAYARAN';
-        emoji = '💳';
-        nextSteps = 'Perbaikan selesai, silakan lakukan pembayaran untuk mengambil perangkat.';
-        break;
-      case 'waiting-confirmation':
+      case 'menunggu_konfirmasi':
         statusText = 'MENUNGGU KONFIRMASI';
         emoji = '❓';
         nextSteps = 'Kami memerlukan konfirmasi dari Anda untuk melanjutkan perbaikan. Silakan hubungi kami.';
@@ -454,16 +448,11 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
           estimatedCostInfo = `\n\n💰 *Estimasi Biaya Service:* ${formatCurrency(serviceTicket.estimatedCost)}`;
         }
         break;
-      case 'testing':
-        statusText = 'SEDANG TES';
-        emoji = '🧪';
-        nextSteps = 'Sedang dilakukan pengujian untuk memastikan perbaikan berfungsi dengan baik.';
+      case 'sudah_diambil':
+        statusText = 'SUDAH DIAMBIL';
+        emoji = '📦';
+        nextSteps = 'Perangkat Anda telah diambil. Terima kasih telah menggunakan layanan kami!';
         break;
-        case 'delivered':
-          statusText = 'SUDAH DIAMBIL';
-          emoji = '📦';
-          nextSteps = 'Perangkat Anda telah diambil. Terima kasih telah menggunakan layanan kami!';
-          break;
       default:
         statusText = 'DIUPDATE';
         emoji = '🔄';
@@ -518,7 +507,7 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
 
     // Completion info for completed status
     let completionInfo = '';
-    if (serviceTicket.status === 'completed' && serviceTicket.completedAt) {
+    if (serviceTicket.status === 'selesai' && serviceTicket.completedAt) {
       const completedDate = new Date(serviceTicket.completedAt).toLocaleDateString('id-ID', {
         weekday: 'long',
         year: 'numeric',
@@ -538,7 +527,7 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
     warrantyInfo = `\n🛡️ **GARANSI SERVICE:**\n${serviceTicket.warrantyPeriod}`;
   }
 
-  const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*${estimatedCostInfo}\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n${warrantyInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}?ticket=${serviceTicket.ticketNumber}${warrantyInfo ? `&garansi=${encodeURIComponent(serviceTicket.warrantyDescription || serviceTicket.warrantyPeriod)}` : ''}\n\n${serviceTicket.status === 'completed' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
+  const message = `${emoji} **UPDATE STATUS SERVICE**\n\nHalo ${customer.name},\n\nAda update untuk service laptop Anda:\n\n📋 **INFORMASI SERVICE:**\n📝 Nomor Service: *${serviceTicket.ticketNumber}*\n📅 Update Terakhir: ${updateDate}\n⏰ Status: *${statusText}*${estimatedCostInfo}\n\n💻 **PERANGKAT:**\n${serviceTicket.deviceType}${serviceTicket.deviceBrand ? ` - ${serviceTicket.deviceBrand}` : ''}${serviceTicket.deviceModel ? ` ${serviceTicket.deviceModel}` : ''}\n\n🔍 **MASALAH:**\n${serviceTicket.problem}${progressInfo}${completionInfo}\n${warrantyInfo}\n\n💬 **LANGKAH SELANJUTNYA:**\n${nextSteps}\n\n🔍 **CEK STATUS DETAIL:**\nUntuk informasi lebih lengkap, kunjungi:\n${statusUrl}?ticket=${serviceTicket.ticketNumber}${warrantyInfo ? `&garansi=${encodeURIComponent(serviceTicket.warrantyDescription || serviceTicket.warrantyPeriod)}` : ''}\n\n${serviceTicket.status === 'selesai' ? '⚠️ **PENTING:** Harap bawa tanda terima saat pengambilan!' : '📞 **INFO:** Kami akan update jika ada perkembangan baru.'}\n\n---\n🏪 **${storeConfig?.name || 'LaptopPOS Service Center'}**\n📞 ${storeConfig?.phone || 'Telepon Toko'}`;
 
     try {
       const result = await this.sendMessage(customerPhone, message);

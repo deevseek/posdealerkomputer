@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CheckCircle, Clock, AlertCircle, Package, Settings, TestTube, FileText, X } from 'lucide-react';
+import { CheckCircle, Clock, Package, Settings, FileText, X } from 'lucide-react';
 
 interface ServiceStep {
   id: string;
@@ -23,47 +23,15 @@ interface ServiceStatusTrackerProps {
 
 const serviceSteps: ServiceStep[] = [
   {
-    id: 'received',
-    label: 'Belum Cek',
+    id: 'sedang_dicek',
+    label: 'Sedang Dicek',
     status: 'pending',
     icon: Clock,
     color: 'text-blue-700',
     bgColor: 'bg-blue-100'
   },
   {
-    id: 'checking',
-    label: 'Sedang Cek',
-    status: 'pending',
-    icon: AlertCircle,
-    color: 'text-sky-700',
-    bgColor: 'bg-sky-100'
-  },
-  {
-    id: 'in-progress',
-    label: 'Sedang Dikerjakan',
-    status: 'pending',
-    icon: Settings,
-    color: 'text-green-700',
-    bgColor: 'bg-green-100'
-  },
-  {
-    id: 'waiting-technician',
-    label: 'Ditunggu MITRA Teknik',
-    status: 'pending',
-    icon: AlertCircle,
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-100'
-  },
-  {
-    id: 'testing',
-    label: 'Sedang Tes',
-    status: 'pending',
-    icon: TestTube,
-    color: 'text-gray-700',
-    bgColor: 'bg-gray-100'
-  },
-  {
-    id: 'waiting-confirmation',
+    id: 'menunggu_konfirmasi',
     label: 'Menunggu Konfirmasi',
     status: 'pending',
     icon: FileText,
@@ -71,7 +39,7 @@ const serviceSteps: ServiceStep[] = [
     bgColor: 'bg-red-100'
   },
   {
-    id: 'waiting-parts',
+    id: 'menunggu_sparepart',
     label: 'Menunggu Sparepart',
     status: 'pending',
     icon: Package,
@@ -79,27 +47,40 @@ const serviceSteps: ServiceStep[] = [
     bgColor: 'bg-orange-100'
   },
   {
-    id: 'completed',
+    id: 'sedang_dikerjakan',
+    label: 'Sedang Dikerjakan',
+    status: 'pending',
+    icon: Settings,
+    color: 'text-green-700',
+    bgColor: 'bg-green-100'
+  },
+  {
+    id: 'selesai',
     label: 'Selesai',
     status: 'pending',
     icon: CheckCircle,
     color: 'text-emerald-700',
     bgColor: 'bg-emerald-100'
+  },
+  {
+    id: 'sudah_diambil',
+    label: 'Sudah Diambil',
+    status: 'pending',
+    icon: CheckCircle,
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-100'
   }
 ];
 
 // Map status dari database ke langkah-langkah service
 const statusMapping: Record<string, number> = {
-  'pending': 0,           // Belum Cek
-  'checking': 1,          // Sedang Cek  
-  'in-progress': 2,       // Sedang Dikerjakan
-  'waiting-technician': 3, // Ditunggu MITRA Teknik
-  'testing': 4,           // Sedang Tes
-  'waiting-confirmation': 5, // Menunggu Konfirmasi
-  'waiting-parts': 6,     // Menunggu Sparepart
-  'completed': 7,         // Selesai
-  'delivered': 7,         // Selesai (sudah diambil)
-  'cancelled': -1         // Dibatalkan
+  sedang_dicek: 0,
+  menunggu_konfirmasi: 1,
+  menunggu_sparepart: 2,
+  sedang_dikerjakan: 3,
+  selesai: 4,
+  sudah_diambil: 5,
+  cencel: -1,
 };
 
 export default function ServiceStatusTracker({ 
@@ -116,7 +97,7 @@ export default function ServiceStatusTracker({
   const getStepStatus = (stepIndex: number): 'completed' | 'current' | 'pending' | 'waiting' => {
     const currentIndex = getCurrentStepIndex();
     
-    if (currentStatus === 'cancelled') {
+    if (currentStatus === 'cencel') {
       return 'waiting';
     }
     

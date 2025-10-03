@@ -6,23 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings, TestTube, FileText } from "lucide-react";
+import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings } from "lucide-react";
 import { formatDateLong } from '@shared/utils/timezone';
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
 const statusConfig = {
-  pending: { label: 'Belum Cek', color: 'bg-yellow-500', icon: Clock },
-  checking: { label: 'Sedang Cek', color: 'bg-sky-500', icon: AlertCircle },
-  'in-progress': { label: 'Sedang Dikerjakan', color: 'bg-blue-500', icon: Settings },
-  'waiting-technician': { label: 'Ditunggu MITRA Teknik', color: 'bg-gray-500', icon: AlertCircle },
-  testing: { label: 'Sedang Tes', color: 'bg-indigo-500', icon: TestTube },
-  'waiting-confirmation': { label: 'Menunggu Konfirmasi', color: 'bg-red-500', icon: FileText },
-  'waiting-parts': { label: 'Menunggu Sparepart', color: 'bg-orange-500', icon: Package },
-  'waiting-payment': { label: 'Menunggu Pembayaran', color: 'bg-purple-500', icon: Receipt },
-  completed: { label: 'Selesai', color: 'bg-green-500', icon: CheckCircle },
-  delivered: { label: 'Sudah Diambil', color: 'bg-emerald-500', icon: CheckCircle },
-  cancelled: { label: 'Dibatalkan', color: 'bg-red-500', icon: AlertCircle },
-};
+  sedang_dicek: { label: 'Sedang Dicek', color: 'bg-yellow-500', icon: Clock },
+  menunggu_konfirmasi: { label: 'Menunggu Konfirmasi', color: 'bg-red-500', icon: AlertCircle },
+  menunggu_sparepart: { label: 'Menunggu Sparepart', color: 'bg-orange-500', icon: Package },
+  sedang_dikerjakan: { label: 'Sedang Dikerjakan', color: 'bg-blue-500', icon: Settings },
+  selesai: { label: 'Selesai', color: 'bg-green-500', icon: CheckCircle },
+  sudah_diambil: { label: 'Sudah Diambil', color: 'bg-emerald-500', icon: CheckCircle },
+  cencel: { label: 'Cencel', color: 'bg-red-600', icon: AlertCircle },
+} as const;
 
 export default function ServiceStatus() {
   const [serviceNumber, setServiceNumber] = useState("");

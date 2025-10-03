@@ -583,8 +583,8 @@ export default function ServicePaymentReceipt({
                     <div className="flex justify-between">
                       <span className="text-gray-600">Status:</span>
                       <span className="font-semibold text-green-600">
-                        {serviceTicket.status === 'completed' ? 'SELESAI' : 
-                         serviceTicket.status === 'delivered' ? 'DIAMBIL' : 'SELESAI'}
+                        {serviceTicket.status === 'selesai' ? 'SELESAI' :
+                         serviceTicket.status === 'sudah_diambil' ? 'DIAMBIL' : 'SELESAI'}
                       </span>
                     </div>
                     {technician && (
