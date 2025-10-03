@@ -2,6 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { primaryDb, ensureTenantDbForSettings, setTenantDbForRequest, TenantProvisioningError } from '../db';
 import { clients, subscriptions } from '../../shared/saas-schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import {
+  isPrimaryDomainHost,
+  isPrimaryDomainOrLocal,
+  PRIMARY_DOMAINS,
+} from '@shared/constants/domains';
 
 // Extend Express Request to include tenant info
 declare global {
@@ -70,7 +75,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       const parts = hostWithoutPort.split('.');
 
       // Handle known base domains correctly
-      const knownBaseDomains = ['profesionalservis.my.id'];
+      const knownBaseDomains = [...PRIMARY_DOMAINS];
       const isKnownBaseDomain = knownBaseDomains.some(baseDomain => hostWithoutPort === baseDomain || hostWithoutWww === baseDomain);
 
       const domainCandidates = Array.from(new Set([hostWithoutPort, hostWithoutWww])).filter(Boolean) as string[];
@@ -115,13 +120,22 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       console.log('Detected subdomain:', subdomain);
     }
 
+    const isMainDomainRequest = isPrimaryDomainOrLocal(hostWithoutPort) || isPrimaryDomainHost(hostWithoutWww);
+
     // Special handling for super admin routes
     if (req.path.startsWith('/api/admin')) {
-      req.isSuperAdmin = true;
-      return next();
+      if (!matchedCustomDomainClient && (subdomain === 'admin' || subdomain === 'main') && isMainDomainRequest) {
+        req.isSuperAdmin = true;
+        return next();
+      }
+
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'SaaS management hanya dapat diakses melalui domain utama.',
+      });
     }
 
-    if (!matchedCustomDomainClient && (subdomain === 'admin' || subdomain === 'main')) {
+    if (!matchedCustomDomainClient && (subdomain === 'admin' || subdomain === 'main') && isMainDomainRequest) {
       req.isSuperAdmin = true;
       return next();
     }
