@@ -2552,6 +2552,7 @@ export class DatabaseStorage implements IStorage {
     let monthlySalesRevenueValue = 0;
     let monthlyCOGSValue = 0;
     let monthlySalesProfit = 0;
+    let monthlyProfit = 0;
 
     try {
       const monthlySalesWhere = clientId
@@ -2611,6 +2612,7 @@ export class DatabaseStorage implements IStorage {
             : summaryGrossProfitValue;
 
       monthlySalesProfit = resolvedGrossProfitValue;
+      monthlyProfit = resolvedGrossProfitValue;
     } catch (error) {
       console.error("Error getting monthly profit from finance manager:", error);
     }
@@ -2620,6 +2622,11 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (monthlySalesProfit === 0) {
+    if (monthlyProfit === 0 && fallbackGrossProfit !== 0) {
+      monthlyProfit = fallbackGrossProfit;
+    }
+
+    if (monthlyProfit === 0) {
       try {
         // Fallback to simplified financial record calculation (harga jual - HPP)
         const confirmedCondition = eq(financialRecords.status, 'confirmed');
@@ -2688,6 +2695,9 @@ export class DatabaseStorage implements IStorage {
       if (clientId) {
         serviceIncomeConditions.push(eq(financialRecords.clientId, clientId));
         serviceCostConditions.push(eq(financialRecords.clientId, clientId));
+        monthlyProfit = monthlyIncome - monthlyCOGS;
+      } catch (fallbackError) {
+        console.error("Error calculating monthly profit from financial records:", fallbackError);
       }
 
       const [serviceIncomeResult] = await db
