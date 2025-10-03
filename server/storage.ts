@@ -2266,17 +2266,44 @@ export class DatabaseStorage implements IStorage {
         endDate
       });
 
+      const summarySalesRevenueValue = Number(summary.totalSalesRevenue ?? 0);
+      const resolvedSalesRevenueValue =
+        summarySalesRevenueValue !== 0
+          ? summarySalesRevenueValue
+          : totalSalesRevenueValue;
+
+      const summaryCOGSValue = Number(summary.totalCOGS ?? 0);
+      const resolvedCOGSValue =
+        summaryCOGSValue !== 0 ? summaryCOGSValue : totalCOGSValue;
+
+      const fallbackGrossProfitValue = Number(
+        (resolvedSalesRevenueValue - resolvedCOGSValue).toFixed(2)
+      );
+
+      const summaryGrossProfitValue = Number(summary.grossProfit ?? 0);
+      const resolvedGrossProfitValue =
+        summaryGrossProfitValue !== 0
+          ? summaryGrossProfitValue
+          : fallbackGrossProfitValue !== 0
+            ? fallbackGrossProfitValue
+            : summaryGrossProfitValue;
+
+      const summaryNetProfitValue =
+        summary.netProfit != null ? Number(summary.netProfit) : null;
+      const resolvedNetProfitValue =
+        summaryNetProfitValue !== null && summaryNetProfitValue !== 0
+          ? summaryNetProfitValue
+          : summaryGrossProfitValue !== 0
+            ? summaryGrossProfitValue
+            : resolvedGrossProfitValue;
+
       return {
         totalIncome: String(summary.totalIncome ?? '0'),
         totalExpense: String(summary.totalExpense ?? '0'),
-        profit: String(summary.grossProfit ?? grossProfit),
-        netProfit: String(
-          summary.netProfit ?? summary.grossProfit ?? grossProfit
-        ),
-        totalSalesRevenue: String(
-          summary.totalSalesRevenue ?? totalSalesRevenue
-        ),
-        totalCOGS: String(summary.totalCOGS ?? totalCOGS),
+        profit: resolvedGrossProfitValue.toString(),
+        netProfit: resolvedNetProfitValue.toString(),
+        totalSalesRevenue: resolvedSalesRevenueValue.toString(),
+        totalCOGS: resolvedCOGSValue.toString(),
         records
       };
     } catch (error) {
