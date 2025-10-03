@@ -2273,6 +2273,10 @@ export class DatabaseStorage implements IStorage {
         netProfit: summary.netProfit ?? grossProfit,
         totalSalesRevenue,
         totalCOGS,
+        profit: summary.grossProfit,
+        netProfit: summary.netProfit,
+        totalSalesRevenue: summary.totalSalesRevenue,
+        totalCOGS: summary.totalCOGS,
         records
       };
     } catch (error) {
@@ -2325,6 +2329,30 @@ export class DatabaseStorage implements IStorage {
         .from(financialRecords)
         .where(expenseWhere);
 
+      const [cogsResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'expense'),
+            sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
+      const [salesRevenueResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(
+          and(
+            eq(financialRecords.type, 'income'),
+            sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
+            gte(financialRecords.createdAt, startDate),
+            lte(financialRecords.createdAt, endDate)
+          )
+        );
+
       const records = await db
         .select()
         .from(financialRecords)
@@ -2333,6 +2361,8 @@ export class DatabaseStorage implements IStorage {
 
       const totalIncome = Number(incomeResult.total || 0);
       const totalExpense = Number(expenseResult.total || 0);
+      const totalCOGS = Number(cogsResult.total || 0);
+      const totalSalesRevenue = Number(salesRevenueResult.total || 0);
 
       return {
         totalIncome: totalIncome.toString(),
@@ -2341,6 +2371,10 @@ export class DatabaseStorage implements IStorage {
         netProfit: (totalIncome - totalExpense).toString(),
         totalSalesRevenue,
         totalCOGS,
+        profit: (totalSalesRevenue - totalCOGS).toString(),
+        netProfit: (totalIncome - totalExpense).toString(),
+        totalSalesRevenue: totalSalesRevenue.toString(),
+        totalCOGS: totalCOGS.toString(),
         records
       };
     }
@@ -2521,6 +2555,9 @@ export class DatabaseStorage implements IStorage {
         monthlyProfit = Number((monthlySalesValue - monthlyCOGSValue).toFixed(2));
         monthlyProfitFromSales = true;
       }
+      const { financeManager } = await import('./financeManager');
+      const summary = await financeManager.getSummary(startOfMonth, new Date());
+      monthlyProfit = Number(summary.grossProfit || 0);
     } catch (error) {
       console.error("Error calculating monthly POS profit from transactions:", error);
     }
