@@ -2202,6 +2202,8 @@ export class DatabaseStorage implements IStorage {
     totalIncome: string;
     totalExpense: string;
     profit: string;
+    totalSalesRevenue: string;
+    totalCOGS: string;
     records: any[];
   }> {
     try {
@@ -2217,6 +2219,8 @@ export class DatabaseStorage implements IStorage {
         totalIncome: summary.totalIncome,
         totalExpense: summary.totalExpense,
         profit: summary.netProfit,
+        totalSalesRevenue: summary.totalSalesRevenue,
+        totalCOGS: summary.totalCOGS,
         records
       };
     } catch (error) {
@@ -2262,6 +2266,8 @@ export class DatabaseStorage implements IStorage {
         totalIncome: totalIncome.toString(),
         totalExpense: totalExpense.toString(),
         profit: (totalIncome - totalExpense).toString(),
+        totalSalesRevenue: totalIncome.toString(),
+        totalCOGS: '0',
         records
       };
     }

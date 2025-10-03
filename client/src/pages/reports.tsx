@@ -89,6 +89,8 @@ interface FinancialReportSummary {
   totalIncome: string;
   totalExpense: string;
   profit: string;
+  totalSalesRevenue: string;
+  totalCOGS: string;
   records: FinancialRecordSummary[];
 }
 
@@ -192,6 +194,10 @@ export default function Reports() {
         doc.text(`Total Pemasukan: Rp ${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
         doc.text(`Total Pengeluaran: Rp ${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`Harga Jual: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 8;
+        doc.text(`HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
         doc.text(`Laba Bersih: Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 20;
@@ -472,7 +478,14 @@ export default function Reports() {
                           {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
+
+                          Laba bersih = harga jual - HPP (Cost of Goods Sold).
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Harga jual: Rp {Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp {Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
+
                           Laba bersih = total harga jual - HPP (Cost of Goods Sold).
+
                         </p>
                       </div>
                       <TrendingUp className="w-8 h-8 text-green-600" />
@@ -640,7 +653,7 @@ export default function Reports() {
 
             {/* Financial Tab */}
             <TabsContent value="financial" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-green-600">Pemasukan</CardTitle>
@@ -660,6 +673,30 @@ export default function Reports() {
                     <p className="text-2xl font-bold">
                       {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}`}
                     </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-blue-600">Harga Jual</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Total nilai penjualan produk pada periode ini.</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-amber-600">HPP (Cost of Goods Sold)</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-amber-600">
+                      {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Total modal barang yang terjual pada periode ini.</p>
                   </CardContent>
                 </Card>
               </div>
