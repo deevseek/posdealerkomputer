@@ -8,17 +8,21 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Search, Clock, CheckCircle, AlertCircle, Package, Calendar, Receipt, Settings } from "lucide-react";
 import { formatDateLong } from '@shared/utils/timezone';
+import { SERVICE_STATUS_LABELS, normalizeServiceStatus, type ServiceStatus } from "@shared/service-status";
 import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 
-const statusConfig = {
-  sedang_dicek: { label: 'Sedang Dicek', color: 'bg-yellow-500', icon: Clock },
-  menunggu_konfirmasi: { label: 'Menunggu Konfirmasi', color: 'bg-red-500', icon: AlertCircle },
-  menunggu_sparepart: { label: 'Menunggu Sparepart', color: 'bg-orange-500', icon: Package },
-  sedang_dikerjakan: { label: 'Sedang Dikerjakan', color: 'bg-blue-500', icon: Settings },
-  selesai: { label: 'Selesai', color: 'bg-green-500', icon: CheckCircle },
-  sudah_diambil: { label: 'Sudah Diambil', color: 'bg-emerald-500', icon: CheckCircle },
-  cencel: { label: 'Cencel', color: 'bg-red-600', icon: AlertCircle },
-} as const;
+const statusConfig: Record<ServiceStatus, { label: string; color: string; icon: typeof Clock }> = {
+  pending: { label: SERVICE_STATUS_LABELS.pending, color: 'bg-yellow-500', icon: Clock },
+  checking: { label: SERVICE_STATUS_LABELS.checking, color: 'bg-yellow-500', icon: Clock },
+  'waiting-technician': { label: SERVICE_STATUS_LABELS['waiting-technician'], color: 'bg-gray-500', icon: AlertCircle },
+  'waiting-confirmation': { label: SERVICE_STATUS_LABELS['waiting-confirmation'], color: 'bg-red-500', icon: AlertCircle },
+  'waiting-parts': { label: SERVICE_STATUS_LABELS['waiting-parts'], color: 'bg-orange-500', icon: Package },
+  'in-progress': { label: SERVICE_STATUS_LABELS['in-progress'], color: 'bg-blue-500', icon: Settings },
+  testing: { label: SERVICE_STATUS_LABELS.testing, color: 'bg-indigo-500', icon: Settings },
+  completed: { label: SERVICE_STATUS_LABELS.completed, color: 'bg-green-500', icon: CheckCircle },
+  delivered: { label: SERVICE_STATUS_LABELS.delivered, color: 'bg-emerald-500', icon: CheckCircle },
+  cancelled: { label: SERVICE_STATUS_LABELS.cancelled, color: 'bg-red-600', icon: AlertCircle },
+};
 
 export default function ServiceStatus() {
   const [serviceNumber, setServiceNumber] = useState("");
@@ -78,7 +82,8 @@ export default function ServiceStatus() {
     }).format(Number(amount));
   };
 
-  const status = serviceData?.status ? statusConfig[serviceData.status as keyof typeof statusConfig] : null;
+  const normalizedStatus = normalizeServiceStatus(serviceData?.status ?? undefined);
+  const status = normalizedStatus ? statusConfig[normalizedStatus] : null;
   const StatusIcon = status?.icon || Clock;
 
   return (

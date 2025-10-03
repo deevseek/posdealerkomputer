@@ -1579,7 +1579,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(serviceTickets)
       .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
-      .where(sql`${serviceTickets.status} != 'selesai' AND ${serviceTickets.status} != 'sudah_diambil' AND ${serviceTickets.status} != 'cencel'`)
+      .where(sql`${serviceTickets.status} != 'completed' AND ${serviceTickets.status} != 'delivered' AND ${serviceTickets.status} != 'cancelled'`)
       .orderBy(desc(serviceTickets.createdAt));
     
     return tickets.map(ticket => ({
@@ -1631,8 +1631,8 @@ export class DatabaseStorage implements IStorage {
             totalPrice: totalPrice
           });
           
-          // Only update stock and record movement for selesai/sudah_diambil status
-          if (ticket.status === 'selesai' || ticket.status === 'sudah_diambil') {
+          // Only update stock and record movement for completed/delivered status
+          if (ticket.status === 'completed' || ticket.status === 'delivered') {
             const currentStock = product.stock || 0;
             
             // Check stock for completed services - allow negative stock but warn
@@ -1692,7 +1692,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       // Auto-record financial transactions for completed services
-      if (ticket && (ticket.status === 'selesai' || ticket.status === 'sudah_diambil')) {
+      if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
         try {
           const { financeManager } = await import('./financeManager');
           
@@ -1765,7 +1765,7 @@ export class DatabaseStorage implements IStorage {
           return { success: false, message: 'Service ticket not found' };
         }
 
-        if (ticket.status === 'cencel') {
+        if (ticket.status === 'cancelled') {
           return { success: false, message: 'Service ticket is already cancelled' };
         }
 
@@ -1790,7 +1790,7 @@ export class DatabaseStorage implements IStorage {
 
         // Update service ticket dengan data pembatalan
         await tx.update(serviceTickets).set({
-          status: 'cencel',
+          status: 'cancelled',
           cancellationFee: data.cancellationFee,
           cancellationReason: data.cancellationReason,
           cancellationType: data.cancellationType,
@@ -2517,15 +2517,15 @@ export class DatabaseStorage implements IStorage {
     // Active services
     const activeServicesWhere = clientId
       ? and(
-          ne(serviceTickets.status, 'selesai'),
-          ne(serviceTickets.status, 'sudah_diambil'),
-          ne(serviceTickets.status, 'cencel'),
+          ne(serviceTickets.status, 'completed'),
+          ne(serviceTickets.status, 'delivered'),
+          ne(serviceTickets.status, 'cancelled'),
           eq(serviceTickets.clientId, clientId)
         )
       : and(
-          ne(serviceTickets.status, 'selesai'),
-          ne(serviceTickets.status, 'sudah_diambil'),
-          ne(serviceTickets.status, 'cencel')
+          ne(serviceTickets.status, 'completed'),
+          ne(serviceTickets.status, 'delivered'),
+          ne(serviceTickets.status, 'cancelled')
         );
 
     const [activeServicesResult] = await db
@@ -2973,7 +2973,7 @@ export class DatabaseStorage implements IStorage {
         deviceModel: originalTicket.deviceModel,
         serialNumber: originalTicket.serialNumber,
         problem: `Warranty Service - Follow up for ticket: ${originalTicket.ticketNumber}`,
-        status: 'sedang_dicek',
+        status: 'pending',
         laborCost: '0.00', // Free labor for warranty service
         estimatedCompletion: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
         warrantyDuration: originalTicket.warrantyDuration || 90, // Default 90 days
@@ -2987,7 +2987,7 @@ export class DatabaseStorage implements IStorage {
       await db
         .update(serviceTickets)
         .set({
-          status: 'selesai',
+          status: 'completed',
           updatedAt: new Date(),
         })
         .where(eq(serviceTickets.id, originalServiceTicketId));

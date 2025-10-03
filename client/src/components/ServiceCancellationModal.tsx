@@ -36,6 +36,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { serviceCancellationSchema, type ServiceCancellationRequest } from "@shared/service-cancellation-schema";
 import { formatDateShort } from '@shared/utils/timezone';
+import { normalizeServiceStatus, SERVICE_STATUS_LABELS } from "@shared/service-status";
 
 interface ServiceCancellationModalProps {
   open: boolean;
@@ -49,16 +50,20 @@ type CancellationType = 'before_completed' | 'after_completed' | 'warranty_refun
 const getCancellationScenarios = (ticket: any): CancellationType[] => {
   if (!ticket) return [];
   
-  const status = ticket.status;
+  const status = normalizeServiceStatus(ticket.status ?? undefined);
   const hasWarranty = ticket.warrantyDuration && ticket.warrantyDuration > 0;
-  
-  // For tickets not yet selesai/sudah_diambil
-  if (['sedang_dicek', 'menunggu_konfirmasi', 'menunggu_sparepart', 'sedang_dikerjakan'].includes(status)) {
+
+  if (!status) {
+    return [];
+  }
+
+  // For tickets not yet completed/delivered
+  if (['pending', 'checking', 'waiting-technician', 'waiting-confirmation', 'waiting-parts', 'in-progress', 'testing'].includes(status)) {
     return ['before_completed'];
   }
 
-  // For selesai/sudah diambil tickets
-  if (['selesai', 'sudah_diambil'].includes(status)) {
+  // For completed/delivered tickets
+  if (['completed', 'delivered'].includes(status)) {
     const scenarios: CancellationType[] = ['after_completed'];
 
     // Add warranty refund option if ticket has warranty
@@ -132,6 +137,10 @@ export default function ServiceCancellationModal({
   const { toast } = useToast();
 
   const availableScenarios = getCancellationScenarios(serviceTicket);
+  const normalizedTicketStatus = normalizeServiceStatus(serviceTicket?.status ?? undefined);
+  const ticketStatusLabel = normalizedTicketStatus
+    ? SERVICE_STATUS_LABELS[normalizedTicketStatus]
+    : 'Status Tidak Dikenal';
 
   const form = useForm<ServiceCancellationRequest>({
     resolver: zodResolver(serviceCancellationSchema),
@@ -249,7 +258,7 @@ export default function ServiceCancellationModal({
               <div>
                 <span className="font-medium">Status Saat Ini:</span>
                 <Badge variant="outline" className="ml-2">
-                  {serviceTicket.status}
+                  {ticketStatusLabel}
                 </Badge>
               </div>
               <div>
