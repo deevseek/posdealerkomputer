@@ -729,10 +729,6 @@ export class FinanceManager {
       totalCOGS = Number(cogsResult?.total || 0);
     }
 
-    const totalSalesRevenue = totalIncome;
-    const totalCOGS = Number(cogsResult?.total || 0);
-
-
     // Count
     const [countResult] = await db
       .select({ count: count() })
