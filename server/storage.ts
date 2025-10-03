@@ -2202,6 +2202,8 @@ export class DatabaseStorage implements IStorage {
     totalIncome: string;
     totalExpense: string;
     profit: string;
+    totalSalesRevenue: string;
+    totalCOGS: string;
     records: any[];
   }> {
     try {
@@ -2217,6 +2219,8 @@ export class DatabaseStorage implements IStorage {
         totalIncome: summary.totalIncome,
         totalExpense: summary.totalExpense,
         profit: summary.netProfit,
+        totalSalesRevenue: summary.totalSalesRevenue,
+        totalCOGS: summary.totalCOGS,
         records
       };
     } catch (error) {
@@ -2262,6 +2266,8 @@ export class DatabaseStorage implements IStorage {
         totalIncome: totalIncome.toString(),
         totalExpense: totalExpense.toString(),
         profit: (totalIncome - totalExpense).toString(),
+        totalSalesRevenue: totalIncome.toString(),
+        totalCOGS: '0',
         records
       };
     }
@@ -2385,30 +2391,30 @@ export class DatabaseStorage implements IStorage {
       monthlyProfit = Number(summary.netProfit || 0);
     } catch (error) {
       console.error("Error getting monthly profit from finance manager:", error);
-      // Fallback to transaction-based calculation
-      const [monthlySalesResult] = await db
-        .select({ total: sum(transactions.total) })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.type, 'sale'),
-            gte(transactions.createdAt, startOfMonth)
-          )
-        );
-      
-      const [monthlyPurchasesResult] = await db
-        .select({ total: sum(transactions.total) })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.type, 'purchase'),
-            gte(transactions.createdAt, startOfMonth)
-          )
-        );
-      
-      const monthlySales = Number(monthlySalesResult.total || 0);
-      const monthlyPurchases = Number(monthlyPurchasesResult.total || 0);
-      monthlyProfit = monthlySales - monthlyPurchases;
+      // Fallback to simplified financial record calculation (harga jual - HPP)
+      const confirmedCondition = eq(financialRecords.status, 'confirmed');
+      const [monthlyIncomeResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(and(
+          eq(financialRecords.type, 'income'),
+          gte(financialRecords.createdAt, startOfMonth),
+          confirmedCondition
+        ));
+
+      const [monthlyCogsResult] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(and(
+          eq(financialRecords.type, 'expense'),
+          sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+          gte(financialRecords.createdAt, startOfMonth),
+          confirmedCondition
+        ));
+
+      const monthlyIncome = Number(monthlyIncomeResult.total || 0);
+      const monthlyCOGS = Number(monthlyCogsResult.total || 0);
+      monthlyProfit = monthlyIncome - monthlyCOGS;
     }
     
     // Get WhatsApp connection status from store config

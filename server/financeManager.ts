@@ -25,7 +25,7 @@ import {
   type InsertJournalEntryLine,
   type Account
 } from "@shared/schema";
-import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sum, count, sql, inArray } from "drizzle-orm";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
@@ -563,6 +563,9 @@ export class FinanceManager {
     totalIncome: string;
     totalExpense: string;
     netProfit: string;
+    totalSalesRevenue: string;
+    totalCOGS: string;
+    totalRefunds: string;
     transactionCount: number;
     inventoryValue: string;
     inventoryCount: number;
@@ -617,7 +620,7 @@ export class FinanceManager {
 
     // Exclude inventory purchases AND cancellation expenses from expense calculation 
     // (cancellation expenses are already netted from revenue above)
-    const actualExpenses = allExpenses.filter((expense: { category: string; amount: string }) => 
+    const actualExpenses = allExpenses.filter((expense: { category: string; amount: string }) =>
       expense.category !== 'Inventory Purchase' &&
       expense.category !== 'Service Cancellation' &&
       expense.category !== 'Warranty Refund' &&
@@ -626,7 +629,105 @@ export class FinanceManager {
     );
 
     const totalExpenseAmount = actualExpenses.reduce((sum: number, expense: { amount: string }) => sum + Number(expense.amount), 0);
-    const expenseResult = { total: totalExpenseAmount };
+
+    const grossIncome = Number(incomeResult.total || 0);
+    const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
+    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
+    const totalExpense = totalExpenseAmount;
+
+    const [cogsResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.type, 'expense'),
+        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+        whereClauseWithStatus
+      ));
+
+    // Calculate sales revenue directly from sales transactions for accurate HPP comparison
+    const salesConditions = [eq(transactions.type, 'sale')];
+    if (startDate) salesConditions.push(gte(transactions.createdAt, startDate));
+    if (endDate) salesConditions.push(lte(transactions.createdAt, endDate));
+
+    const salesWhere = salesConditions.length > 1 ? and(...salesConditions) : salesConditions[0];
+
+    const [salesTotalResult] = await db
+      .select({ total: sum(transactions.total) })
+      .from(transactions)
+      .where(salesWhere);
+
+    // Subtract product return transactions if present
+    const returnConditions = [eq(transactions.type, 'return')];
+    if (startDate) returnConditions.push(gte(transactions.createdAt, startDate));
+    if (endDate) returnConditions.push(lte(transactions.createdAt, endDate));
+
+    const returnWhere = returnConditions.length > 1 ? and(...returnConditions) : returnConditions[0];
+
+    const [returnsTotalResult] = await db
+      .select({ total: sum(transactions.total) })
+      .from(transactions)
+      .where(returnWhere);
+
+    let totalSalesRevenue = Math.max(
+      0,
+      Number(salesTotalResult?.total || 0) - Number(returnsTotalResult?.total || 0)
+    );
+
+    // Build a fallback COGS calculation from sold items when financial records are missing
+    let totalCOGS = Number(cogsResult?.total || 0);
+
+    if (totalCOGS === 0) {
+      const saleItems = await db
+        .select({
+          productId: transactionItems.productId,
+          totalQuantity: sql<number>`SUM(${transactionItems.quantity})`
+        })
+        .from(transactionItems)
+        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+        .where(salesWhere)
+        .groupBy(transactionItems.productId);
+
+      if (saleItems.length > 0) {
+        const productIds = saleItems
+          .map((item) => item.productId)
+          .filter((id): id is string => Boolean(id));
+
+        if (productIds.length > 0) {
+          const productCosts = await db
+            .select({
+              id: products.id,
+              averageCost: products.averageCost,
+              lastPurchasePrice: products.lastPurchasePrice
+            })
+            .from(products)
+            .where(inArray(products.id, productIds));
+
+          const costMap = new Map(
+            productCosts.map((product) => {
+              const avgCost = Number(product.averageCost || 0);
+              const lastCost = Number(product.lastPurchasePrice || 0);
+              return [product.id, avgCost > 0 ? avgCost : lastCost];
+            })
+          );
+
+          const computedCOGS = saleItems.reduce((sum, item) => {
+            const quantity = Number(item.totalQuantity || 0);
+            const unitCost = costMap.get(item.productId) || 0;
+            return sum + quantity * unitCost;
+          }, 0);
+
+          if (computedCOGS > 0) {
+            totalCOGS = computedCOGS;
+          }
+        }
+      }
+    }
+
+    // If there are no sales transactions in the period, fall back to income-based totals
+    if (totalSalesRevenue === 0 && totalCOGS === 0) {
+      totalSalesRevenue = totalIncome;
+      totalCOGS = Number(cogsResult?.total || 0);
+    }
 
     // Count
     const [countResult] = await db
@@ -720,10 +821,6 @@ export class FinanceManager {
         whereClauseWithStatus
       ));
 
-    const grossIncome = Number(incomeResult.total || 0);
-    const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
-    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
-    const totalExpense = totalExpenseAmount;
     const totalRefunds = Number(refundResult.total || 0);
 
     // Process category breakdown
@@ -792,7 +889,10 @@ export class FinanceManager {
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
-      netProfit: (totalIncome - totalExpense).toString(), // Profit excludes refunds
+      netProfit: (totalSalesRevenue - totalCOGS).toString(),
+      totalSalesRevenue: totalSalesRevenue.toString(),
+      totalCOGS: totalCOGS.toString(),
+      totalRefunds: totalRefunds.toString(),
       transactionCount: countResult.count,
       inventoryValue: totalInventoryValue.toString(),
       inventoryCount: totalInventoryCount,
