@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { primaryDb, ensureTenantDbForSettings, setTenantDbForRequest, TenantProvisioningError } from '../db';
 import { clients, subscriptions } from '../../shared/saas-schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 
 // Extend Express Request to include tenant info
 declare global {
@@ -27,35 +27,39 @@ declare global {
 export const tenantMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const host = req.headers.host || '';
+    const hostLower = host.toLowerCase();
+    const hostWithoutPort = hostLower.split(':')[0] ?? '';
+    const hostWithoutWww = hostWithoutPort.startsWith('www.') ? hostWithoutPort.slice(4) : hostWithoutPort;
     console.log('Host header:', host);
-    
+
     // IMMEDIATE CHECK: In development, if accessing admin routes, grant super admin access
-    if ((host.includes('.replit.dev') || host.includes('.replit.app') || host.includes('localhost')) && req.path.startsWith('/api/admin')) {
+    if ((hostLower.includes('.replit.dev') || hostLower.includes('.replit.app') || hostLower.includes('localhost')) && req.path.startsWith('/api/admin')) {
       console.log('Development admin route detected, granting super admin access');
       req.isSuperAdmin = true;
       return next();
     }
-    
+
     // Extract subdomain
     let subdomain = '';
-    
+    let matchedCustomDomainClient: (typeof clients)['$inferSelect'] | null = null;
+
     // Handle different environments
-    if (host.includes('localhost') || host.includes('127.0.0.1')) {
+    if (hostLower.includes('localhost') || hostLower.includes('127.0.0.1')) {
       // Development: check for subdomain in query param or header, skip tenant detection if not specified
       subdomain = req.query.tenant as string || req.headers['x-tenant'] as string;
-      
+
       // If no tenant specified in localhost, skip tenant middleware entirely
       if (!subdomain) {
         console.log('Localhost development: No tenant specified, skipping tenant middleware');
         return next();
       }
-    } else if (host.includes('.ngrok.io') || host.includes('.ngrok-free.app')) {
+    } else if (hostLower.includes('.ngrok.io') || hostLower.includes('.ngrok-free.app')) {
       // Ngrok: Use query param or header for tenant
       subdomain = req.query.tenant as string || req.headers['x-tenant'] as string || 'demo';
-    } else if (host.includes('.replit.dev') || host.includes('.replit.app')) {
+    } else if (hostLower.includes('.replit.dev') || hostLower.includes('.replit.app')) {
       // Replit development environment: Use query param or header, or skip tenant detection
       subdomain = req.query.tenant as string || req.headers['x-tenant'] as string;
-      
+
       // If no tenant specified in Replit, skip tenant middleware entirely
       if (!subdomain) {
         console.log('Replit development: No tenant specified, skipping tenant middleware');
@@ -63,19 +67,34 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       }
     } else {
       // Production: extract subdomain from domain
-      const parts = host.split('.');
-      
+      const parts = hostWithoutPort.split('.');
+
       // Handle known base domains correctly
       const knownBaseDomains = ['profesionalservis.my.id'];
-      const isKnownBaseDomain = knownBaseDomains.some(baseDomain => host === baseDomain || host === `www.${baseDomain}`);
-      
-      if (isKnownBaseDomain) {
+      const isKnownBaseDomain = knownBaseDomains.some(baseDomain => hostWithoutPort === baseDomain || hostWithoutWww === baseDomain);
+
+      const domainCandidates = Array.from(new Set([hostWithoutPort, hostWithoutWww])).filter(Boolean) as string[];
+
+      if (domainCandidates.length) {
+        const customDomainMatch = await primaryDb
+          .select()
+          .from(clients)
+          .where(inArray(clients.customDomain, domainCandidates))
+          .limit(1);
+
+        if (customDomainMatch.length) {
+          matchedCustomDomainClient = customDomainMatch[0];
+          subdomain = matchedCustomDomainClient.subdomain;
+        }
+      }
+
+      if (!matchedCustomDomainClient && isKnownBaseDomain) {
         // This is the main domain, not a subdomain
         subdomain = 'main';
-      } else if (parts.length >= 4) {
+      } else if (!matchedCustomDomainClient && parts.length >= 4) {
         // Real subdomain: subdomain.profesionalservis.my.id
         subdomain = parts[0];
-      } else if (parts.length === 3) {
+      } else if (!matchedCustomDomainClient && parts.length === 3) {
         // Could be subdomain.domain.com or domain.co.id
         // Check if it matches our base domain pattern
         const possibleBaseDomain = parts.slice(1).join('.');
@@ -84,37 +103,37 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
         } else {
           subdomain = 'main'; // Main domain like domain.co.id
         }
-      } else {
+      } else if (!matchedCustomDomainClient) {
         // Main domain - might be super admin or landing page
         subdomain = 'main';
       }
     }
 
-    console.log('Detected subdomain:', subdomain);
+    if (matchedCustomDomainClient) {
+      console.log('Detected subdomain via custom domain mapping:', matchedCustomDomainClient.subdomain, 'for host', hostWithoutPort);
+    } else {
+      console.log('Detected subdomain:', subdomain);
+    }
 
     // Special handling for super admin routes
-    if (subdomain === 'admin' || subdomain === 'main' || req.path.startsWith('/api/admin')) {
+    if (req.path.startsWith('/api/admin')) {
+      req.isSuperAdmin = true;
+      return next();
+    }
+
+    if (!matchedCustomDomainClient && (subdomain === 'admin' || subdomain === 'main')) {
       req.isSuperAdmin = true;
       return next();
     }
 
     // Skip tenant detection for certain routes and original app routes
     const skipRoutes = [
-      '/api/auth', 
-      '/api/health', 
-      '/api/saas/register', 
-      '/api/saas/plans', 
-      '/api/saas/payment', 
-      '/api/payment-webhook',
-      '/api/users',
-      '/api/customers',
-      '/api/products',
-      '/api/transactions',
-      '/api/service-tickets',
-      '/api/suppliers',
-      '/api/reports',
-      '/api/financial',
-      '/api/whatsapp'
+      '/api/auth',
+      '/api/health',
+      '/api/saas/register',
+      '/api/saas/plans',
+      '/api/saas/payment',
+      '/api/payment-webhook'
     ];
     
     // Admin routes remain super-admin only, but allow setup routes for tenant onboarding
@@ -136,11 +155,13 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     // Find client by subdomain
-    const client = await primaryDb
-      .select()
-      .from(clients)
-      .where(eq(clients.subdomain, subdomain))
-      .limit(1);
+    const client = matchedCustomDomainClient
+      ? [matchedCustomDomainClient]
+      : await primaryDb
+        .select()
+        .from(clients)
+        .where(eq(clients.subdomain, subdomain))
+        .limit(1);
 
     if (!client.length) {
       return res.status(404).json({ 
@@ -215,11 +236,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       const { db: tenantDb, connectionString, created, databaseName } = await ensureTenantDbForSettings(
         clientData.subdomain,
         normalizedSettings as Record<string, unknown>,
-
         { autoProvision: shouldAutoProvision },
-
-        { autoProvision: true },
-
       );
 
       const existingDatabaseSettings =
