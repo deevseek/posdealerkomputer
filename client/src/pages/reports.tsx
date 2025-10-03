@@ -471,6 +471,9 @@ export default function Reports() {
                         <p className="text-2xl font-bold text-green-600">
                           {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Laba bersih = total harga jual - HPP (Cost of Goods Sold).
+                        </p>
                       </div>
                       <TrendingUp className="w-8 h-8 text-green-600" />
                     </div>
