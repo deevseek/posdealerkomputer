@@ -123,7 +123,6 @@ const statusColors: Record<ServiceTicketStatus, { bg: string; text: string; icon
 
 const serviceStatusOptions: { value: ServiceTicketStatus; label: string }[] = [
   'pending',
-  'checking',
   'waiting-technician',
   'waiting-confirmation',
   'waiting-parts',
