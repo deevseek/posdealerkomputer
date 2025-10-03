@@ -40,8 +40,9 @@ class WebSocketManager {
     if (envApiUrl) {
       try {
         const url = new URL(envApiUrl, window.location.href);
-        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${url.protocol}//${url.host}${url.pathname.replace(/\/$/, '')}/ws`;
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = url.host;
+        return `${protocol}//${host}/ws`;
       } catch (error) {
         console.warn('Unable to parse VITE_API_URL for websocket usage:', error);
       }
