@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Plus, TrendingUp, TrendingDown, DollarSign, Users, Calendar, Eye } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, DollarSign, Users, Calendar, RotateCcw } from "lucide-react";
 import { formatDateShort, createDatabaseTimestamp } from '@shared/utils/timezone';
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
@@ -89,6 +89,30 @@ interface PayrollRecord {
   createdAt: string;
 }
 
+interface TransactionFormState {
+  type: 'income' | 'expense' | 'transfer';
+  category: string;
+  subcategory: string;
+  amount: string;
+  description: string;
+  paymentMethod: string;
+  tags: string[];
+  sourceAccount: string;
+  destinationAccount: string;
+}
+
+interface CreateTransactionPayload {
+  type: 'income' | 'expense' | 'transfer';
+  category: string;
+  subcategory?: string;
+  amount: string;
+  description: string;
+  paymentMethod?: string;
+  tags?: string[];
+  sourceAccount?: string;
+  destinationAccount?: string;
+}
+
 const TRANSACTION_CATEGORIES = {
   income: [
     'Sales Revenue',
@@ -139,19 +163,60 @@ const PAYMENT_METHODS = [
   'check'
 ];
 
+const TRANSFER_ACCOUNTS = [
+  { value: 'cash', label: 'Kas' },
+  { value: 'bank', label: 'Bank' },
+  { value: 'inventory', label: 'Persediaan' },
+  { value: 'accounts_receivable', label: 'Piutang Usaha' },
+  { value: 'accounts_payable', label: 'Hutang Usaha' },
+  { value: 'customer_deposits', label: 'Uang Muka Pelanggan' },
+];
+
+const ACCOUNT_LABELS: Record<string, string> = {
+  cash: 'Kas',
+  bank: 'Bank',
+  bank_transfer: 'Bank',
+  inventory: 'Persediaan',
+  system: 'Persediaan',
+  transfer: 'Transfer',
+  accounts_receivable: 'Piutang Usaha',
+  accounts_payable: 'Hutang Usaha',
+  customer_deposit: 'Uang Muka Pelanggan',
+  customer_deposits: 'Uang Muka Pelanggan',
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Tunai',
+  bank: 'Bank',
+  bank_transfer: 'Transfer Bank',
+  transfer: 'Transfer Internal',
+  credit_card: 'Kartu Kredit',
+  debit_card: 'Kartu Debit',
+  e_wallet: 'Dompet Digital',
+  check: 'Cek/Bilyet Giro',
+  system: 'Penyesuaian Persediaan',
+  inventory: 'Persediaan',
+  accounts_receivable: 'Piutang Usaha',
+  accounts_payable: 'Hutang Usaha',
+  customer_deposit: 'Uang Muka Pelanggan',
+  customer_deposits: 'Uang Muka Pelanggan',
+};
+
 export default function FinanceNew() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
   // Transaction Form State
-  const [transactionForm, setTransactionForm] = useState({
-    type: 'income' as 'income' | 'expense' | 'transfer',
+  const [transactionForm, setTransactionForm] = useState<TransactionFormState>({
+    type: 'income',
     category: '',
     subcategory: '',
     amount: '',
     description: '',
     paymentMethod: 'cash',
-    tags: [] as string[]
+    tags: [],
+    sourceAccount: 'cash',
+    destinationAccount: 'bank'
   });
 
   // Employee Form State
@@ -229,7 +294,7 @@ export default function FinanceNew() {
 
   // Create transaction mutation
   const createTransactionMutation = useMutation({
-    mutationFn: async (data: typeof transactionForm) => {
+    mutationFn: async (data: CreateTransactionPayload) => {
       return apiRequest('POST', '/api/finance/transactions', data);
     },
     onSuccess: () => {
@@ -244,13 +309,54 @@ export default function FinanceNew() {
         amount: '',
         description: '',
         paymentMethod: 'cash',
-        tags: []
+        tags: [],
+        sourceAccount: 'cash',
+        destinationAccount: 'bank'
       });
     },
     onError: () => {
       toast({ title: "Gagal membuat transaksi", variant: "destructive" });
     }
   });
+
+  const handleSaveTransaction = () => {
+    if (!transactionForm.category) {
+      toast({ title: 'Silakan pilih kategori transaksi', variant: 'destructive' });
+      return;
+    }
+
+    const amountNumber = Number(transactionForm.amount);
+    if (!transactionForm.amount || Number.isNaN(amountNumber) || amountNumber <= 0) {
+      toast({ title: 'Jumlah transaksi tidak valid', variant: 'destructive' });
+      return;
+    }
+
+    if (transactionForm.type === 'transfer' && transactionForm.sourceAccount === transactionForm.destinationAccount) {
+      toast({ title: 'Sumber dan tujuan transfer harus berbeda', variant: 'destructive' });
+      return;
+    }
+
+    const sanitizedAmount = Math.abs(amountNumber).toString();
+
+    const payload: CreateTransactionPayload = {
+      type: transactionForm.type,
+      category: transactionForm.category,
+      subcategory: transactionForm.subcategory || undefined,
+      amount: sanitizedAmount,
+      description: transactionForm.description,
+      paymentMethod: transactionForm.type === 'transfer' ? undefined : transactionForm.paymentMethod,
+      tags:
+        transactionForm.type === 'transfer'
+          ? [`transfer:from=${transactionForm.sourceAccount}`, `transfer:to=${transactionForm.destinationAccount}`]
+          : transactionForm.tags.length > 0
+            ? transactionForm.tags
+            : undefined,
+      sourceAccount: transactionForm.type === 'transfer' ? transactionForm.sourceAccount : undefined,
+      destinationAccount: transactionForm.type === 'transfer' ? transactionForm.destinationAccount : undefined,
+    };
+
+    createTransactionMutation.mutate(payload);
+  };
 
   // Create employee mutation
   const createEmployeeMutation = useMutation({
@@ -333,6 +439,46 @@ export default function FinanceNew() {
     }).format(num);
   };
 
+  const resolveAccountLabel = (value?: string) => {
+    if (!value) return '-';
+    const normalized = value.toLowerCase();
+    return ACCOUNT_LABELS[normalized] || value;
+  };
+
+  const resolvePaymentMethodLabel = (value?: string) => {
+    if (!value) return '-';
+    const normalized = value.toLowerCase();
+    return PAYMENT_METHOD_LABELS[normalized] || value.replace(/[_-]/g, ' ').toUpperCase();
+  };
+
+  const getTransferAccounts = (transaction: FinancialTransaction) => {
+    const tags = transaction.tags || [];
+    let from: string | undefined;
+    let to: string | undefined;
+
+    tags.forEach((tag) => {
+      const lower = tag.toLowerCase();
+      if (lower.startsWith('transfer:from=')) {
+        from = tag.split('=')[1];
+      } else if (lower.startsWith('transfer:to=')) {
+        to = tag.split('=')[1];
+      }
+    });
+
+    return { from, to };
+  };
+
+  const renderTransferDirection = (transaction: FinancialTransaction) => {
+    const { from, to } = getTransferAccounts(transaction);
+    if (!from && !to) {
+      return 'Transfer internal';
+    }
+
+    const fromLabel = resolveAccountLabel(from);
+    const toLabel = resolveAccountLabel(to);
+    return `${fromLabel} → ${toLabel}`;
+  };
+
   const getStatusBadge = (status: string, type?: string) => {
     const statusConfig = {
       'confirmed': { variant: 'default' as const, text: 'Dikonfirmasi' },
@@ -353,8 +499,17 @@ export default function FinanceNew() {
 
   // Helper function untuk menampilkan transaksi dengan benar (aset = positif, expense = negatif)
   const getTransactionDisplay = (transaction: FinancialTransaction) => {
+    if (transaction.type === 'transfer') {
+      return {
+        sign: '',
+        color: 'text-blue-600',
+        badge: 'outline',
+        label: 'Transfer'
+      };
+    }
+
     // Handle refunds separately - they should NOT be shown as income
-    if (transaction.category === 'Returns and Allowances' || 
+    if (transaction.category === 'Returns and Allowances' ||
         transaction.category?.includes('Refund') ||
         transaction.description?.toLowerCase().includes('refund')) {
       return {
@@ -437,7 +592,7 @@ export default function FinanceNew() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
@@ -458,6 +613,21 @@ export default function FinanceNew() {
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
               {formatCurrency(summary?.totalExpense || '0')}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Retur & Refund</CardTitle>
+            <RotateCcw className="h-4 w-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-amber-600">
+              {formatCurrency(summary?.totalRefunds || '0')}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Diklasifikasikan sebagai kontra pendapatan
             </div>
           </CardContent>
         </Card>
@@ -742,7 +912,9 @@ export default function FinanceNew() {
                         amount: '',
                         description: subcat,
                         paymentMethod: 'cash',
-                        tags: []
+                        tags: [],
+                        sourceAccount: 'cash',
+                        destinationAccount: 'bank'
                       });
                       setShowTransactionDialog(true);
                     }}
@@ -776,8 +948,17 @@ export default function FinanceNew() {
                     <Label htmlFor="type">Tipe Transaksi</Label>
                     <Select
                       value={transactionForm.type}
-                      onValueChange={(value: 'income' | 'expense' | 'transfer') => 
-                        setTransactionForm(prev => ({ ...prev, type: value, category: '' }))
+                      onValueChange={(value: 'income' | 'expense' | 'transfer') =>
+                        setTransactionForm(prev => ({
+                          ...prev,
+                          type: value,
+                          category: '',
+                          subcategory: '',
+                          paymentMethod: value === 'transfer' ? 'transfer' : 'cash',
+                          sourceAccount: value === 'transfer' ? 'cash' : prev.sourceAccount,
+                          destinationAccount: value === 'transfer' ? 'bank' : prev.destinationAccount,
+                          tags: value === 'transfer' ? prev.tags : []
+                        }))
                       }
                     >
                       <SelectTrigger>
@@ -856,26 +1037,77 @@ export default function FinanceNew() {
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
-                    <Select
-                      value={transactionForm.paymentMethod}
-                      onValueChange={(value) => 
-                        setTransactionForm(prev => ({ ...prev, paymentMethod: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PAYMENT_METHODS.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {method.replace('_', ' ').toUpperCase()}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {transactionForm.type === 'transfer' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="sourceAccount">Sumber Dana</Label>
+                        <Select
+                          value={transactionForm.sourceAccount}
+                          onValueChange={(value) =>
+                            setTransactionForm(prev => ({ ...prev, sourceAccount: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TRANSFER_ACCOUNTS.map((account) => (
+                              <SelectItem key={account.value} value={account.value}>
+                                {account.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Akun ini akan dikreditkan (saldo berkurang).
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor="destinationAccount">Tujuan Dana</Label>
+                        <Select
+                          value={transactionForm.destinationAccount}
+                          onValueChange={(value) =>
+                            setTransactionForm(prev => ({ ...prev, destinationAccount: value }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TRANSFER_ACCOUNTS.map((account) => (
+                              <SelectItem key={account.value} value={account.value}>
+                                {account.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Akun ini akan didebit (saldo bertambah).
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <Label htmlFor="paymentMethod">Metode Pembayaran</Label>
+                      <Select
+                        value={transactionForm.paymentMethod}
+                        onValueChange={(value) =>
+                          setTransactionForm(prev => ({ ...prev, paymentMethod: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.map((method) => (
+                            <SelectItem key={method} value={method}>
+                              {resolvePaymentMethodLabel(method)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="flex gap-2">
                     <Button 
@@ -886,7 +1118,7 @@ export default function FinanceNew() {
                       Batal
                     </Button>
                     <Button
-                      onClick={() => createTransactionMutation.mutate(transactionForm)}
+                      onClick={handleSaveTransaction}
                       disabled={createTransactionMutation.isPending}
                       className="flex-1"
                     >
@@ -912,56 +1144,57 @@ export default function FinanceNew() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Array.isArray(transactions) ? transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>
-                        {formatDateShort(transaction.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const display = getTransactionDisplay(transaction);
-                          return (
-                            <Badge variant={display.badge as any}>
-                              {display.label}
-                            </Badge>
-                          );
-                        })()}
-                        {transaction.paymentMethod && (
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {transaction.paymentMethod === 'cash' ? 'Tunai' :
-                             transaction.paymentMethod === 'transfer' ? 'Transfer' :
-                             transaction.paymentMethod === 'bank_transfer' ? 'Transfer Bank' :
-                             transaction.paymentMethod === 'inventory' ? 'Stok/Persediaan' : transaction.paymentMethod}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{transaction.category}</div>
-                        {transaction.subcategory && (
-                          <div className="text-sm text-muted-foreground">{transaction.subcategory}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="truncate font-medium">{transaction.description}</div>
-                        {transaction.referenceType && (
-                          <div className="text-xs text-blue-600 mt-1">
-                            Dari: {transaction.referenceType === 'service' ? 'Service Ticket' :
-                                  transaction.referenceType === 'service_labor' ? 'Ongkos Kerja Service' :
-                                  transaction.referenceType === 'service_parts_cost' ? 'Biaya Parts Service' :
-                                  transaction.referenceType === 'service_parts_revenue' ? 'Penjualan Parts Service' :
-                                  transaction.referenceType === 'payroll' ? 'Payroll' : transaction.referenceType}
-                            {transaction.reference && ` (${transaction.reference.slice(0, 8)}...)`}
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className={getTransactionDisplay(transaction).color}>
-                        {getTransactionDisplay(transaction).sign}{formatCurrency(transaction.amount)}
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(transaction.status)}
-                      </TableCell>
-                    </TableRow>
-                  )) : (
+                  {Array.isArray(transactions) ? transactions.map((transaction) => {
+                    const display = getTransactionDisplay(transaction);
+                    const transferDirection = transaction.type === 'transfer'
+                      ? renderTransferDirection(transaction)
+                      : undefined;
+
+                    return (
+                      <TableRow key={transaction.id}>
+                        <TableCell>
+                          {formatDateShort(transaction.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={display.badge as any}>
+                            {display.label}
+                          </Badge>
+                          {(transaction.type === 'transfer' || transaction.paymentMethod) && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {transaction.type === 'transfer'
+                                ? transferDirection
+                                : resolvePaymentMethodLabel(transaction.paymentMethod)}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium">{transaction.category}</div>
+                          {transaction.subcategory && (
+                            <div className="text-sm text-muted-foreground">{transaction.subcategory}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-xs">
+                          <div className="truncate font-medium">{transaction.description}</div>
+                          {transaction.referenceType && (
+                            <div className="text-xs text-blue-600 mt-1">
+                              Dari: {transaction.referenceType === 'service' ? 'Service Ticket' :
+                                    transaction.referenceType === 'service_labor' ? 'Ongkos Kerja Service' :
+                                    transaction.referenceType === 'service_parts_cost' ? 'Biaya Parts Service' :
+                                    transaction.referenceType === 'service_parts_revenue' ? 'Penjualan Parts Service' :
+                                    transaction.referenceType === 'payroll' ? 'Payroll' : transaction.referenceType}
+                              {transaction.reference && ` (${transaction.reference.slice(0, 8)}...)`}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className={display.color}>
+                          {display.sign}{formatCurrency(transaction.amount)}
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(transaction.status)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  }) : (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                         Tidak ada transaksi
@@ -970,6 +1203,10 @@ export default function FinanceNew() {
                   )}
                 </TableBody>
               </Table>
+              <div className="px-4 py-3 text-xs text-muted-foreground border-t">
+                Catatan: setiap transaksi otomatis membentuk jurnal debit/kredit sesuai akun sehingga laporan keuangan selalu
+                mengikuti prinsip akuntansi double-entry.
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
