@@ -10,11 +10,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { toast } from '@/hooks/use-toast';
-import { 
-  ChartLine, ScanBarcode, Wrench, Package, PieChart, Users, Truck, 
+import {
+  ChartLine, ScanBarcode, Wrench, Package, PieChart, Users, Truck,
   FileText, Settings, UserCog, Shield, Layers, MessageCircle, Palette,
-  Database, CreditCard, BarChart3, CheckCircle, XCircle, Save
+  Database, CreditCard, BarChart3, CheckCircle, XCircle, Save, HelpCircle
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import type { Plan as SaasPlan } from '@shared/saas-schema';
 
@@ -39,128 +40,103 @@ const defaultPlanFeatures: PlanFeatureResponse = {
   limits: {}
 };
 
-// Define all available application features
-const APPLICATION_FEATURES = [
-  { 
-    id: 'dashboard', 
-    name: 'Dashboard & Analytics', 
-    icon: ChartLine, 
+type FeatureDefinition = {
+  name: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+const FEATURE_DEFINITIONS: Record<string, FeatureDefinition> = {
+  dashboard: {
+    name: 'Dashboard & Analytics',
     description: 'Main dashboard with business analytics and reports',
-    permission: 'dashboard_view'
+    icon: ChartLine,
   },
-  { 
-    id: 'pos', 
-    name: 'Point of Sale (POS)', 
-    icon: ScanBarcode, 
+  pos: {
+    name: 'Point of Sale (POS)',
     description: 'Cash register and sales transactions',
-    permission: 'pos_access'
+    icon: ScanBarcode,
   },
-  { 
-    id: 'service', 
-    name: 'Service Tickets', 
-    icon: Wrench, 
+  service: {
+    name: 'Service Tickets',
     description: 'Repair service management and tracking',
-    permission: 'service_tickets_full'
+    icon: Wrench,
   },
-  { 
-    id: 'inventory', 
-    name: 'Inventory Management', 
-    icon: Package, 
+  inventory: {
+    name: 'Inventory Management',
     description: 'Stock management and product catalog',
-    permission: 'inventory_full'
+    icon: Package,
   },
-  { 
-    id: 'purchasing', 
-    name: 'Purchasing System', 
-    icon: Truck, 
+  purchasing: {
+    name: 'Purchasing System',
     description: 'Purchase orders and supplier management',
-    permission: 'purchasing_full'
+    icon: Truck,
   },
-  { 
-    id: 'finance', 
-    name: 'Finance & Payroll', 
-    icon: PieChart, 
+  finance: {
+    name: 'Finance & Payroll',
     description: 'Financial management and payroll processing',
-    permission: 'financial_full'
+    icon: PieChart,
   },
-  { 
-    id: 'customers', 
-    name: 'Customer Management', 
-    icon: Users, 
+  customers: {
+    name: 'Customer Management',
     description: 'Customer database and relationship management',
-    permission: 'customers_full'
+    icon: Users,
   },
-  { 
-    id: 'suppliers', 
-    name: 'Supplier Management', 
-    icon: Truck, 
+  suppliers: {
+    name: 'Supplier Management',
     description: 'Supplier database and purchase management',
-    permission: 'suppliers_full'
+    icon: Truck,
   },
-  { 
-    id: 'users', 
-    name: 'User Management', 
-    icon: UserCog, 
+  users: {
+    name: 'User Management',
     description: 'Staff accounts and access control',
-    permission: 'users_full'
+    icon: UserCog,
   },
-  { 
-    id: 'roles', 
-    name: 'Role Management', 
-    icon: Shield, 
+  roles: {
+    name: 'Role Management',
     description: 'User roles and permission management',
-    permission: 'roles_full'
+    icon: Shield,
   },
-  { 
-    id: 'reports', 
-    name: 'Reports & Analytics', 
-    icon: FileText, 
+  reports: {
+    name: 'Reports & Analytics',
     description: 'Business reports and data analytics',
-    permission: 'reports_full'
+    icon: FileText,
   },
-  { 
-    id: 'stock_movements', 
-    name: 'Stock Movements', 
-    icon: Layers, 
+  stock_movements: {
+    name: 'Stock Movements',
     description: 'Inventory tracking and movement history',
-    permission: 'reports_inventory_view'
+    icon: Layers,
   },
-  { 
-    id: 'settings', 
-    name: 'System Settings', 
-    icon: Settings, 
+  settings: {
+    name: 'System Settings',
     description: 'Application configuration and preferences',
-    permission: 'settings_full'
+    icon: Settings,
   },
-  { 
-    id: 'whatsapp', 
-    name: 'WhatsApp Integration', 
-    icon: MessageCircle, 
+  whatsapp: {
+    name: 'WhatsApp Integration',
     description: 'WhatsApp business messaging and notifications',
-    permission: 'whatsapp_settings'
+    icon: MessageCircle,
   },
-  { 
-    id: 'custom_branding', 
-    name: 'Custom Branding', 
-    icon: Palette, 
+  custom_branding: {
+    name: 'Custom Branding',
     description: 'Logo customization and brand colors',
-    permission: 'settings_full'
+    icon: Palette,
   },
-  { 
-    id: 'api_access', 
-    name: 'API Access', 
-    icon: Database, 
+  api_access: {
+    name: 'API Access',
     description: 'REST API access for integrations',
-    permission: 'system_admin'
+    icon: Database,
   },
-  { 
-    id: 'priority_support', 
-    name: 'Priority Support', 
-    icon: CreditCard, 
+  priority_support: {
+    name: 'Priority Support',
     description: 'Premium customer support and assistance',
-    permission: 'system_admin'
+    icon: CreditCard,
   },
-];
+};
+
+const DEFAULT_FEATURE_IDS = Object.keys(FEATURE_DEFINITIONS);
+
+type FeatureOption = FeatureDefinition & { id: string };
 
 export function FeatureConfigurationManager() {
   const [selectedPlan, setSelectedPlan] = useState<string>('');
@@ -180,7 +156,65 @@ export function FeatureConfigurationManager() {
     retry: false,
   });
 
+  const { data: availableFeaturesResponse } = useQuery<{ features?: unknown }>({
+    queryKey: ['/api/admin/available-features'],
+    retry: false,
+  });
+
   const planFeatures = useMemo(() => planFeaturesResponse ?? defaultPlanFeatures, [planFeaturesResponse]);
+
+  const normalizedPlanFeatures = useMemo(() => {
+    if (!Array.isArray(planFeatures.features)) {
+      return [] as string[];
+    }
+
+    return planFeatures.features
+      .filter((feature): feature is string => typeof feature === 'string' && feature.trim().length > 0);
+  }, [planFeatures.features]);
+
+  const normalizedLimits: PlanFeatureLimits = useMemo(() => (
+    typeof planFeatures.limits === 'object' && planFeatures.limits !== null
+      ? planFeatures.limits
+      : {}
+  ), [planFeatures.limits]);
+
+  const availableFeatureIds = useMemo(() => {
+    const responseFeatures = Array.isArray((availableFeaturesResponse as any)?.features)
+      ? (availableFeaturesResponse as any).features.filter((feature: unknown): feature is string => typeof feature === 'string')
+      : [];
+
+    const baseIds = responseFeatures.length > 0 ? responseFeatures : DEFAULT_FEATURE_IDS;
+
+    return Array.from(new Set([...baseIds, ...normalizedPlanFeatures]));
+  }, [availableFeaturesResponse, normalizedPlanFeatures]);
+
+  const featureOptions: FeatureOption[] = useMemo(() => {
+    const toTitleCase = (value: string) =>
+      value
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, (match) => match.toUpperCase());
+
+    return availableFeatureIds.map((featureId) => {
+      const definition = FEATURE_DEFINITIONS[featureId];
+
+      if (definition) {
+        return { id: featureId, ...definition } satisfies FeatureOption;
+      }
+
+      const displayName = toTitleCase(featureId);
+
+      return {
+        id: featureId,
+        name: displayName || 'Fitur Kustom',
+        description: displayName
+          ? `Pengaturan untuk ${displayName}`
+          : 'Pengaturan fitur tambahan dari paket langganan.',
+        icon: HelpCircle,
+      } satisfies FeatureOption;
+    });
+  }, [availableFeatureIds]);
 
   // Update plan features mutation
   const updatePlanFeatures = useMutation({
@@ -208,7 +242,9 @@ export function FeatureConfigurationManager() {
   });
 
   const handleFeatureToggle = (featureId: string, enabled: boolean) => {
-    const currentFeatures = planFeatures.features || [];
+    if (!selectedPlan) return;
+
+    const currentFeatures = normalizedPlanFeatures;
     const updatedFeatures = enabled
       ? [...currentFeatures.filter((f: string) => f !== featureId), featureId]
       : currentFeatures.filter((f: string) => f !== featureId);
@@ -216,19 +252,29 @@ export function FeatureConfigurationManager() {
     updatePlanFeatures.mutate({
       planId: selectedPlan,
       features: updatedFeatures,
-      limits: planFeatures.limits || {}
+      limits: normalizedLimits
     });
   };
 
-  const handleLimitUpdate = (limitType: string, value: number) => {
+  const handleLimitUpdate = (limitType: string, value: string) => {
+    if (!selectedPlan) return;
+
+    const parsedValue = Number.parseInt(value, 10);
+    const safeValue = Number.isFinite(parsedValue) ? parsedValue : undefined;
+
     const updatedLimits = {
-      ...(planFeatures.limits || {}),
-      [limitType]: value
+      ...normalizedLimits,
+    } as Record<string, number | null>;
+
+    if (safeValue === undefined) {
+      delete updatedLimits[limitType];
+    } else {
+      updatedLimits[limitType] = safeValue;
     };
 
     updatePlanFeatures.mutate({
       planId: selectedPlan,
-      features: planFeatures.features || [],
+      features: normalizedPlanFeatures,
       limits: updatedLimits
     });
   };
@@ -283,10 +329,10 @@ export function FeatureConfigurationManager() {
 
               <TabsContent value="features" className="space-y-4 mt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {APPLICATION_FEATURES.map((feature) => {
-                    const isEnabled = planFeatures.features?.includes(feature.id) || false;
+                  {featureOptions.map((feature) => {
+                    const isEnabled = normalizedPlanFeatures.includes(feature.id);
                     const IconComponent = feature.icon;
-                    
+
                     return (
                       <Card key={feature.id} className={`transition-all ${isEnabled ? 'border-green-200 bg-green-50/50' : 'border-gray-200'}`}>
                         <CardContent className="p-4">
@@ -343,8 +389,8 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-users"
                           type="number"
-                          value={planFeatures.limits?.maxUsers ?? selectedPlanData.maxUsers ?? 5}
-                          onChange={(e) => handleLimitUpdate('maxUsers', parseInt(e.target.value))}
+                          value={normalizedLimits?.maxUsers ?? selectedPlanData.maxUsers ?? 5}
+                          onChange={(e) => handleLimitUpdate('maxUsers', e.target.value)}
                           className="mt-1"
                           min="1"
                           max="1000"
@@ -366,8 +412,8 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-transactions"
                           type="number"
-                          value={planFeatures.limits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 1000}
-                          onChange={(e) => handleLimitUpdate('maxTransactionsPerMonth', parseInt(e.target.value))}
+                          value={normalizedLimits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 1000}
+                          onChange={(e) => handleLimitUpdate('maxTransactionsPerMonth', e.target.value)}
                           className="mt-1"
                           min="1"
                           step="100"
@@ -389,8 +435,8 @@ export function FeatureConfigurationManager() {
                         <Input
                           id="max-storage"
                           type="number"
-                          value={planFeatures.limits?.maxStorageGB ?? selectedPlanData.maxStorageGB ?? 1}
-                          onChange={(e) => handleLimitUpdate('maxStorageGB', parseInt(e.target.value))}
+                          value={normalizedLimits?.maxStorageGB ?? selectedPlanData.maxStorageGB ?? 1}
+                          onChange={(e) => handleLimitUpdate('maxStorageGB', e.target.value)}
                           className="mt-1"
                           min="1"
                           max="1000"
@@ -409,15 +455,15 @@ export function FeatureConfigurationManager() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="font-medium text-blue-700">Active Features:</span>
-                        <span className="ml-2 font-bold">{planFeatures.features?.length || 0}</span>
+                        <span className="ml-2 font-bold">{normalizedPlanFeatures.length}</span>
                       </div>
                       <div>
                         <span className="font-medium text-blue-700">Max Users:</span>
-                        <span className="ml-2 font-bold">{planFeatures.limits?.maxUsers ?? selectedPlanData.maxUsers}</span>
+                        <span className="ml-2 font-bold">{normalizedLimits?.maxUsers ?? selectedPlanData.maxUsers}</span>
                       </div>
                       <div>
                         <span className="font-medium text-blue-700">Monthly Transactions:</span>
-                        <span className="ml-2 font-bold">{(planFeatures.limits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 0).toLocaleString()}</span>
+                        <span className="ml-2 font-bold">{(normalizedLimits?.maxTransactionsPerMonth ?? selectedPlanData.maxTransactionsPerMonth ?? 0).toLocaleString()}</span>
                       </div>
                     </div>
                   </CardContent>
