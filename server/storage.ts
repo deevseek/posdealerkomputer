@@ -61,7 +61,7 @@ import {
   type InsertWarrantyClaim,
 } from "@shared/schema";
 import { db, getCurrentTenantContext } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, gt } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt } from "drizzle-orm";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -887,6 +887,8 @@ export class DatabaseStorage implements IStorage {
 
     if (!item) throw new Error("Purchase order item not found");
 
+    const resolvedClientId = this.resolveClientId(item.clientId);
+
     const newReceivedQuantity = (item.receivedQuantity || 0) + receivedQuantity;
     const newOutstandingQuantity = item.quantity - newReceivedQuantity;
     
@@ -908,6 +910,7 @@ export class DatabaseStorage implements IStorage {
       : `Received from PO`;
       
     await db.insert(stockMovements).values({
+      clientId: resolvedClientId,
       productId: item.productId,
       movementType: 'in',
       quantity: receivedQuantity,
@@ -979,6 +982,7 @@ export class DatabaseStorage implements IStorage {
           : 'Inventory Purchase';
           
         await db.insert(financialRecords).values({
+          clientId: resolvedClientId,
           type: recordType,
           amount: totalCost.toString(),
           description: recordDescription,
@@ -991,6 +995,7 @@ export class DatabaseStorage implements IStorage {
         console.error("Error creating journal entry for purchase:", error);
         // Fallback to simple financial record
         await db.insert(financialRecords).values({
+          clientId: resolvedClientId,
           type: 'expense',
           amount: totalCost.toString(),
           description: `Purchase: ${receivedQuantity} units received`,
@@ -1013,7 +1018,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(products.id, item.productId));
 
     // CALCULATE AND UPDATE HPP (Average Cost) after receiving new stock
-    const newAverageCost = await this.getAveragePurchasePrice(item.productId);
+    const newAverageCost = await this.getAveragePurchasePrice(item.productId, resolvedClientId);
     await db
       .update(products)
       .set({ 
@@ -1142,7 +1147,11 @@ export class DatabaseStorage implements IStorage {
 
   // Enhanced stock movement with new system
   async createStockMovement(movementData: InsertStockMovement): Promise<StockMovement> {
-    const [movement] = await db.insert(stockMovements).values(movementData).returning();
+    const resolvedClientId = this.resolveClientId(movementData.clientId);
+    const [movement] = await db.insert(stockMovements).values({
+      ...movementData,
+      clientId: resolvedClientId,
+    }).returning();
     
     // CREATE FINANCE TRANSACTION for stock movements that have cost impact
     if (movement.unitCost && parseFloat(movement.unitCost) > 0) {
@@ -1163,6 +1172,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       await db.insert(financialRecords).values({
+        clientId: resolvedClientId,
         type: transactionType,
         amount: totalCost.toString(),
         description,
@@ -1176,7 +1186,13 @@ export class DatabaseStorage implements IStorage {
     return movement;
   }
 
-  async getAveragePurchasePrice(productId: string): Promise<number> {
+  async getAveragePurchasePrice(productId: string, explicitClientId?: string | null): Promise<number> {
+    const resolvedClientId = this.resolveClientId(explicitClientId);
+
+    const movementClientFilter = resolvedClientId
+      ? eq(stockMovements.clientId, resolvedClientId)
+      : isNull(stockMovements.clientId);
+
     // Get all stock movements where stock came in (type: 'in') for this product
     const movements = await db
       .select({
@@ -1187,14 +1203,22 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(stockMovements.productId, productId),
         eq(stockMovements.movementType, 'in'),
-        isNotNull(stockMovements.unitCost)
+        isNotNull(stockMovements.unitCost),
+        movementClientFilter
       ));
 
     if (movements.length === 0) {
       // If no stock movements with price found, fallback to product's purchase price
+      const productClientFilter = resolvedClientId
+        ? eq(products.clientId, resolvedClientId)
+        : isNull(products.clientId);
+
       const [product] = await db.select({ purchasePrice: products.lastPurchasePrice })
         .from(products)
-        .where(eq(products.id, productId));
+        .where(and(
+          eq(products.id, productId),
+          productClientFilter
+        ));
       return parseFloat(product?.purchasePrice || '0');
     }
 
