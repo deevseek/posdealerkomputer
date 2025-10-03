@@ -23,6 +23,7 @@ import {
   type InsertJournalEntryLine,
   type Account
 } from "@shared/schema";
+import { categoryToAccountMapping } from "./defaultAccounts";
 import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
@@ -33,21 +34,29 @@ const ACCOUNT_CODES = {
   ACCOUNTS_RECEIVABLE: '1120', // Piutang Dagang
   INVENTORY: '1130', // Persediaan Barang
   DAMAGED_GOODS_INVENTORY: '1135', // Persediaan Barang Rusak
-  
+
   // Liabilities (Kewajiban)
   ACCOUNTS_PAYABLE: '2110', // Hutang Dagang
   CUSTOMER_DEPOSITS: '2120', // Uang Muka Pelanggan
-  
+
   // Revenue (Pendapatan)
   SALES_REVENUE: '4110', // Pendapatan Penjualan
   SERVICE_REVENUE: '4210', // Pendapatan Jasa Service
-  
+  OTHER_REVENUE: '4300', // Pendapatan Lainnya
+
   // Expenses (Beban)
   COST_OF_GOODS_SOLD: '5110', // Harga Pokok Penjualan
   WARRANTY_EXPENSE: '5120', // Beban Garansi
   DAMAGED_GOODS_LOSS: '5130', // Kerugian Barang Rusak
   PAYROLL_EXPENSE: '5210', // Beban Gaji
+  RENT_EXPENSE: '5220', // Beban Sewa
+  UTILITY_EXPENSE: '5230', // Beban Utilitas
+  COMMUNICATION_EXPENSE: '5240', // Beban Komunikasi
+  MARKETING_EXPENSE: '5250', // Beban Pemasaran
+  TRANSPORT_EXPENSE: '5260', // Beban Transportasi
+  SUPPLIES_EXPENSE: '5270', // Beban Perlengkapan
   OTHER_EXPENSE: '5290', // Beban Lain-lain
+  TAX_EXPENSE: '5320', // Beban Pajak
 };
 
 export class FinanceManager {
@@ -55,6 +64,225 @@ export class FinanceManager {
   private async getAccountByCode(code: string): Promise<Account | null> {
     const [account] = await db.select().from(accounts).where(eq(accounts.code, code)).limit(1);
     return account || null;
+  }
+
+  private normalizeText(value?: string | null): string {
+    return (value || '').toLowerCase().trim();
+  }
+
+  private resolvePaymentAccount(paymentMethod?: string | null): string {
+    const method = this.normalizeText(paymentMethod);
+
+    switch (method) {
+      case 'cash':
+      case 'tunai':
+        return ACCOUNT_CODES.CASH;
+      case 'inventory':
+      case 'system':
+        return ACCOUNT_CODES.INVENTORY;
+      case 'accounts_receivable':
+      case 'piutang':
+      case 'piutang usaha':
+        return ACCOUNT_CODES.ACCOUNTS_RECEIVABLE;
+      case 'accounts_payable':
+      case 'hutang':
+      case 'hutang usaha':
+        return ACCOUNT_CODES.ACCOUNTS_PAYABLE;
+      case 'customer_deposit':
+      case 'customer_deposits':
+      case 'uang_muka':
+      case 'uang muka':
+        return ACCOUNT_CODES.CUSTOMER_DEPOSITS;
+      case 'bank':
+      case 'bank_transfer':
+      case 'transfer':
+      case 'credit_card':
+      case 'debit_card':
+      case 'e_wallet':
+      case 'ewallet':
+      case 'giro':
+      case 'check':
+      case 'cheque':
+      default:
+        return ACCOUNT_CODES.BANK;
+    }
+  }
+
+  private resolveAccountAlias(alias?: string | null): string {
+    const normalized = this.normalizeText(alias);
+
+    if (!normalized) {
+      return ACCOUNT_CODES.BANK;
+    }
+
+    switch (normalized) {
+      case 'cash':
+      case 'tunai':
+        return ACCOUNT_CODES.CASH;
+      case 'bank':
+      case 'bank_transfer':
+        return ACCOUNT_CODES.BANK;
+      case 'inventory':
+      case 'persediaan':
+        return ACCOUNT_CODES.INVENTORY;
+      case 'accounts_receivable':
+      case 'piutang':
+      case 'piutang usaha':
+        return ACCOUNT_CODES.ACCOUNTS_RECEIVABLE;
+      case 'accounts_payable':
+      case 'hutang':
+      case 'hutang usaha':
+        return ACCOUNT_CODES.ACCOUNTS_PAYABLE;
+      case 'customer_deposit':
+      case 'customer_deposits':
+      case 'uang muka':
+      case 'uang_muka':
+        return ACCOUNT_CODES.CUSTOMER_DEPOSITS;
+      default:
+        return this.resolvePaymentAccount(alias);
+    }
+  }
+
+  private extractTransferTag(tags: string[] | null | undefined, type: 'from' | 'to'): string | undefined {
+    if (!tags || tags.length === 0) {
+      return undefined;
+    }
+
+    const prefix = `transfer:${type}=`;
+    const match = tags.find((tag) => this.normalizeText(tag).startsWith(prefix));
+    if (!match) {
+      return undefined;
+    }
+
+    const [, value] = match.split('=');
+    return value;
+  }
+
+  private getTransferAccountCodes(data: {
+    sourceAccount?: string;
+    destinationAccount?: string;
+    tags?: string[];
+  }): { from: string; to: string } {
+    const fromAlias = data.sourceAccount ?? this.extractTransferTag(data.tags, 'from') ?? 'cash';
+    const toAlias = data.destinationAccount ?? this.extractTransferTag(data.tags, 'to') ?? 'bank';
+
+    return {
+      from: this.resolveAccountAlias(fromAlias),
+      to: this.resolveAccountAlias(toAlias),
+    };
+  }
+
+  private getIncomeAccount(category: string, subcategory?: string | null): string {
+    const normalizedCategory = this.normalizeText(category);
+    const normalizedSubcategory = this.normalizeText(subcategory);
+    const mapping = categoryToAccountMapping as Record<string, string>;
+
+    if (normalizedCategory.includes('service cancellation') || normalizedCategory.includes('service revenue reversal')) {
+      return ACCOUNT_CODES.SERVICE_REVENUE;
+    }
+
+    if (normalizedCategory.includes('parts revenue') || normalizedCategory.includes('returns and allowances')) {
+      return ACCOUNT_CODES.SALES_REVENUE;
+    }
+
+    if (normalizedCategory.includes('service') || normalizedSubcategory.includes('service') || normalizedSubcategory.includes('labor')) {
+      return ACCOUNT_CODES.SERVICE_REVENUE;
+    }
+
+    if (normalizedCategory.includes('labor') || normalizedCategory.includes('jasa')) {
+      return ACCOUNT_CODES.SERVICE_REVENUE;
+    }
+
+    if (normalizedCategory.includes('parts') || normalizedCategory.includes('sales') || normalizedSubcategory.includes('sales') || normalizedSubcategory.includes('parts')) {
+      return ACCOUNT_CODES.SALES_REVENUE;
+    }
+
+    if (normalizedCategory.includes('rental') || normalizedCategory.includes('invest') || normalizedCategory.includes('other')) {
+      return ACCOUNT_CODES.OTHER_REVENUE;
+    }
+
+    if (mapping[category]) {
+      return mapping[category];
+    }
+
+    if (subcategory && mapping[subcategory]) {
+      return mapping[subcategory];
+    }
+
+    return ACCOUNT_CODES.SALES_REVENUE;
+  }
+
+  private getExpenseAccount(category: string, subcategory?: string | null): { accountCode: string; treatment: 'expense' | 'asset' | 'contra_revenue' } {
+    const normalizedCategory = this.normalizeText(category);
+    const normalizedSubcategory = this.normalizeText(subcategory);
+    const combined = `${normalizedCategory} ${normalizedSubcategory}`.trim();
+    const mapping = categoryToAccountMapping as Record<string, string>;
+
+    if (combined.includes('cost of goods sold') || combined.includes('cogs') || combined.includes('hpp')) {
+      return { accountCode: ACCOUNT_CODES.COST_OF_GOODS_SOLD, treatment: 'expense' };
+    }
+
+    if (combined.includes('inventory purchase') || combined.includes('inventory adjustment') || combined.includes('persediaan') || combined.includes('stock')) {
+      return { accountCode: ACCOUNT_CODES.INVENTORY, treatment: 'asset' };
+    }
+
+    if (combined.includes('warranty')) {
+      return { accountCode: ACCOUNT_CODES.WARRANTY_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('kerugian barang rusak') || combined.includes('damaged goods')) {
+      return { accountCode: ACCOUNT_CODES.DAMAGED_GOODS_LOSS, treatment: 'expense' };
+    }
+
+    if (combined.includes('service cancellation') || combined.includes('service revenue reversal')) {
+      return { accountCode: ACCOUNT_CODES.SERVICE_REVENUE, treatment: 'contra_revenue' };
+    }
+
+    if (combined.includes('parts revenue reversal') || combined.includes('returns and allowances') || combined.includes('refund')) {
+      return { accountCode: ACCOUNT_CODES.SALES_REVENUE, treatment: 'contra_revenue' };
+    }
+
+    if (combined.includes('payroll') || combined.includes('salary') || combined.includes('gaji')) {
+      return { accountCode: ACCOUNT_CODES.PAYROLL_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('rent') || combined.includes('sewa')) {
+      return { accountCode: ACCOUNT_CODES.RENT_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('listrik') || combined.includes('air')) {
+      return { accountCode: ACCOUNT_CODES.UTILITY_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('telepon') || combined.includes('internet') || combined.includes('komunikasi')) {
+      return { accountCode: ACCOUNT_CODES.COMMUNICATION_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('marketing') || combined.includes('promosi') || combined.includes('iklan')) {
+      return { accountCode: ACCOUNT_CODES.MARKETING_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('transport') || combined.includes('bensin') || combined.includes('travel')) {
+      return { accountCode: ACCOUNT_CODES.TRANSPORT_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('perlengkapan') || combined.includes('supplies')) {
+      return { accountCode: ACCOUNT_CODES.SUPPLIES_EXPENSE, treatment: 'expense' };
+    }
+
+    if (combined.includes('tax') || combined.includes('pajak')) {
+      return { accountCode: ACCOUNT_CODES.TAX_EXPENSE, treatment: 'expense' };
+    }
+
+    if (mapping[category]) {
+      return { accountCode: mapping[category], treatment: 'expense' };
+    }
+
+    if (subcategory && mapping[subcategory]) {
+      return { accountCode: mapping[subcategory], treatment: 'expense' };
+    }
+
+    return { accountCode: ACCOUNT_CODES.OTHER_EXPENSE, treatment: 'expense' };
   }
 
   // Initialize default chart of accounts
@@ -210,74 +438,137 @@ export class FinanceManager {
       reference?: string;
       paymentMethod?: string;
       tags?: string[];
+      sourceAccount?: string;
+      destinationAccount?: string;
       userId: string;
     },
     tx?: any
   ): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
     const dbClient = tx || db;
     try {
+      const amountValue = Math.abs(Number(data.amount));
+      if (!Number.isFinite(amountValue) || amountValue <= 0) {
+        return { success: false, error: 'Invalid amount for financial transaction' };
+      }
+
+      const formattedAmount = amountValue.toFixed(2);
+      const paymentMethod = data.type === 'transfer' ? (data.paymentMethod || 'transfer') : data.paymentMethod;
+
+      let tags = data.tags;
+      let sourceAlias: string | undefined;
+      let destinationAlias: string | undefined;
+
+      if (data.type === 'transfer') {
+        sourceAlias = data.sourceAccount ?? this.extractTransferTag(data.tags, 'from') ?? 'cash';
+        destinationAlias = data.destinationAccount ?? this.extractTransferTag(data.tags, 'to') ?? 'bank';
+        tags = [`transfer:from=${sourceAlias}`, `transfer:to=${destinationAlias}`];
+      }
+
       // Create the financial record
       const [transaction] = await dbClient.insert(financialRecords).values({
         type: data.type,
         category: data.category,
         subcategory: data.subcategory,
-        amount: data.amount,
+        amount: formattedAmount,
         description: data.description,
         reference: data.reference,
         referenceType: data.referenceType,
-        paymentMethod: data.paymentMethod,
-        tags: data.tags,
+        paymentMethod,
+        tags,
         status: 'confirmed',
         userId: data.userId
       }).returning();
-      
+
       // Create corresponding journal entries
-      const amount = Number(data.amount);
       let journalLines: Array<{
         accountCode: string;
         description: string;
         debitAmount?: string;
         creditAmount?: string;
       }> = [];
-      
-      // Map categories to accounts and create journal entries
+      let linkedAccountCode: string | null = null;
+
       if (data.type === 'income') {
-        // Income: Debit Cash/Bank, Credit Revenue
-        const cashAccount = data.paymentMethod === 'cash' ? ACCOUNT_CODES.CASH : ACCOUNT_CODES.BANK;
-        const revenueAccount = data.category === 'Service Revenue' ? ACCOUNT_CODES.SERVICE_REVENUE : ACCOUNT_CODES.SALES_REVENUE;
-        
+        const settlementAccount = this.resolvePaymentAccount(paymentMethod);
+        const revenueAccount = this.getIncomeAccount(data.category, data.subcategory);
+
         journalLines = [
           {
-            accountCode: cashAccount,
-            description: `Receive payment - ${data.description}`,
-            debitAmount: amount.toString()
+            accountCode: settlementAccount,
+            description: `Pembayaran diterima - ${data.description}`,
+            debitAmount: formattedAmount
           },
           {
             accountCode: revenueAccount,
             description: data.description,
-            creditAmount: amount.toString()
+            creditAmount: formattedAmount
           }
         ];
+        linkedAccountCode = revenueAccount;
       } else if (data.type === 'expense') {
-        // Expense: Debit Expense, Credit Cash/Bank
-        const cashAccount = data.paymentMethod === 'cash' ? ACCOUNT_CODES.CASH : ACCOUNT_CODES.BANK;
-        const expenseAccount = data.category === 'Payroll' ? ACCOUNT_CODES.PAYROLL_EXPENSE : ACCOUNT_CODES.OTHER_EXPENSE;
-        
+        const expenseInfo = this.getExpenseAccount(data.category, data.subcategory);
+        const settlementAccount = this.resolvePaymentAccount(paymentMethod);
+        linkedAccountCode = expenseInfo.accountCode;
+
+        if (expenseInfo.treatment === 'contra_revenue') {
+          journalLines = [
+            {
+              accountCode: expenseInfo.accountCode,
+              description: data.description,
+              debitAmount: formattedAmount
+            },
+            {
+              accountCode: settlementAccount,
+              description: `Pengembalian dana - ${data.description}`,
+              creditAmount: formattedAmount
+            }
+          ];
+        } else {
+          const creditDescription = settlementAccount === ACCOUNT_CODES.INVENTORY
+            ? `Penyesuaian persediaan - ${data.description}`
+            : expenseInfo.treatment === 'asset'
+              ? `Pengeluaran kas - ${data.description}`
+              : `Pembayaran - ${data.description}`;
+
+          journalLines = [
+            {
+              accountCode: expenseInfo.accountCode,
+              description: data.description,
+              debitAmount: formattedAmount
+            },
+            {
+              accountCode: settlementAccount,
+              description: creditDescription,
+              creditAmount: formattedAmount
+            }
+          ];
+        }
+      } else if (data.type === 'transfer') {
+        const transferAccounts = this.getTransferAccountCodes({
+          sourceAccount: sourceAlias,
+          destinationAccount: destinationAlias,
+          tags
+        });
+
+        if (transferAccounts.from === transferAccounts.to) {
+          return { success: false, error: 'Sumber dan tujuan transfer tidak boleh sama' };
+        }
+
         journalLines = [
           {
-            accountCode: expenseAccount,
-            description: data.description,
-            debitAmount: amount.toString()
+            accountCode: transferAccounts.to,
+            description: `Transfer masuk - ${data.description}`,
+            debitAmount: formattedAmount
           },
           {
-            accountCode: cashAccount,
-            description: `Payment - ${data.description}`,
-            creditAmount: amount.toString()
+            accountCode: transferAccounts.from,
+            description: `Transfer keluar - ${data.description}`,
+            creditAmount: formattedAmount
           }
         ];
+        linkedAccountCode = transferAccounts.to;
       }
-      
-      // Create journal entry if we have lines
+
       if (journalLines.length > 0) {
         const journalResult = await this.createJournalEntry({
           description: `${data.type.toUpperCase()}: ${data.description}`,
@@ -286,17 +577,27 @@ export class FinanceManager {
           lines: journalLines,
           userId: data.userId
         }, tx);
-        
+
         if (!journalResult.success) {
           console.warn('Failed to create journal entry:', journalResult.error);
         } else {
-          // Link the journal entry to the financial record
+          const updateData: Partial<FinancialRecord> = {
+            journalEntryId: journalResult.journalEntry?.id
+          };
+
+          if (linkedAccountCode) {
+            const linkedAccount = await this.getAccountByCode(linkedAccountCode);
+            if (linkedAccount) {
+              updateData.accountId = linkedAccount.id;
+            }
+          }
+
           await dbClient.update(financialRecords)
-            .set({ journalEntryId: journalResult.journalEntry?.id })
+            .set(updateData)
             .where(eq(financialRecords.id, transaction.id));
         }
       }
-      
+
       return { success: true, transaction };
       
     } catch (error) {
@@ -515,6 +816,8 @@ export class FinanceManager {
       reference?: string;
       paymentMethod?: string;
       tags?: string[];
+      sourceAccount?: string;
+      destinationAccount?: string;
       userId: string;
     },
     tx?: any
