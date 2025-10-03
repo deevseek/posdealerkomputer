@@ -39,6 +39,7 @@ interface FinancialSummary {
   totalExpense: string;
   totalRefunds: string; // Track refunds separately from income
   netProfit: string;
+  grossProfit: string;
   totalSalesRevenue: string;
   totalCOGS: string;
   transactionCount: number;
@@ -643,6 +644,9 @@ export default function FinanceNew() {
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               = {formatCurrency(summary?.totalIncome || '0')} - {formatCurrency(summary?.totalExpense || '0')}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Laba penjualan (harga jual - HPP): {formatCurrency(summary?.grossProfit || '0')}
             </div>
             <div className="text-xs text-muted-foreground">
               Harga jual produk: {formatCurrency(summary?.totalSalesRevenue || '0')} • HPP: {formatCurrency(summary?.totalCOGS || '0')}
