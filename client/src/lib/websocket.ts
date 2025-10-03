@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,6 +20,46 @@ class WebSocketManager {
   private queryClient: any = null;
   private toast: any = null;
 
+  private resolveWebSocketUrl(): string {
+    const envWsUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim();
+    const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+
+    const ensureProtocol = (value: string, protocol: 'ws:' | 'wss:') => {
+      if (/^wss?:\/\//i.test(value)) {
+        return value;
+      }
+      const sanitized = value.replace(/^\/+/, '');
+      return `${protocol}//${sanitized}`;
+    };
+
+    if (envWsUrl) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return ensureProtocol(envWsUrl, protocol);
+    }
+
+    if (envApiUrl) {
+      try {
+        const url = new URL(envApiUrl, window.location.href);
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${url.protocol}//${url.host}${url.pathname.replace(/\/$/, '')}/ws`;
+      } catch (error) {
+        console.warn('Unable to parse VITE_API_URL for websocket usage:', error);
+      }
+    }
+
+    const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${fallbackProtocol}//${window.location.host}/ws`;
+  }
+
+  private notifyConnectionFailure() {
+    if (!this.toast) return;
+
+    this.toast({
+      title: 'Gagal terhubung ke pembaruan real-time',
+      description: 'Sistem akan tetap berjalan tanpa sinkronisasi waktu nyata.',
+    });
+  }
+
   connect(queryClient: any, toast: any) {
     if (this.isConnecting || (this.ws && this.ws.readyState === WebSocket.OPEN)) {
       return;
@@ -29,9 +70,8 @@ class WebSocketManager {
     this.isConnecting = true;
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
-      
+      const wsUrl = this.resolveWebSocketUrl();
+
       console.log('🔄 Connecting to WebSocket...', wsUrl);
       this.ws = new WebSocket(wsUrl);
 
@@ -58,22 +98,28 @@ class WebSocketManager {
         console.log('🔌 WebSocket disconnected', event.code, event.reason);
         this.isConnecting = false;
         this.ws = null;
-        
+
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
           console.log(`🔄 Attempting reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
           setTimeout(() => this.connect(queryClient, toast), this.reconnectInterval);
+        } else {
+          this.notifyConnectionFailure();
         }
       };
 
       this.ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         this.isConnecting = false;
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          this.notifyConnectionFailure();
+        }
       };
 
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
       this.isConnecting = false;
+      this.notifyConnectionFailure();
     }
   }
 
@@ -193,13 +239,13 @@ export function useWebSocket() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const connect = () => {
+  const connect = useCallback(() => {
     websocketManager.connect(queryClient, toast);
-  };
+  }, [queryClient, toast]);
 
-  const disconnect = () => {
+  const disconnect = useCallback(() => {
     websocketManager.disconnect();
-  };
+  }, []);
 
   return {
     connect,
