@@ -472,7 +472,10 @@ export default function FinanceNew() {
               {formatCurrency(summary?.netProfit || '0')}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              = {formatCurrency(summary?.totalSalesRevenue || '0')} - {formatCurrency(summary?.totalCOGS || '0')} (HPP)
+              = {formatCurrency(summary?.totalIncome || '0')} - {formatCurrency(summary?.totalExpense || '0')}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Harga jual produk: {formatCurrency(summary?.totalSalesRevenue || '0')} • HPP: {formatCurrency(summary?.totalCOGS || '0')}
             </div>
           </CardContent>
         </Card>
@@ -555,8 +558,8 @@ export default function FinanceNew() {
                 Saat ini ada {summary?.breakdown?.sources ?
                   Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} transaksi pemasukan
                 dengan total {formatCurrency(summary?.totalIncome || '0')}.
-                Laba bersih dihitung dari total harga jual sebesar {formatCurrency(summary?.totalSalesRevenue || '0')} dikurangi HPP
-                (harga pokok penjualan) {formatCurrency(summary?.totalCOGS || '0')}.
+                Laba bersih dihitung dari total pendapatan dikurangi seluruh pengeluaran (termasuk HPP/biaya modal) sebesar {formatCurrency(summary?.totalExpense || '0')}.
+                Total harga jual produk tercatat {formatCurrency(summary?.totalSalesRevenue || '0')} dengan HPP {formatCurrency(summary?.totalCOGS || '0')} sebagai bagian dari pengeluaran.
               </p>
             </div>
             <div className="p-3 bg-orange-50 rounded-lg">

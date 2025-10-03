@@ -886,10 +886,12 @@ export class FinanceManager {
       };
     });
 
+    const netProfit = totalIncome - totalExpense;
+
     return {
       totalIncome: totalIncome.toString(),
       totalExpense: totalExpense.toString(),
-      netProfit: (totalSalesRevenue - totalCOGS).toString(),
+      netProfit: netProfit.toString(),
       totalSalesRevenue: totalSalesRevenue.toString(),
       totalCOGS: totalCOGS.toString(),
       totalRefunds: totalRefunds.toString(),

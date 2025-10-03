@@ -200,7 +200,11 @@ export default function Reports() {
         doc.text(`HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
         yPos += 8;
         doc.text(`Laba Bersih: Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`, 20, yPos);
-        yPos += 20;
+        yPos += 8;
+        doc.text(`Perhitungan: Pendapatan (${Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')}) - Pengeluaran (${Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')})`, 20, yPos);
+        yPos += 8;
+        doc.text(`Harga jual produk: Rp ${Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp ${Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}`, 20, yPos);
+        yPos += 12;
         
         // Laporan Servis
         doc.setFontSize(16);
@@ -478,14 +482,13 @@ export default function Reports() {
                           {financialLoading ? "Loading..." : `Rp ${Number(financialReport?.profit || 0).toLocaleString('id-ID')}`}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">
-
-                          Laba bersih = harga jual - HPP (Cost of Goods Sold).
+                          Laba bersih = total pendapatan - total pengeluaran.
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Harga jual: Rp {Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp {Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
-
-                          Laba bersih = total harga jual - HPP (Cost of Goods Sold).
-
+                          Pendapatan: Rp {Number(financialReport?.totalIncome || 0).toLocaleString('id-ID')} • Pengeluaran: Rp {Number(financialReport?.totalExpense || 0).toLocaleString('id-ID')}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Harga jual produk: Rp {Number(financialReport?.totalSalesRevenue || 0).toLocaleString('id-ID')} • HPP: Rp {Number(financialReport?.totalCOGS || 0).toLocaleString('id-ID')}
                         </p>
                       </div>
                       <TrendingUp className="w-8 h-8 text-green-600" />
