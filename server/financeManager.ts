@@ -1,8 +1,8 @@
 import { db } from "./db";
-import { 
-  financialRecords, 
-  employees, 
-  payrollRecords, 
+import {
+  financialRecords,
+  employees,
+  payrollRecords,
   attendanceRecords,
   products,
   accounts,
@@ -11,6 +11,7 @@ import {
   transactions,
   transactionItems,
   serviceTickets,
+  serviceTicketParts,
   type InsertFinancialRecord,
   type FinancialRecord,
   type InsertEmployee,
@@ -25,7 +26,7 @@ import {
   type InsertJournalEntryLine,
   type Account
 } from "@shared/schema";
-import { eq, and, gte, lte, desc, sum, count, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sum, count, sql, inArray, or } from "drizzle-orm";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
@@ -632,8 +633,93 @@ export class FinanceManager {
 
     const grossIncome = Number(incomeResult.total || 0);
     const cancellationExpenses = Number(cancellationExpenseResult.total || 0);
-    const totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
-    const totalExpense = totalExpenseAmount;
+    let totalIncome = grossIncome - cancellationExpenses; // Net revenue after cancellations
+    let totalExpense = totalExpenseAmount;
+
+    // Track fallback service totals in case financial records are missing (e.g. pending status)
+    let laborIncomeFallback = 0;
+    let partsRevenueFallback = 0;
+    let partsCostFallback = 0;
+
+    const serviceIncomeTypes = ['service', 'service_labor', 'service_parts_revenue', 'service_cancellation', 'service_cancellation_after_completed'];
+    const [serviceIncomeResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.type, 'income'),
+        inArray(financialRecords.referenceType, serviceIncomeTypes),
+        whereClauseWithStatus
+      ));
+
+    const [serviceExpenseResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(and(
+        eq(financialRecords.type, 'expense'),
+        inArray(financialRecords.referenceType, ['service_parts_cost', 'service_parts_cost_adjustment', 'service_cancellation_reversal']),
+        whereClauseWithStatus
+      ));
+
+    let confirmedServiceIncome = Number(serviceIncomeResult?.total || 0);
+    let confirmedServiceExpense = Number(serviceExpenseResult?.total || 0);
+
+    if (confirmedServiceIncome === 0 || confirmedServiceExpense === 0) {
+      const statusCondition = or(
+        eq(serviceTickets.status, 'completed'),
+        eq(serviceTickets.status, 'delivered')
+      );
+      const serviceConditions: any[] = [statusCondition];
+      if (startDate) {
+        serviceConditions.push(gte(serviceTickets.createdAt, startDate));
+      }
+      if (endDate) {
+        serviceConditions.push(lte(serviceTickets.createdAt, endDate));
+      }
+
+      const serviceWhere = serviceConditions.length > 1
+        ? and(...serviceConditions)
+        : serviceConditions[0];
+
+      if (confirmedServiceIncome === 0) {
+        const [laborFallbackResult] = await db
+          .select({ total: sum(serviceTickets.laborCost) })
+          .from(serviceTickets)
+          .where(serviceWhere);
+
+        const [partsRevenueFallbackResult] = await db
+          .select({ total: sum(serviceTicketParts.totalPrice) })
+          .from(serviceTicketParts)
+          .innerJoin(serviceTickets, eq(serviceTicketParts.serviceTicketId, serviceTickets.id))
+          .where(serviceWhere);
+
+        laborIncomeFallback = Number(laborFallbackResult?.total || 0);
+        partsRevenueFallback = Number(partsRevenueFallbackResult?.total || 0);
+        const fallbackIncome = laborIncomeFallback + partsRevenueFallback;
+
+        if (fallbackIncome > 0) {
+          totalIncome += fallbackIncome;
+          confirmedServiceIncome = fallbackIncome;
+        }
+      }
+
+      if (confirmedServiceExpense === 0) {
+        const [partsCostFallbackResult] = await db
+          .select({
+            total: sql<number>`SUM(${serviceTicketParts.quantity} * COALESCE(${products.lastPurchasePrice}, 0))`
+          })
+          .from(serviceTicketParts)
+          .innerJoin(serviceTickets, eq(serviceTicketParts.serviceTicketId, serviceTickets.id))
+          .leftJoin(products, eq(serviceTicketParts.productId, products.id))
+          .where(serviceWhere);
+
+        partsCostFallback = Number(partsCostFallbackResult?.total || 0);
+
+        if (partsCostFallback > 0) {
+          totalExpense += partsCostFallback;
+          confirmedServiceExpense = partsCostFallback;
+        }
+      }
+    }
 
     const [cogsResult] = await db
       .select({ total: sum(financialRecords.amount) })
@@ -841,6 +927,20 @@ export class FinanceManager {
       categories[item.category].count += item.count;
     });
 
+    // Inject fallback service values into category breakdowns if needed
+    if (laborIncomeFallback + partsRevenueFallback > 0) {
+      if (!categories['Service Revenue']) {
+        categories['Service Revenue'] = { income: 0, expense: 0, count: 0 };
+      }
+      categories['Service Revenue'].income += laborIncomeFallback + partsRevenueFallback;
+    }
+    if (partsCostFallback > 0) {
+      if (!categories['Cost of Goods Sold']) {
+        categories['Cost of Goods Sold'] = { income: 0, expense: 0, count: 0 };
+      }
+      categories['Cost of Goods Sold'].expense += partsCostFallback;
+    }
+
     // Process subcategory breakdown
     const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
     subcategoryBreakdown.forEach((item) => {
@@ -852,6 +952,31 @@ export class FinanceManager {
         };
       }
     });
+
+    if (laborIncomeFallback > 0) {
+      const laborKey = 'Labor Charge';
+      subcategories[laborKey] = {
+        amount: (subcategories[laborKey]?.amount ?? 0) + laborIncomeFallback,
+        type: 'income',
+        count: subcategories[laborKey]?.count ?? 0
+      };
+    }
+    if (partsRevenueFallback > 0) {
+      const partsRevenueKey = 'Parts Sales';
+      subcategories[partsRevenueKey] = {
+        amount: (subcategories[partsRevenueKey]?.amount ?? 0) + partsRevenueFallback,
+        type: 'income',
+        count: subcategories[partsRevenueKey]?.count ?? 0
+      };
+    }
+    if (partsCostFallback > 0) {
+      const partsCostKey = 'Parts Cost';
+      subcategories[partsCostKey] = {
+        amount: (subcategories[partsCostKey]?.amount ?? 0) + partsCostFallback,
+        type: 'expense',
+        count: subcategories[partsCostKey]?.count ?? 0
+      };
+    }
 
     // Process payment method breakdown
     const paymentMethods: { [key: string]: number } = {};
@@ -871,6 +996,25 @@ export class FinanceManager {
         };
       }
     });
+
+    if (laborIncomeFallback > 0) {
+      sources['service_labor'] = {
+        amount: (sources['service_labor']?.amount ?? 0) + laborIncomeFallback,
+        count: sources['service_labor']?.count ?? 0
+      };
+    }
+    if (partsRevenueFallback > 0) {
+      sources['service_parts_revenue'] = {
+        amount: (sources['service_parts_revenue']?.amount ?? 0) + partsRevenueFallback,
+        count: sources['service_parts_revenue']?.count ?? 0
+      };
+    }
+    if (partsCostFallback > 0) {
+      sources['service_parts_cost'] = {
+        amount: (sources['service_parts_cost']?.amount ?? 0) + partsCostFallback,
+        count: sources['service_parts_cost']?.count ?? 0
+      };
+    }
 
     // Process inventory breakdown
     const inventory: { [key: string]: { value: number; stock: number; avgCost: number } } = {};
