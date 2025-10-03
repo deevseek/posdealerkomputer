@@ -164,8 +164,21 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       return next();
     }
     
-    if (skipRoutes.some(route => req.path.startsWith(route))) {
-      return next();
+    const shouldSkipRoute = skipRoutes.some(route => req.path.startsWith(route));
+
+    if (shouldSkipRoute) {
+      const requiresTenantContext =
+        !!matchedCustomDomainClient ||
+        (!isMainDomainRequest &&
+          subdomain !== '' &&
+          subdomain !== 'admin' &&
+          subdomain !== 'main');
+
+      if (!requiresTenantContext) {
+        return next();
+      }
+
+      console.log('Skip route requires tenant context, continuing tenant resolution for path:', req.path);
     }
 
     // Find client by subdomain
