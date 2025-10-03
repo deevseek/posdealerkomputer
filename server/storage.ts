@@ -2549,8 +2549,9 @@ export class DatabaseStorage implements IStorage {
       .where(lowStockWhere);
 
     // Monthly profit calculated from POS transactions (harga jual - HPP)
+    let monthlySalesRevenueValue = 0;
+    let monthlyCOGSValue = 0;
     let monthlyProfit = 0;
-    let monthlyProfitFromSales = false;
 
     try {
       const monthlySalesWhere = clientId
@@ -2577,25 +2578,49 @@ export class DatabaseStorage implements IStorage {
         .where(monthlySalesWhere);
 
       if (monthlyPosSummary) {
-        const monthlySalesValue = Number(monthlyPosSummary.totalSales ?? 0);
-        const monthlyCOGSValue = Number(monthlyPosSummary.totalCOGS ?? 0);
-        monthlyProfit = Number((monthlySalesValue - monthlyCOGSValue).toFixed(2));
-        monthlyProfitFromSales = true;
+        monthlySalesRevenueValue = Number(monthlyPosSummary.totalSales ?? 0);
+        monthlyCOGSValue = Number(monthlyPosSummary.totalCOGS ?? 0);
       }
-      const { financeManager } = await import('./financeManager');
-      const summary = await financeManager.getSummary(startOfMonth, new Date());
-      monthlyProfit = Number(summary.grossProfit || 0);
     } catch (error) {
       console.error("Error calculating monthly POS profit from transactions:", error);
     }
 
-    if (!monthlyProfitFromSales) {
+    const fallbackGrossProfit = Number((monthlySalesRevenueValue - monthlyCOGSValue).toFixed(2));
+
+    try {
+      const { financeManager } = await import('./financeManager');
+      const summary = await financeManager.getSummary(startOfMonth, now);
+
+      const summarySalesRevenueValue = Number(summary.totalSalesRevenue ?? 0);
+      const resolvedSalesRevenueValue =
+        summarySalesRevenueValue !== 0 ? summarySalesRevenueValue : monthlySalesRevenueValue;
+
+      const summaryCOGSValue = Number(summary.totalCOGS ?? 0);
+      const resolvedCOGSValue = summaryCOGSValue !== 0 ? summaryCOGSValue : monthlyCOGSValue;
+
+      const fallbackSummaryGrossProfitValue = Number(
+        (resolvedSalesRevenueValue - resolvedCOGSValue).toFixed(2)
+      );
+
+      const summaryGrossProfitValue = Number(summary.grossProfit ?? 0);
+      const resolvedGrossProfitValue =
+        summaryGrossProfitValue !== 0
+          ? summaryGrossProfitValue
+          : fallbackSummaryGrossProfitValue !== 0
+            ? fallbackSummaryGrossProfitValue
+            : summaryGrossProfitValue;
+
+      monthlyProfit = resolvedGrossProfitValue;
+    } catch (error) {
+      console.error("Error getting monthly profit from finance manager:", error);
+    }
+
+    if (monthlyProfit === 0 && fallbackGrossProfit !== 0) {
+      monthlyProfit = fallbackGrossProfit;
+    }
+
+    if (monthlyProfit === 0) {
       try {
-        const { financeManager } = await import('./financeManager');
-        const summary = await financeManager.getSummary(startOfMonth, now);
-        monthlyProfit = Number(summary.grossProfit || 0);
-      } catch (error) {
-        console.error("Error getting monthly profit from finance manager:", error);
         // Fallback to simplified financial record calculation (harga jual - HPP)
         const confirmedCondition = eq(financialRecords.status, 'confirmed');
         const monthlyIncomeWhere = clientId
@@ -2639,6 +2664,8 @@ export class DatabaseStorage implements IStorage {
         const monthlyIncome = Number(monthlyIncomeResult.total || 0);
         const monthlyCOGS = Number(monthlyCogsResult.total || 0);
         monthlyProfit = monthlyIncome - monthlyCOGS;
+      } catch (fallbackError) {
+        console.error("Error calculating monthly profit from financial records:", fallbackError);
       }
     }
 
