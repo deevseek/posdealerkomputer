@@ -14,9 +14,9 @@ export class RealtimeService {
   initialize(server: Server) {
     console.log('🔄 Initializing WebSocket server for real-time updates...');
     
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       server,
-      path: '/ws'
+      path: '/api/ws'
     });
 
     this.wss.on('connection', (ws: WebSocket, req) => {
