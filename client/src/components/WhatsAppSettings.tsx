@@ -11,6 +11,12 @@ interface WhatsAppSettingsProps {
   storeConfig: any;
 }
 
+interface WhatsAppStatusResponse {
+  connected: boolean;
+  connectionState: 'open' | 'close';
+  qrCode: string | null;
+}
+
 export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -19,11 +25,26 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
   const whatsappEnabled = storeConfig?.whatsappEnabled || false;
 
   // Query WhatsApp status
-  const { data: whatsappStatus, isLoading: statusLoading } = useQuery({
+  const { data: whatsappStatus, isLoading: statusLoading } = useQuery<WhatsAppStatusResponse | null>({
     queryKey: ['/api/whatsapp/status'],
     enabled: whatsappEnabled,
-    refetchInterval: false, // Disable automatic polling to prevent infinite loop
-    staleTime: 30000, // Cache for 30 seconds
+    refetchInterval: (query) => {
+      const data = query.state.data as WhatsAppStatusResponse | null;
+
+      if (!whatsappEnabled) {
+        return false;
+      }
+
+      if (!data || !data.connected || !data.qrCode) {
+        // Poll more aggressively while waiting for a QR code or connection
+        return 2000;
+      }
+
+      // Stop polling once connected to avoid unnecessary requests
+      return false;
+    },
+    refetchIntervalInBackground: true,
+    staleTime: 5000,
     refetchOnWindowFocus: false,
   });
 
