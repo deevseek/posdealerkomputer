@@ -136,7 +136,6 @@ export default function Dashboard() {
             <StatCard
               title="Service Aktif"
               value={statsLoading ? "Memuat..." : (stats as any)?.activeServices?.toString() || "0"}
-              change="5 mendesak"
               icon="tools"
               color="accent"
               data-testid="stat-active-services"
