@@ -60,10 +60,14 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, enabled) => {
       // Invalidate WhatsApp status and dashboard stats for real-time sync
       queryClient.invalidateQueries({ queryKey: ['/api/whatsapp/status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats'] });
+      queryClient.setQueryData(['store-config-settings'], (previous: any) =>
+        previous ? { ...previous, whatsappEnabled: enabled } : { whatsappEnabled: enabled },
+      );
+      queryClient.invalidateQueries({ queryKey: ['store-config-settings'] });
       toast({
         title: "Berhasil",
         description: "Pengaturan WhatsApp berhasil diubah",
@@ -180,9 +184,9 @@ export function WhatsAppSettings({ storeConfig }: WhatsAppSettingsProps) {
     testMessageMutation.mutate(testPhone);
   };
 
-  const whatsappConnected = (whatsappStatus as any)?.connected || false;
-  const connectionState = (whatsappStatus as any)?.state || 'close';
-  const qrCode = (whatsappStatus as any)?.qrCode;
+  const whatsappConnected = whatsappStatus?.connected ?? false;
+  const connectionState = whatsappStatus?.connectionState ?? 'close';
+  const qrCode = whatsappStatus?.qrCode ?? null;
 
   return (
     <Card>
