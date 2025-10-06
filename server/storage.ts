@@ -61,7 +61,7 @@ import {
   type InsertWarrantyClaim,
 } from "@shared/schema";
 import { db, getCurrentTenantContext } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt, ne } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt, ne, type SQL } from "drizzle-orm";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -2850,7 +2850,7 @@ export class DatabaseStorage implements IStorage {
   async getWarrantyClaims(status?: string, clientIdParam?: string | null): Promise<any[]> {
     const clientId = this.resolveClientId(clientIdParam);
     // Join with transactions and service tickets to get reference numbers
-    const query = db
+    let query = db
       .select({
         // Warranty claim fields
         id: warrantyClaims.id,
@@ -2886,20 +2886,21 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(customers, eq(warrantyClaims.customerId, customers.id))
       .leftJoin(transactions, eq(warrantyClaims.originalTransactionId, transactions.id))
       .leftJoin(serviceTickets, eq(warrantyClaims.originalServiceTicketId, serviceTickets.id));
-    
-    let whereCondition;
+
+    const conditions: SQL<unknown>[] = [];
 
     if (clientId) {
-      whereCondition = eq(warrantyClaims.clientId, clientId);
+      conditions.push(eq(warrantyClaims.clientId, clientId));
     }
 
     if (status) {
-      const statusCondition = eq(warrantyClaims.status, status as any);
-      whereCondition = whereCondition ? and(whereCondition, statusCondition) : statusCondition;
+      conditions.push(eq(warrantyClaims.status, status as any));
     }
 
-    if (whereCondition) {
-      query.where(whereCondition);
+    if (conditions.length === 1) {
+      query = query.where(conditions[0]);
+    } else if (conditions.length > 1) {
+      query = query.where(and(...conditions));
     }
 
     return await query.orderBy(desc(warrantyClaims.claimDate));
