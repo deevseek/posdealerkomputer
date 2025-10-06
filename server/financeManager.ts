@@ -62,9 +62,23 @@ const ACCOUNT_CODES = {
 };
 
 export class FinanceManager {
-  // Helper method to get account by code
-  private async getAccountByCode(code: string): Promise<Account | null> {
-    const [account] = await db.select().from(accounts).where(eq(accounts.code, code)).limit(1);
+  // Helper method to get account by code with optional client scoping
+  private async getAccountByCode(code: string, clientId?: string | null, tx?: any): Promise<Account | null> {
+    const dbClient = tx || db;
+
+    if (clientId) {
+      const [scopedAccount] = await dbClient
+        .select()
+        .from(accounts)
+        .where(and(eq(accounts.code, code), eq(accounts.clientId, clientId)))
+        .limit(1);
+
+      if (scopedAccount) {
+        return scopedAccount;
+      }
+    }
+
+    const [account] = await dbClient.select().from(accounts).where(eq(accounts.code, code)).limit(1);
     return account || null;
   }
 
@@ -348,6 +362,7 @@ export class FinanceManager {
         creditAmount?: string;
       }[];
       userId: string;
+      clientId?: string | null;
     },
     tx?: any
   ): Promise<{ success: boolean; journalEntry?: JournalEntry; error?: string }> {
@@ -368,34 +383,39 @@ export class FinanceManager {
       const journalNumber = `JE-${Date.now()}`;
       
       // Create journal entry
-      const [journalEntry] = await dbClient.insert(journalEntries).values({
-        journalNumber,
-        date: new Date(),
-        description: data.description,
-        reference: data.reference,
-        referenceType: data.referenceType,
-        totalAmount: totalAmount.toString(),
-        status: 'posted',
-        userId: data.userId
-      }).returning();
-      
+      const [journalEntry] = await dbClient
+        .insert(journalEntries)
+        .values({
+          journalNumber,
+          date: new Date(),
+          description: data.description,
+          reference: data.reference,
+          referenceType: data.referenceType,
+          totalAmount: totalAmount.toString(),
+          status: 'posted',
+          userId: data.userId,
+          clientId: data.clientId ?? null
+        })
+        .returning();
+
       // Create journal entry lines and update account balances
       for (const lineData of data.lines) {
-        const account = await this.getAccountByCode(lineData.accountCode);
+        const account = await this.getAccountByCode(lineData.accountCode, data.clientId ?? null, dbClient);
         if (!account) {
           return {
             success: false,
             error: `Account with code ${lineData.accountCode} not found`
           };
         }
-        
+
         // Create journal entry line
         await dbClient.insert(journalEntryLines).values({
           journalEntryId: journalEntry.id,
           accountId: account.id,
           description: lineData.description,
           debitAmount: lineData.debitAmount || '0',
-          creditAmount: lineData.creditAmount || '0'
+          creditAmount: lineData.creditAmount || '0',
+          clientId: data.clientId ?? account.clientId ?? null
         });
         
         // Update account balance based on normal balance
@@ -443,6 +463,7 @@ export class FinanceManager {
       sourceAccount?: string;
       destinationAccount?: string;
       userId: string;
+      clientId?: string | null;
     },
     tx?: any
   ): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
@@ -577,7 +598,8 @@ export class FinanceManager {
           reference: transaction.id,
           referenceType: 'financial_transaction',
           lines: journalLines,
-          userId: data.userId
+          userId: data.userId,
+          clientId: data.clientId ?? null
         }, tx);
 
         if (!journalResult.success) {
@@ -588,7 +610,7 @@ export class FinanceManager {
           };
 
           if (linkedAccountCode) {
-            const linkedAccount = await this.getAccountByCode(linkedAccountCode);
+            const linkedAccount = await this.getAccountByCode(linkedAccountCode, data.clientId ?? null, dbClient);
             if (linkedAccount) {
               updateData.accountId = linkedAccount.id;
             }
