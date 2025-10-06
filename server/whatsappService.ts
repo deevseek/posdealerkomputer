@@ -56,11 +56,15 @@ export class WhatsAppService {
         }
         if (connection === 'close') {
           this.connectionState = 'close';
-          const shouldReconnect = (lastDisconnect?.error as Boom)?.output?.statusCode !== DisconnectReason.loggedOut;
+          const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+          const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
           console.log('Connection closed due to ', lastDisconnect?.error, ', reconnecting ', shouldReconnect);
           // Force QR code regeneration on disconnect
           this.qrCode = null;
           await this.clearQRFromDatabase();
+          if (!shouldReconnect) {
+            await this.clearAuthFromStorage();
+          }
           if (!this.forceDisconnect) {
             setTimeout(async () => {
               if (!this.forceDisconnect) await this.initialize();
@@ -178,6 +182,18 @@ export class WhatsAppService {
 
   getConnectionState(): 'open' | 'close' {
     return this.connectionState;
+  }
+
+  private async clearAuthFromStorage() {
+    try {
+      const authPath = path.resolve('auth_info_baileys');
+      if (fs.existsSync(authPath)) {
+        await fs.promises.rm(authPath, { recursive: true, force: true });
+      }
+      await fs.promises.mkdir(authPath, { recursive: true });
+    } catch (error) {
+      console.error('Error clearing WhatsApp auth storage:', error);
+    }
   }
 
   private async updateConnectionStatus(connected: boolean) {
