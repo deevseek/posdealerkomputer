@@ -2922,7 +2922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: 'WhatsApp not enabled in settings' });
       }
 
-      await whatsappService.initialize();
+      await whatsappService.connect();
       res.json({ message: 'WhatsApp connection initiated' });
     } catch (error) {
       console.error('Error connecting WhatsApp:', error);
