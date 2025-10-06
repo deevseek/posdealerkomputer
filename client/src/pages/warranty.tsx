@@ -1067,15 +1067,22 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
   const [action, setAction] = useState<'approve' | 'reject'>('approve');
   
   const schema = createProcessClaimSchema(claim.claimType, action);
-  
+
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
       action: "approve" as const,
       adminNotes: "",
-      returnCondition: "normal_stock" as const,
+      returnCondition: undefined,
     },
+    shouldUnregister: true,
   });
+
+  useEffect(() => {
+    if (!(claim.claimType === 'sales_return' && action === 'approve')) {
+      form.setValue("returnCondition", undefined as any, { shouldDirty: false, shouldValidate: false });
+    }
+  }, [action, claim.claimType, form]);
 
   const processClaimMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1105,15 +1112,27 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
         <p className="text-sm"><strong>Deskripsi:</strong> {claim.claimReason}</p>
       </div>
 
-      <form onSubmit={form.handleSubmit((data) => processClaimMutation.mutate(data))} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          const payload: any = { ...data };
+          if (!(claim.claimType === 'sales_return' && data.action === 'approve')) {
+            delete payload.returnCondition;
+          }
+          processClaimMutation.mutate(payload);
+        })}
+        className="space-y-4"
+      >
         <div>
           <Label>Keputusan</Label>
-          <Select 
-            value={action} 
+          <Select
+            value={action}
             onValueChange={(value) => {
               const newAction = value as 'approve' | 'reject';
               setAction(newAction);
               form.setValue("action", newAction as any);
+              if (!(claim.claimType === 'sales_return' && newAction === 'approve')) {
+                form.setValue("returnCondition", undefined as any, { shouldDirty: false, shouldValidate: false });
+              }
             }}
           >
             <SelectTrigger data-testid="select-process-action">
@@ -1130,8 +1149,8 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
         {claim.claimType === 'sales_return' && action === 'approve' && (
           <div>
             <Label>Kondisi Barang Retur <span className="text-red-500">*</span></Label>
-            <Select 
-              value={form.watch("returnCondition")} 
+            <Select
+              value={form.watch("returnCondition") || undefined}
               onValueChange={(value) => {
                 form.setValue("returnCondition", value as any);
               }}

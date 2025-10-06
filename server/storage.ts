@@ -2946,36 +2946,50 @@ export class DatabaseStorage implements IStorage {
 
     const clientId = this.resolveClientId(options.clientId);
 
-    const [claim] = await db
-      .insert(warrantyClaims)
-      .values({
-        ...claimData,
-        claimNumber,
-        clientId: clientId ?? claimData.clientId ?? null,
-        // Let database use default timestamps
-      })
-      .returning();
+    const claim = await db.transaction(async (tx) => {
+      const [createdClaim] = await tx
+        .insert(warrantyClaims)
+        .values({
+          ...claimData,
+          claimNumber,
+          clientId: clientId ?? claimData.clientId ?? null,
+          // Let database use default timestamps
+        })
+        .returning();
 
-    // For service warranty claims, auto-approve and create new service ticket
-    if (claimData.claimType === 'service' && claimData.originalServiceTicketId) {
-      await this.processServiceWarrantyClaim({
-        claimId: claim.id,
-        originalServiceTicketId: claimData.originalServiceTicketId,
-        customerId: claimData.customerId,
-        processedBy: options.createdBy,
-        clientId: clientId ?? null,
-      });
-    }
+      if (!createdClaim) {
+        throw new Error('Failed to create warranty claim');
+      }
 
-    return claim;
+      // For service warranty claims, auto-approve and create new service ticket
+      if (claimData.claimType === 'service' && claimData.originalServiceTicketId) {
+        await this.processServiceWarrantyClaim({
+          claimId: createdClaim.id,
+          originalServiceTicketId: claimData.originalServiceTicketId,
+          customerId: claimData.customerId,
+          processedBy: options.createdBy,
+          clientId: clientId ?? createdClaim.clientId ?? null,
+          tx,
+        });
+      }
+
+      return createdClaim;
+    });
+
+    const hydratedClaim = await this.getWarrantyClaimById(claim.id, clientId ?? claim.clientId ?? null);
+    return hydratedClaim ?? claim;
   }
 
   async updateWarrantyClaimStatus(
     id: string,
     status: string,
     processedBy?: string,
-    extra?: Partial<Pick<WarrantyClaim, 'returnCondition' | 'notes' | 'adminNotes' | 'claimedItems' | 'warrantyServiceTicketId'>>
+    extra?: Partial<
+      Pick<WarrantyClaim, 'returnCondition' | 'notes' | 'adminNotes' | 'claimedItems' | 'warrantyServiceTicketId'>
+    >,
+    tx?: any
   ): Promise<WarrantyClaim> {
+    const dbClient = tx || db;
     const updateData: any = {
       status,
       // Let database handle updatedAt timestamp
@@ -2997,7 +3011,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [claim] = await db
+    const [claim] = await dbClient
       .update(warrantyClaims)
       .set(updateData)
       .where(eq(warrantyClaims.id, id))
@@ -3149,14 +3163,20 @@ export class DatabaseStorage implements IStorage {
     customerId: string;
     processedBy: string;
     clientId: string | null;
+    tx?: any;
   }): Promise<void> {
     try {
-      const { claimId, originalServiceTicketId, customerId, processedBy, clientId } = params;
+      const { claimId, originalServiceTicketId, customerId, processedBy, clientId, tx } = params;
+      const dbClient = tx || db;
       // Get the original service ticket details
-      const [originalTicket] = await db
+      const [originalTicket] = await dbClient
         .select()
         .from(serviceTickets)
-        .where(eq(serviceTickets.id, originalServiceTicketId));
+        .where(
+          clientId
+            ? and(eq(serviceTickets.id, originalServiceTicketId), eq(serviceTickets.clientId, clientId))
+            : eq(serviceTickets.id, originalServiceTicketId)
+        );
 
       if (!originalTicket) {
         throw new Error('Original service ticket not found');
@@ -3180,24 +3200,34 @@ export class DatabaseStorage implements IStorage {
         clientId: clientId ?? originalTicket.clientId ?? null,
       };
 
-      const [warrantyTicket] = await db
+      const [warrantyTicket] = await dbClient
         .insert(serviceTickets)
         .values(warrantyServiceData as any)
         .returning();
 
-      // Update original service ticket status to indicate warranty claim
-      await db
+      // Preserve original status while marking the ticket as updated for audit trail
+      await dbClient
         .update(serviceTickets)
         .set({
-          status: 'completed',
+          status: originalTicket.status ?? 'pending',
           updatedAt: new Date(),
         })
-        .where(eq(serviceTickets.id, originalServiceTicketId));
+        .where(
+          clientId
+            ? and(eq(serviceTickets.id, originalServiceTicketId), eq(serviceTickets.clientId, clientId))
+            : eq(serviceTickets.id, originalServiceTicketId)
+        );
 
       // Auto-approve the warranty claim since it's for internal service
-      await this.updateWarrantyClaimStatus(claimId, 'approved', processedBy, {
-        warrantyServiceTicketId: warrantyTicket?.id ?? null,
-      });
+      await this.updateWarrantyClaimStatus(
+        claimId,
+        'approved',
+        processedBy,
+        {
+          warrantyServiceTicketId: warrantyTicket?.id ?? null,
+        },
+        dbClient
+      );
 
     } catch (error) {
       console.error('Error processing service warranty claim:', error);
@@ -3214,198 +3244,217 @@ export class DatabaseStorage implements IStorage {
   ): Promise<WarrantyClaimItemDetail[]> {
     try {
       const clientId = this.resolveClientId(options?.clientId);
-      // Get original transaction details
-      const [originalTransaction] = await db
-        .select()
-        .from(transactions)
-        .where(eq(transactions.id, originalTransactionId));
 
-      if (!originalTransaction) {
-        throw new Error('Original transaction not found');
-      }
+      return await db.transaction(async (tx) => {
+        // Get original transaction details
+        const [originalTransaction] = await tx
+          .select()
+          .from(transactions)
+          .where(
+            clientId
+              ? and(eq(transactions.id, originalTransactionId), eq(transactions.clientId, clientId))
+              : eq(transactions.id, originalTransactionId)
+          );
 
-      // Get transaction items that were sold
-      const soldItemsRaw = await db
-        .select({
-          id: transactionItems.id,
-          productId: transactionItems.productId,
-          quantity: transactionItems.quantity,
-          unitPrice: transactionItems.unitPrice,
-        })
-        .from(transactionItems)
-        .where(eq(transactionItems.transactionId, originalTransactionId));
+        if (!originalTransaction) {
+          throw new Error('Original transaction not found');
+        }
 
-      const soldItems = soldItemsRaw.map((item) => ({
-        id: item.id,
-        productId: item.productId,
-        quantity: Number(item.quantity) || 0,
-        unitPrice: item.unitPrice as string | number | null,
-      }));
-
-      const itemMap = new Map(soldItems.map((item) => [item.id, item]));
-
-      const itemsToProcess = (options?.claimedItems?.length
-        ? options.claimedItems.map((input) => {
-            const originalItem = itemMap.get(input.transactionItemId);
-            if (!originalItem) {
-              throw new Error(`Transaction item ${input.transactionItemId} not found for warranty processing`);
-            }
-
-            const requestedQuantity = Number(input.quantity) || 0;
-            const availableQuantity = Math.max(0, originalItem.quantity);
-            const quantity = Math.min(requestedQuantity, availableQuantity);
-            if (quantity <= 0) {
-              return null;
-            }
-
-            return {
-              ...originalItem,
-              quantity,
-            };
+        // Get transaction items that were sold
+        const soldItemsRaw = await tx
+          .select({
+            id: transactionItems.id,
+            productId: transactionItems.productId,
+            quantity: transactionItems.quantity,
+            unitPrice: transactionItems.unitPrice,
           })
-        : soldItems
-      ).filter((item): item is typeof soldItems[number] => !!item && item.quantity > 0);
+          .from(transactionItems)
+          .where(eq(transactionItems.transactionId, originalTransactionId));
 
-      if (itemsToProcess.length === 0) {
-        return [];
-      }
+        const soldItems = soldItemsRaw.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          quantity: Number(item.quantity) || 0,
+          unitPrice: item.unitPrice as string | number | null,
+        }));
 
-      const financeManager = new FinanceManager();
-      const processedItems: WarrantyClaimItemDetail[] = [];
+        const itemMap = new Map(soldItems.map((item) => [item.id, item]));
 
-      // Process each item return
-      for (const item of itemsToProcess) {
-        const productId = item.productId;
-        const quantity = item.quantity;
+        const itemsToProcess = (options?.claimedItems?.length
+          ? options.claimedItems.map((input) => {
+              const originalItem = itemMap.get(input.transactionItemId);
+              if (!originalItem) {
+                throw new Error(`Transaction item ${input.transactionItemId} not found for warranty processing`);
+              }
 
-        const unitPriceString =
-          typeof item.unitPrice === 'string'
-            ? item.unitPrice
-            : item.unitPrice != null
-              ? String(item.unitPrice)
-              : '0';
+              const requestedQuantity = Number(input.quantity) || 0;
+              const availableQuantity = Math.max(0, originalItem.quantity);
+              const quantity = Math.min(requestedQuantity, availableQuantity);
+              if (quantity <= 0) {
+                return null;
+              }
 
-        processedItems.push({
-          transactionItemId: item.id,
-          productId,
-          quantity,
-          unitPrice: unitPriceString,
-        });
-
-        if (returnCondition === 'normal_stock') {
-          // Add back to normal inventory
-          await db
-            .update(products)
-            .set({
-              stock: sql`${products.stock} + ${quantity}`,
-              updatedAt: new Date()
+              return {
+                ...originalItem,
+                quantity,
+              };
             })
-            .where(eq(products.id, productId));
+          : soldItems
+        ).filter((item): item is typeof soldItems[number] => !!item && item.quantity > 0);
 
-          // Create stock movement record
-          await db.insert(stockMovements).values({
-            productId: productId,
-            movementType: 'adjustment',
-            referenceType: 'warranty_return',
-            quantity: quantity,
-            referenceId: originalTransactionId,
-            notes: `Retur garansi - kondisi barang normal, dapat dijual kembali`,
-            userId: userId,
-            clientId: clientId ?? originalTransaction.clientId ?? null,
+        if (itemsToProcess.length === 0) {
+          return [];
+        }
+
+        const financeManager = new FinanceManager();
+        const processedItems: WarrantyClaimItemDetail[] = [];
+
+        // Process each item return
+        for (const item of itemsToProcess) {
+          const productId = item.productId;
+          const quantity = item.quantity;
+
+          const unitPriceString =
+            typeof item.unitPrice === 'string'
+              ? item.unitPrice
+              : item.unitPrice != null
+                ? String(item.unitPrice)
+                : '0';
+
+          processedItems.push({
+            transactionItemId: item.id,
+            productId,
+            quantity,
+            unitPrice: unitPriceString,
           });
 
-          // Create proper journal entries for normal stock return
-          const itemValue = Number(item.unitPrice ?? 0) * quantity;
+          const productWhere = clientId
+            ? and(eq(products.id, productId), eq(products.clientId, clientId))
+            : eq(products.id, productId);
 
-          // Journal Entry: Restore inventory value
-          // Debit: Persediaan (Inventory), Credit: Beban Garansi (Warranty Expense)
-          const journalResult = await financeManager.createJournalEntry({
-            description: `Retur garansi - penambahan stok normal (${quantity} unit)`,
-            reference: originalTransactionId,
-            referenceType: 'warranty_return',
-            lines: [
-              {
-                accountCode: '1130', // INVENTORY - Persediaan Barang
-                description: `Penambahan persediaan dari retur garansi - Produk ID ${productId}`,
-                debitAmount: itemValue.toString()
-              },
-              {
-                accountCode: '5120', // WARRANTY_EXPENSE - Beban Garansi
-                description: `Pemulihan beban garansi dari retur normal - Produk ID ${productId}`,
-                creditAmount: itemValue.toString()
-              }
-            ],
-            userId: userId
-          });
+          if (returnCondition === 'normal_stock') {
+            // Add back to normal inventory
+            await tx
+              .update(products)
+              .set({
+                stock: sql`${products.stock} + ${quantity}`,
+                updatedAt: new Date()
+              })
+              .where(productWhere);
 
-          if (!journalResult.success) {
-            console.warn(`Failed to create journal entry for normal warranty return: ${journalResult.error}`);
-
-            // For normal stock returns, we should NOT create any financial record
-            // as it should be financially neutral - only restore inventory
-            // The warranty return does not generate new revenue/income
-            console.log(`Normal warranty return processed without financial impact - only inventory restored`);
-          }
-
-        } else if (returnCondition === 'damaged_stock') {
-          // Handle damaged stock with proper accounting principles
-
-          // Create stock movement record for damaged goods tracking
-          await db.insert(stockMovements).values({
-            productId: productId,
-            movementType: 'adjustment',
-            referenceType: 'warranty_return_damaged',
-            quantity: quantity,
-            referenceId: originalTransactionId,
-            notes: `Retur garansi - barang rusak tidak dapat dijual kembali`,
-            userId: userId,
-            clientId: clientId ?? originalTransaction.clientId ?? null,
-          });
-
-          // Create proper journal entries for damaged goods
-          const itemValue = Number(item.unitPrice ?? 0) * quantity;
-
-          // Journal Entry: Record damaged goods inventory and write-off
-          // Debit: Kerugian Barang Rusak (Loss), Credit: Persediaan (Inventory)
-          const journalResult = await financeManager.createJournalEntry({
-            description: `Retur garansi - kerugian barang rusak (${quantity} unit)`,
-            reference: originalTransactionId,
-            referenceType: 'warranty_return_damaged',
-            lines: [
-              {
-                accountCode: '5130', // DAMAGED_GOODS_LOSS - Kerugian Barang Rusak
-                description: `Kerugian barang rusak dari retur garansi - Produk ID ${productId}`,
-                debitAmount: itemValue.toString()
-              },
-              {
-                accountCode: '1130', // INVENTORY - Persediaan Barang
-                description: `Pengurangan persediaan akibat barang rusak - Produk ID ${productId}`,
-                creditAmount: itemValue.toString()
-              }
-            ],
-            userId: userId
-          });
-
-          if (!journalResult.success) {
-            console.warn(`Failed to create journal entry for damaged goods: ${journalResult.error}`);
-
-            // Fallback: Create financial record entry if journal entry fails
-            await db.insert(financialRecords).values({
-              type: 'expense',
-              category: 'Kerugian Barang Rusak',
-              subcategory: 'Retur Garansi',
-              description: `Retur garansi - kerugian barang rusak (${quantity} unit, Produk ID ${productId})`,
-              amount: itemValue.toString(),
-              reference: originalTransactionId,
-              referenceType: 'warranty_return_damaged',
+            // Create stock movement record
+            await tx.insert(stockMovements).values({
+              productId: productId,
+              movementType: 'adjustment',
+              referenceType: 'warranty_return',
+              quantity: quantity,
+              referenceId: originalTransactionId,
+              notes: `Retur garansi - kondisi barang normal, dapat dijual kembali`,
               userId: userId,
               clientId: clientId ?? originalTransaction.clientId ?? null,
             });
+
+            // Create proper journal entries for normal stock return
+            const itemValue = Number(item.unitPrice ?? 0) * quantity;
+
+            // Journal Entry: Restore inventory value
+            // Debit: Persediaan (Inventory), Credit: Beban Garansi (Warranty Expense)
+            const journalResult = await financeManager.createJournalEntry(
+              {
+                description: `Retur garansi - penambahan stok normal (${quantity} unit)`,
+                reference: originalTransactionId,
+                referenceType: 'warranty_return',
+                lines: [
+                  {
+                    accountCode: '1130', // INVENTORY - Persediaan Barang
+                    description: `Penambahan persediaan dari retur garansi - Produk ID ${productId}`,
+                    debitAmount: itemValue.toString()
+                  },
+                  {
+                    accountCode: '5120', // WARRANTY_EXPENSE - Beban Garansi
+                    description: `Pemulihan beban garansi dari retur normal - Produk ID ${productId}`,
+                    creditAmount: itemValue.toString()
+                  }
+                ],
+                userId: userId,
+                clientId: clientId ?? originalTransaction.clientId ?? null
+              },
+              tx
+            );
+
+            if (!journalResult.success) {
+              console.warn(`Failed to create journal entry for normal warranty return: ${journalResult.error}`);
+
+              // For normal stock returns, we should NOT create any financial record
+              // as it should be financially neutral - only restore inventory
+              // The warranty return does not generate new revenue/income
+              console.log(`Normal warranty return processed without financial impact - only inventory restored`);
+            }
+
+          } else if (returnCondition === 'damaged_stock') {
+            // Handle damaged stock with proper accounting principles
+
+            // Create stock movement record for damaged goods tracking
+            await tx.insert(stockMovements).values({
+              productId: productId,
+              movementType: 'adjustment',
+              referenceType: 'warranty_return_damaged',
+              quantity: quantity,
+              referenceId: originalTransactionId,
+              notes: `Retur garansi - barang rusak tidak dapat dijual kembali`,
+              userId: userId,
+              clientId: clientId ?? originalTransaction.clientId ?? null,
+            });
+
+            // Create proper journal entries for damaged goods
+            const itemValue = Number(item.unitPrice ?? 0) * quantity;
+
+            // Journal Entry: Record damaged goods inventory and write-off
+            // Debit: Kerugian Barang Rusak (Loss), Credit: Persediaan (Inventory)
+            const journalResult = await financeManager.createJournalEntry(
+              {
+                description: `Retur garansi - kerugian barang rusak (${quantity} unit)`,
+                reference: originalTransactionId,
+                referenceType: 'warranty_return_damaged',
+                lines: [
+                  {
+                    accountCode: '5130', // DAMAGED_GOODS_LOSS - Kerugian Barang Rusak
+                    description: `Kerugian barang rusak dari retur garansi - Produk ID ${productId}`,
+                    debitAmount: itemValue.toString()
+                  },
+                  {
+                    accountCode: '1130', // INVENTORY - Persediaan Barang
+                    description: `Pengurangan persediaan akibat barang rusak - Produk ID ${productId}`,
+                    creditAmount: itemValue.toString()
+                  }
+                ],
+                userId: userId,
+                clientId: clientId ?? originalTransaction.clientId ?? null
+              },
+              tx
+            );
+
+            if (!journalResult.success) {
+              console.warn(`Failed to create journal entry for damaged goods: ${journalResult.error}`);
+
+              // Fallback: Create financial record entry if journal entry fails
+              await tx.insert(financialRecords).values({
+                type: 'expense',
+                category: 'Kerugian Barang Rusak',
+                subcategory: 'Retur Garansi',
+                description: `Retur garansi - kerugian barang rusak (${quantity} unit, Produk ID ${productId})`,
+                amount: itemValue.toString(),
+                reference: originalTransactionId,
+                referenceType: 'warranty_return_damaged',
+                userId: userId,
+                clientId: clientId ?? originalTransaction.clientId ?? null,
+              });
+            }
           }
         }
-      }
 
-      return processedItems;
+        return processedItems;
+      });
     } catch (error) {
       console.error('Error processing sales return warranty:', error);
       throw error;
