@@ -2849,61 +2849,51 @@ export class DatabaseStorage implements IStorage {
   // Warranty Claims
   async getWarrantyClaims(status?: string, clientIdParam?: string | null): Promise<any[]> {
     const clientId = this.resolveClientId(clientIdParam);
-    // Join with transactions and service tickets to get reference numbers
-    let query = db
-      .select({
-        // Warranty claim fields
-        id: warrantyClaims.id,
-        claimNumber: warrantyClaims.claimNumber,
-        claimType: warrantyClaims.claimType,
-        status: warrantyClaims.status,
-        claimReason: warrantyClaims.claimReason,
-        claimDate: warrantyClaims.claimDate,
-        processedDate: warrantyClaims.processedDate,
-        returnCondition: warrantyClaims.returnCondition,
-        notes: warrantyClaims.notes,
-        adminNotes: warrantyClaims.adminNotes,
-        claimedItems: warrantyClaims.claimedItems,
-        createdAt: warrantyClaims.createdAt,
-        updatedAt: warrantyClaims.updatedAt,
-
-        // Reference information
-        originalTransactionId: warrantyClaims.originalTransactionId,
-        originalServiceTicketId: warrantyClaims.originalServiceTicketId,
-        warrantyServiceTicketId: warrantyClaims.warrantyServiceTicketId,
-
-        // Customer info
-        customerId: warrantyClaims.customerId,
-        customerName: customers.name,
-
-        // Transaction reference (if applicable)
-        transactionNumber: transactions.transactionNumber,
-        
-        // Service ticket reference (if applicable)
-        serviceTicketNumber: serviceTickets.ticketNumber,
-      })
-      .from(warrantyClaims)
-      .leftJoin(customers, eq(warrantyClaims.customerId, customers.id))
-      .leftJoin(transactions, eq(warrantyClaims.originalTransactionId, transactions.id))
-      .leftJoin(serviceTickets, eq(warrantyClaims.originalServiceTicketId, serviceTickets.id));
-
-    const conditions: SQL<unknown>[] = [];
+    const conditions: SQL[] = [];
 
     if (clientId) {
-      conditions.push(eq(warrantyClaims.clientId, clientId));
+      conditions.push(sql`wc.client_id = ${clientId}`);
     }
 
     if (status) {
-      conditions.push(eq(warrantyClaims.status, status as any));
+      conditions.push(sql`wc.status = ${status}`);
     }
 
-    if (conditions.length === 1) {
-      query = query.where(conditions[0]);
-    } else if (conditions.length > 1) {
-      query = query.where(and(...conditions));
-    }
+    const whereClause = conditions.length
+      ? sql`where ${sql.join(conditions, sql` and `)}`
+      : sql``;
 
-    return await query.orderBy(desc(warrantyClaims.claimDate));
+    const result = await db.execute(sql`
+      select
+        wc.id,
+        wc.claim_number as "claimNumber",
+        wc.claim_type as "claimType",
+        wc.status,
+        wc.claim_reason as "claimReason",
+        wc.claim_date as "claimDate",
+        wc.processed_date as "processedDate",
+        wc.return_condition as "returnCondition",
+        wc.notes,
+        wc.admin_notes as "adminNotes",
+        wc.claimed_items as "claimedItems",
+        wc.created_at as "createdAt",
+        wc.updated_at as "updatedAt",
+        wc.original_transaction_id as "originalTransactionId",
+        wc.original_service_ticket_id as "originalServiceTicketId",
+        wc.warranty_service_ticket_id as "warrantyServiceTicketId",
+        wc.customer_id as "customerId",
+        c.name as "customerName",
+        t.transaction_number as "transactionNumber",
+        st.ticket_number as "serviceTicketNumber"
+      from warranty_claims wc
+      left join customers c on wc.customer_id = c.id
+      left join transactions t on wc.original_transaction_id = t.id
+      left join service_tickets st on wc.original_service_ticket_id = st.id
+      ${whereClause}
+      order by wc.claim_date desc
+    `);
+
+    return result.rows ?? [];
   }
 
   async getWarrantyClaimById(id: string, clientIdParam?: string | null): Promise<WarrantyClaim | undefined> {
