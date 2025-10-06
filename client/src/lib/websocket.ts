@@ -23,18 +23,54 @@ class WebSocketManager {
   private resolveWebSocketUrl(): string {
     const envWsUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim();
     const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+    const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-    const ensureProtocol = (value: string, protocol: 'ws:' | 'wss:') => {
-      if (/^wss?:\/\//i.test(value)) {
-        return value;
+    const normalizeWsUrl = (value: string): string | null => {
+      if (!value) return null;
+
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+
+      const hasScheme = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(trimmed);
+
+      try {
+        if (hasScheme) {
+          const parsed = new URL(trimmed);
+          if (parsed.protocol === 'ws:' || parsed.protocol === 'wss:') {
+            return parsed.toString();
+          }
+
+          if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+            parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+            return parsed.toString();
+          }
+        }
+      } catch (error) {
+        console.warn('Unable to parse websocket URL, falling back to heuristics:', error);
       }
-      const sanitized = value.replace(/^\/+/, '');
-      return `${protocol}//${sanitized}`;
+
+      if (trimmed.startsWith('//')) {
+        return `${fallbackProtocol}${trimmed}`;
+      }
+
+      if (/^[\w.-]+:\d+(\/.*)?$/.test(trimmed)) {
+        return `${fallbackProtocol}//${trimmed}`;
+      }
+
+      if (trimmed.startsWith('/')) {
+        return `${fallbackProtocol}//${window.location.host}${trimmed}`;
+      }
+
+      if (trimmed.includes('/')) {
+        return `${fallbackProtocol}//${window.location.host}/${trimmed.replace(/^\/+/, '')}`;
+      }
+
+      return `${fallbackProtocol}//${trimmed}`;
     };
 
-    if (envWsUrl) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      return ensureProtocol(envWsUrl, protocol);
+    const normalizedEnvWsUrl = envWsUrl ? normalizeWsUrl(envWsUrl) : null;
+    if (normalizedEnvWsUrl) {
+      return normalizedEnvWsUrl;
     }
 
     if (envApiUrl) {
@@ -48,7 +84,6 @@ class WebSocketManager {
       }
     }
 
-    const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${fallbackProtocol}//${window.location.host}/ws`;
   }
 
