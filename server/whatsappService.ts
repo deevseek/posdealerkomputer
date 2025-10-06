@@ -88,6 +88,19 @@ export class WhatsAppService {
     }
   }
 
+  /**
+   * Allow manual reconnection attempts after a forceful disconnect.
+   * This resets the forceDisconnect flag and delegates to initialize().
+   */
+  async connect() {
+    if (this.forceDisconnect) {
+      console.log('Resetting forceDisconnect flag for manual reconnect request');
+      this.forceDisconnect = false;
+    }
+
+    await this.initialize();
+  }
+
 
   async sendMessage(phoneNumber: string, message: string): Promise<boolean> {
     // Enhanced connection checking
@@ -587,14 +600,12 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
   async toggleWhatsApp(enable: boolean) {
     if (enable) {
       console.log("🔌 Mengaktifkan WhatsApp...");
-      this.forceDisconnect = false;
-      await this.initialize();
+      await this.connect();
     } else {
       console.log("⛔ Menonaktifkan WhatsApp...");
       await this.disconnect();
       // Setelah disconnect, langsung inisialisasi ulang untuk generate QR baru
-      this.forceDisconnect = false;
-      await this.initialize();
+      await this.connect();
     }
     // Broadcast status langsung ke frontend
     realtimeService.broadcast({
