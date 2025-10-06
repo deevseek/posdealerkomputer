@@ -82,8 +82,18 @@ type ServiceTicketWithCustomer = ServiceTicket & {
 
 type TransactionWithItems = Transaction & {
   items?: Array<{
+    id: string;
+    quantity: number;
+    unitPrice?: string | number;
     product?: { name?: string | null } | null;
   }>;
+};
+
+type ReturnItemSelection = {
+  transactionItemId: string;
+  productName: string;
+  maxQuantity: number;
+  quantity: number;
 };
 
 
@@ -786,12 +796,13 @@ export default function WarrantyPage() {
                 <DialogTitle>Terima Garansi</DialogTitle>
               </DialogHeader>
               {selectedClaim && (
-                <AcceptWarrantyForm 
+                <AcceptWarrantyForm
                   claim={selectedClaim}
                   onSuccess={() => {
                     setAcceptDialogOpen(false);
                     setSelectedClaim(null);
                   }}
+                  transactions={transactions}
                 />
               )}
             </DialogContent>
@@ -1165,17 +1176,73 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
   );
 }
 
-function AcceptWarrantyForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; onSuccess: () => void }) {
+function AcceptWarrantyForm({
+  claim,
+  onSuccess,
+  transactions,
+}: {
+  claim: EnhancedWarrantyClaim;
+  onSuccess: () => void;
+  transactions: TransactionWithItems[];
+}) {
   const { toast } = useToast();
   const acceptWarrantySchema = createAcceptWarrantySchema(claim.claimType);
-  
+  const [itemSelections, setItemSelections] = useState<ReturnItemSelection[]>([]);
+
+  useEffect(() => {
+    if (claim.claimType !== 'sales_return') {
+      setItemSelections([]);
+      return;
+    }
+
+    const relatedTransaction = transactions.find((txn) => txn.id === claim.originalTransactionId);
+    if (!relatedTransaction?.items?.length) {
+      setItemSelections([]);
+      return;
+    }
+
+    const claimedMap = new Map<string, number>();
+    const rawClaimedItems = Array.isArray((claim as any).claimedItems) ? (claim as any).claimedItems : [];
+    for (const item of rawClaimedItems as Array<{ transactionItemId?: string; quantity?: number }>) {
+      if (item?.transactionItemId) {
+        claimedMap.set(item.transactionItemId, Number(item.quantity) || 0);
+      }
+    }
+
+    const selections = relatedTransaction.items.map((item) => {
+      const maxQuantity = Number(item.quantity) || 0;
+      const presetQuantity = claimedMap.has(item.id) ? Math.min(claimedMap.get(item.id) || 0, maxQuantity) : maxQuantity;
+      return {
+        transactionItemId: item.id,
+        productName: item.product?.name || 'Produk Tidak Dikenal',
+        maxQuantity,
+        quantity: presetQuantity,
+      };
+    });
+
+    setItemSelections(selections);
+  }, [claim, transactions]);
+
   const form = useForm({
     resolver: zodResolver(acceptWarrantySchema),
     defaultValues: {
-      returnCondition: claim.claimType === 'sales_return' ? 'normal_stock' as const : undefined,
+      returnCondition:
+        claim.claimType === 'sales_return'
+          ? ((claim.returnCondition as 'normal_stock' | 'damaged_stock') ?? 'normal_stock')
+          : undefined,
       notes: "",
     },
   });
+
+  useEffect(() => {
+    form.reset({
+      returnCondition:
+        claim.claimType === 'sales_return'
+          ? ((claim.returnCondition as 'normal_stock' | 'damaged_stock') ?? 'normal_stock')
+          : undefined,
+      notes: "",
+    });
+  }, [claim, form]);
 
   const acceptWarrantyMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1187,13 +1254,26 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim
       onSuccess();
     },
     onError: (error: any) => {
-      toast({ 
-        title: "Error", 
+      toast({
+        title: "Error",
         description: error.message || "Gagal menerima garansi",
-        variant: "destructive" 
+        variant: "destructive"
       });
     },
   });
+
+  const handleQuantityChange = (transactionItemId: string, value: number) => {
+    setItemSelections((prev) =>
+      prev.map((item) =>
+        item.transactionItemId === transactionItemId
+          ? {
+              ...item,
+              quantity: Math.max(0, Math.min(item.maxQuantity, Number.isFinite(value) ? value : 0)),
+            }
+          : item
+      )
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1202,44 +1282,113 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim
         <p className="text-sm"><strong>No:</strong> {claim.claimNumber}</p>
         <p className="text-sm"><strong>Customer:</strong> {claim.customerName}</p>
         <p className="text-sm"><strong>Tipe:</strong> {claim.claimType === 'service' ? 'Service' : 'Retur Penjualan'}</p>
-        
+
         {claim.claimType === 'service' && (
           <div className="bg-blue-50 p-3 rounded text-sm">
             <strong>Service Warranty:</strong> Item akan dikembalikan ke proses service tanpa update stok atau keuangan.
           </div>
         )}
-        
+
         {claim.claimType === 'sales_return' && (
           <div className="bg-green-50 p-3 rounded text-sm">
-            <strong>Sales Return:</strong> Pilih kondisi barang untuk update stok dan keuangan yang sesuai.
+            <strong>Sales Return:</strong> Pilih kondisi barang serta jumlah unit yang benar-benar diterima kembali.
           </div>
         )}
       </div>
 
-      <form onSubmit={form.handleSubmit((data) => acceptWarrantyMutation.mutate(data))} className="space-y-4">
+      <form
+        onSubmit={form.handleSubmit((data) => {
+          const payload: Record<string, unknown> = { ...data };
+
+          if (claim.claimType === 'sales_return') {
+            const claimedItemsPayload = itemSelections
+              .filter((item) => item.quantity > 0)
+              .map((item) => ({
+                transactionItemId: item.transactionItemId,
+                quantity: item.quantity,
+              }));
+
+            if (claimedItemsPayload.length === 0) {
+              toast({
+                title: "Tidak ada item retur",
+                description: "Setidaknya satu item harus diretur untuk menyelesaikan klaim.",
+                variant: "destructive",
+              });
+              return;
+            }
+
+            payload.claimedItems = claimedItemsPayload;
+          }
+
+          acceptWarrantyMutation.mutate(payload);
+        })}
+        className="space-y-4"
+      >
         {claim.claimType === 'sales_return' && (
-          <div>
-            <Label>Kondisi Barang</Label>
-            <Select 
-              value={form.watch("returnCondition") || ''} 
-              onValueChange={(value) => form.setValue("returnCondition", value as any)}
-            >
-              <SelectTrigger data-testid="select-return-condition">
-                <SelectValue placeholder="Pilih kondisi barang" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal_stock">Normal (Asset)</SelectItem>
-                <SelectItem value="damaged_stock">Rusak (Penyesuaian)</SelectItem>
-              </SelectContent>
-            </Select>
-            {form.formState.errors.returnCondition && (
-              <p className="text-sm text-destructive mt-1">
-                {form.formState.errors.returnCondition.message}
+          <div className="space-y-3">
+            <div>
+              <Label>Kondisi Barang</Label>
+              <Select
+                value={form.watch("returnCondition") || ''}
+                onValueChange={(value) => form.setValue("returnCondition", value as any)}
+              >
+                <SelectTrigger data-testid="select-return-condition">
+                  <SelectValue placeholder="Pilih kondisi barang" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal_stock">Normal (Asset)</SelectItem>
+                  <SelectItem value="damaged_stock">Rusak (Penyesuaian)</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.formState.errors.returnCondition && (
+                <p className="text-sm text-destructive mt-1">
+                  {form.formState.errors.returnCondition.message}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Normal: Stok bertambah sebagai aset. Rusak: Stok bertambah dengan penyesuaian keuangan.
               </p>
-            )}
-            <p className="text-xs text-muted-foreground mt-1">
-              Normal: Stok bertambah sebagai aset. Rusak: Stok bertambah dengan penyesuaian keuangan.
-            </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Pilih Item Retur</Label>
+              {itemSelections.length > 0 ? (
+                itemSelections.map((item) => (
+                  <div
+                    key={item.transactionItemId}
+                    className="flex items-center justify-between gap-4 rounded border p-3"
+                  >
+                    <div>
+                      <div className="font-medium">{item.productName}</div>
+                      <div className="text-xs text-muted-foreground">Terjual: {item.maxQuantity} unit</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Retur</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={item.maxQuantity}
+                        value={item.quantity}
+                        onChange={(event) =>
+                          handleQuantityChange(
+                            item.transactionItemId,
+                            Math.min(item.maxQuantity, Math.max(0, Number(event.target.value) || 0))
+                          )
+                        }
+                        className="w-20"
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
+                  Item transaksi tidak ditemukan atau belum dimuat.
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Gunakan nilai 0 jika ada item yang tidak ikut diretur.
+              </p>
+            </div>
           </div>
         )}
 
@@ -1254,8 +1403,8 @@ function AcceptWarrantyForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={acceptWarrantyMutation.isPending}
             data-testid="button-submit-accept"
           >

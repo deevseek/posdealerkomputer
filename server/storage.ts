@@ -74,6 +74,13 @@ import {
 } from "@shared/utils/timezone";
 import { FinanceManager } from "./financeManager";
 
+type WarrantyClaimItemDetail = {
+  transactionItemId: string;
+  productId: string;
+  quantity: number;
+  unitPrice: string;
+};
+
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
@@ -231,12 +238,29 @@ export interface IStorage {
   }>;
   
   // Warranty Claims
-  getWarrantyClaims(status?: string): Promise<WarrantyClaim[]>;
-  getWarrantyClaimById(id: string): Promise<WarrantyClaim | undefined>;
-  createWarrantyClaim(claim: InsertWarrantyClaim): Promise<WarrantyClaim>;
-  updateWarrantyClaimStatus(id: string, status: string, processedBy?: string): Promise<WarrantyClaim>;
-  processWarrantyClaim(id: string, status: string, processedBy: string, returnCondition?: string): Promise<WarrantyClaim>;
-  validateWarrantyEligibility(originalTransactionId?: string, originalServiceTicketId?: string): Promise<{ isValid: boolean; message: string }>;
+  getWarrantyClaims(status?: string, clientId?: string | null): Promise<WarrantyClaim[]>;
+  getWarrantyClaimById(id: string, clientId?: string | null): Promise<WarrantyClaim | undefined>;
+  createWarrantyClaim(
+    claim: InsertWarrantyClaim,
+    options: { clientId?: string | null; createdBy: string }
+  ): Promise<WarrantyClaim>;
+  updateWarrantyClaimStatus(
+    id: string,
+    status: string,
+    processedBy?: string,
+    extra?: Partial<Pick<WarrantyClaim, 'returnCondition' | 'notes' | 'adminNotes' | 'claimedItems' | 'warrantyServiceTicketId'>>
+  ): Promise<WarrantyClaim>;
+  processWarrantyClaim(
+    id: string,
+    status: string,
+    processedBy: string,
+    options?: { returnCondition?: string; adminNotes?: string }
+  ): Promise<WarrantyClaim>;
+  validateWarrantyEligibility(
+    originalTransactionId?: string,
+    originalServiceTicketId?: string,
+    clientId?: string | null
+  ): Promise<{ isValid: boolean; message: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2823,7 +2847,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Warranty Claims
-  async getWarrantyClaims(status?: string): Promise<any[]> {
+  async getWarrantyClaims(status?: string, clientIdParam?: string | null): Promise<any[]> {
+    const clientId = this.resolveClientId(clientIdParam);
     // Join with transactions and service tickets to get reference numbers
     const query = db
       .select({
@@ -2837,17 +2862,20 @@ export class DatabaseStorage implements IStorage {
         processedDate: warrantyClaims.processedDate,
         returnCondition: warrantyClaims.returnCondition,
         notes: warrantyClaims.notes,
+        adminNotes: warrantyClaims.adminNotes,
+        claimedItems: warrantyClaims.claimedItems,
         createdAt: warrantyClaims.createdAt,
         updatedAt: warrantyClaims.updatedAt,
-        
+
         // Reference information
         originalTransactionId: warrantyClaims.originalTransactionId,
         originalServiceTicketId: warrantyClaims.originalServiceTicketId,
-        
+        warrantyServiceTicketId: warrantyClaims.warrantyServiceTicketId,
+
         // Customer info
         customerId: warrantyClaims.customerId,
         customerName: customers.name,
-        
+
         // Transaction reference (if applicable)
         transactionNumber: transactions.transactionNumber,
         
@@ -2859,40 +2887,73 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(transactions, eq(warrantyClaims.originalTransactionId, transactions.id))
       .leftJoin(serviceTickets, eq(warrantyClaims.originalServiceTicketId, serviceTickets.id));
     
-    if (status) {
-      query.where(eq(warrantyClaims.status, status as any));
+    let whereCondition;
+
+    if (clientId) {
+      whereCondition = eq(warrantyClaims.clientId, clientId);
     }
-    
+
+    if (status) {
+      const statusCondition = eq(warrantyClaims.status, status as any);
+      whereCondition = whereCondition ? and(whereCondition, statusCondition) : statusCondition;
+    }
+
+    if (whereCondition) {
+      query.where(whereCondition);
+    }
+
     return await query.orderBy(desc(warrantyClaims.claimDate));
   }
 
-  async getWarrantyClaimById(id: string): Promise<WarrantyClaim | undefined> {
-    const [claim] = await db.select().from(warrantyClaims).where(eq(warrantyClaims.id, id));
+  async getWarrantyClaimById(id: string, clientIdParam?: string | null): Promise<WarrantyClaim | undefined> {
+    const clientId = this.resolveClientId(clientIdParam);
+    const conditions = clientId
+      ? and(eq(warrantyClaims.id, id), eq(warrantyClaims.clientId, clientId))
+      : eq(warrantyClaims.id, id);
+
+    const [claim] = await db.select().from(warrantyClaims).where(conditions);
     return claim;
   }
 
-  async createWarrantyClaim(claimData: InsertWarrantyClaim): Promise<WarrantyClaim> {
+  async createWarrantyClaim(
+    claimData: InsertWarrantyClaim,
+    options: { clientId?: string | null; createdBy: string }
+  ): Promise<WarrantyClaim> {
     // Generate unique claim number
     const claimNumber = `WC-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-    
+
+    const clientId = this.resolveClientId(options.clientId);
+
     const [claim] = await db
       .insert(warrantyClaims)
       .values({
         ...claimData,
         claimNumber,
+        clientId: clientId ?? claimData.clientId ?? null,
         // Let database use default timestamps
       })
       .returning();
 
     // For service warranty claims, auto-approve and create new service ticket
     if (claimData.claimType === 'service' && claimData.originalServiceTicketId) {
-      await this.processServiceWarrantyClaim(claim.id, claimData.originalServiceTicketId, claimData.customerId);
+      await this.processServiceWarrantyClaim({
+        claimId: claim.id,
+        originalServiceTicketId: claimData.originalServiceTicketId,
+        customerId: claimData.customerId,
+        processedBy: options.createdBy,
+        clientId: clientId ?? null,
+      });
     }
 
     return claim;
   }
 
-  async updateWarrantyClaimStatus(id: string, status: string, processedBy?: string): Promise<WarrantyClaim> {
+  async updateWarrantyClaimStatus(
+    id: string,
+    status: string,
+    processedBy?: string,
+    extra?: Partial<Pick<WarrantyClaim, 'returnCondition' | 'notes' | 'adminNotes' | 'claimedItems' | 'warrantyServiceTicketId'>>
+  ): Promise<WarrantyClaim> {
     const updateData: any = {
       status,
       // Let database handle updatedAt timestamp
@@ -2903,25 +2964,8 @@ export class DatabaseStorage implements IStorage {
       updateData.processedDate = new Date(); // Use Date object for timestamp
     }
 
-    const [claim] = await db
-      .update(warrantyClaims)
-      .set(updateData)
-      .where(eq(warrantyClaims.id, id))
-      .returning();
-
-    return claim;
-  }
-
-  async processWarrantyClaim(id: string, status: string, processedBy: string, returnCondition?: string): Promise<WarrantyClaim> {
-    const updateData: any = {
-      status,
-      processedBy,
-      processedDate: new Date(), // Use Date object for timestamp
-      // Let database handle updatedAt timestamp
-    };
-
-    if (returnCondition) {
-      updateData.returnCondition = returnCondition;
+    if (extra) {
+      Object.assign(updateData, extra);
     }
 
     const [claim] = await db
@@ -2933,33 +2977,80 @@ export class DatabaseStorage implements IStorage {
     return claim;
   }
 
-  async validateWarrantyEligibility(originalTransactionId?: string, originalServiceTicketId?: string): Promise<{ isValid: boolean; message: string }> {
+  async processWarrantyClaim(
+    id: string,
+    status: string,
+    processedBy: string,
+    options?: { returnCondition?: string; adminNotes?: string }
+  ): Promise<WarrantyClaim> {
+    const updateData: any = {
+      status,
+      processedBy,
+      processedDate: new Date(), // Use Date object for timestamp
+      // Let database handle updatedAt timestamp
+    };
+
+    if (options?.returnCondition) {
+      updateData.returnCondition = options.returnCondition;
+    }
+
+    if (typeof options?.adminNotes !== 'undefined') {
+      updateData.adminNotes = options.adminNotes;
+    }
+
+    const [claim] = await db
+      .update(warrantyClaims)
+      .set(updateData)
+      .where(eq(warrantyClaims.id, id))
+      .returning();
+
+    return claim;
+  }
+
+  async validateWarrantyEligibility(
+    originalTransactionId?: string,
+    originalServiceTicketId?: string,
+    clientIdParam?: string | null
+  ): Promise<{ isValid: boolean; message: string }> {
     try {
+      const clientId = this.resolveClientId(clientIdParam);
       if (originalTransactionId) {
         // Validate sales warranty
         const [transaction] = await db
           .select()
           .from(transactions)
-          .where(eq(transactions.id, originalTransactionId));
+          .where(
+            clientId
+              ? and(eq(transactions.id, originalTransactionId), eq(transactions.clientId, clientId))
+              : eq(transactions.id, originalTransactionId)
+          );
 
         if (!transaction) {
           return { isValid: false, message: 'Original transaction not found' };
         }
 
-        if (!transaction.warrantyEndDate) {
-          return { isValid: false, message: 'No warranty information found for this transaction' };
-        }
+        const unlimitedWarranty = (transaction.warrantyDuration ?? 0) >= 9999 || !transaction.warrantyEndDate;
 
-        const now = getCurrentJakartaTime();
-        if (now > transaction.warrantyEndDate) {
-          return { isValid: false, message: 'Warranty has expired' };
+        if (!unlimitedWarranty) {
+          if (!transaction.warrantyEndDate) {
+            return { isValid: false, message: 'No warranty information found for this transaction' };
+          }
+
+          const now = getCurrentJakartaTime();
+          if (transaction.warrantyEndDate && now > transaction.warrantyEndDate) {
+            return { isValid: false, message: 'Warranty has expired' };
+          }
         }
 
         // Check for existing warranty claims
         const [existingClaim] = await db
           .select()
           .from(warrantyClaims)
-          .where(eq(warrantyClaims.originalTransactionId, originalTransactionId));
+          .where(
+            clientId
+              ? and(eq(warrantyClaims.originalTransactionId, originalTransactionId), eq(warrantyClaims.clientId, clientId))
+              : eq(warrantyClaims.originalTransactionId, originalTransactionId)
+          );
 
         if (existingClaim && existingClaim.status !== 'rejected') {
           return { isValid: false, message: 'A warranty claim already exists for this transaction' };
@@ -2973,26 +3064,38 @@ export class DatabaseStorage implements IStorage {
         const [serviceTicket] = await db
           .select()
           .from(serviceTickets)
-          .where(eq(serviceTickets.id, originalServiceTicketId));
+          .where(
+            clientId
+              ? and(eq(serviceTickets.id, originalServiceTicketId), eq(serviceTickets.clientId, clientId))
+              : eq(serviceTickets.id, originalServiceTicketId)
+          );
 
         if (!serviceTicket) {
           return { isValid: false, message: 'Original service ticket not found' };
         }
 
-        if (!serviceTicket.warrantyEndDate) {
-          return { isValid: false, message: 'No warranty information found for this service' };
-        }
+        const unlimitedWarranty = (serviceTicket.warrantyDuration ?? 0) >= 9999 || !serviceTicket.warrantyEndDate;
 
-        const now = getCurrentJakartaTime();
-        if (now > serviceTicket.warrantyEndDate) {
-          return { isValid: false, message: 'Service warranty has expired' };
+        if (!unlimitedWarranty) {
+          if (!serviceTicket.warrantyEndDate) {
+            return { isValid: false, message: 'No warranty information found for this service' };
+          }
+
+          const now = getCurrentJakartaTime();
+          if (serviceTicket.warrantyEndDate && now > serviceTicket.warrantyEndDate) {
+            return { isValid: false, message: 'Service warranty has expired' };
+          }
         }
 
         // Check for existing warranty claims
         const [existingClaim] = await db
           .select()
           .from(warrantyClaims)
-          .where(eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId));
+          .where(
+            clientId
+              ? and(eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId), eq(warrantyClaims.clientId, clientId))
+              : eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId)
+          );
 
         if (existingClaim && existingClaim.status !== 'rejected') {
           return { isValid: false, message: 'A warranty claim already exists for this service' };
@@ -3009,8 +3112,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Private helper method for processing service warranty claims
-  private async processServiceWarrantyClaim(claimId: string, originalServiceTicketId: string, customerId: string): Promise<void> {
+  private async processServiceWarrantyClaim(params: {
+    claimId: string;
+    originalServiceTicketId: string;
+    customerId: string;
+    processedBy: string;
+    clientId: string | null;
+  }): Promise<void> {
     try {
+      const { claimId, originalServiceTicketId, customerId, processedBy, clientId } = params;
       // Get the original service ticket details
       const [originalTicket] = await db
         .select()
@@ -3022,7 +3132,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Create new service ticket for warranty service
-        const warrantyServiceData: InsertServiceTicket = {
+      const warrantyServiceData: InsertServiceTicket = {
         ticketNumber: `WS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
         customerId: customerId,
         deviceType: originalTicket.deviceType,
@@ -3036,9 +3146,13 @@ export class DatabaseStorage implements IStorage {
         warrantyDuration: originalTicket.warrantyDuration || 90, // Default 90 days
         warrantyStartDate: new Date(),
         warrantyEndDate: new Date(Date.now() + (originalTicket.warrantyDuration || 90) * 24 * 60 * 60 * 1000),
+        clientId: clientId ?? originalTicket.clientId ?? null,
       };
 
-      await db.insert(serviceTickets).values(warrantyServiceData as any);
+      const [warrantyTicket] = await db
+        .insert(serviceTickets)
+        .values(warrantyServiceData as any)
+        .returning();
 
       // Update original service ticket status to indicate warranty claim
       await db
@@ -3050,7 +3164,9 @@ export class DatabaseStorage implements IStorage {
         .where(eq(serviceTickets.id, originalServiceTicketId));
 
       // Auto-approve the warranty claim since it's for internal service
-      await this.updateWarrantyClaimStatus(claimId, 'approved');
+      await this.updateWarrantyClaimStatus(claimId, 'approved', processedBy, {
+        warrantyServiceTicketId: warrantyTicket?.id ?? null,
+      });
 
     } catch (error) {
       console.error('Error processing service warranty claim:', error);
@@ -3060,11 +3176,13 @@ export class DatabaseStorage implements IStorage {
 
   // Process sales return warranty - handle inventory and finance integration
   async processSalesReturnWarranty(
-    originalTransactionId: string, 
+    originalTransactionId: string,
     returnCondition: 'normal_stock' | 'damaged_stock',
-    userId: string
-  ): Promise<void> {
+    userId: string,
+    options?: { claimedItems?: Array<{ transactionItemId: string; quantity: number }>; clientId?: string | null }
+  ): Promise<WarrantyClaimItemDetail[]> {
     try {
+      const clientId = this.resolveClientId(options?.clientId);
       // Get original transaction details
       const [originalTransaction] = await db
         .select()
@@ -3076,21 +3194,78 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Get transaction items that were sold
-      const soldItems = await db
-        .select()
+      const soldItemsRaw = await db
+        .select({
+          id: transactionItems.id,
+          productId: transactionItems.productId,
+          quantity: transactionItems.quantity,
+          unitPrice: transactionItems.unitPrice,
+        })
         .from(transactionItems)
         .where(eq(transactionItems.transactionId, originalTransactionId));
 
+      const soldItems = soldItemsRaw.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        quantity: Number(item.quantity) || 0,
+        unitPrice: item.unitPrice as string | number | null,
+      }));
+
+      const itemMap = new Map(soldItems.map((item) => [item.id, item]));
+
+      const itemsToProcess = (options?.claimedItems?.length
+        ? options.claimedItems.map((input) => {
+            const originalItem = itemMap.get(input.transactionItemId);
+            if (!originalItem) {
+              throw new Error(`Transaction item ${input.transactionItemId} not found for warranty processing`);
+            }
+
+            const requestedQuantity = Number(input.quantity) || 0;
+            const availableQuantity = Math.max(0, originalItem.quantity);
+            const quantity = Math.min(requestedQuantity, availableQuantity);
+            if (quantity <= 0) {
+              return null;
+            }
+
+            return {
+              ...originalItem,
+              quantity,
+            };
+          })
+        : soldItems
+      ).filter((item): item is typeof soldItems[number] => !!item && item.quantity > 0);
+
+      if (itemsToProcess.length === 0) {
+        return [];
+      }
+
+      const financeManager = new FinanceManager();
+      const processedItems: WarrantyClaimItemDetail[] = [];
+
       // Process each item return
-      for (const item of soldItems) {
+      for (const item of itemsToProcess) {
         const productId = item.productId;
         const quantity = item.quantity;
-        
+
+        const unitPriceString =
+          typeof item.unitPrice === 'string'
+            ? item.unitPrice
+            : item.unitPrice != null
+              ? String(item.unitPrice)
+              : '0';
+
+        processedItems.push({
+          transactionItemId: item.id,
+          productId,
+          quantity,
+          unitPrice: unitPriceString,
+        });
+
         if (returnCondition === 'normal_stock') {
           // Add back to normal inventory
           await db
             .update(products)
-            .set({ 
+            .set({
               stock: sql`${products.stock} + ${quantity}`,
               updatedAt: new Date()
             })
@@ -3104,13 +3279,13 @@ export class DatabaseStorage implements IStorage {
             quantity: quantity,
             referenceId: originalTransactionId,
             notes: `Retur garansi - kondisi barang normal, dapat dijual kembali`,
-            userId: userId
+            userId: userId,
+            clientId: clientId ?? originalTransaction.clientId ?? null,
           });
 
           // Create proper journal entries for normal stock return
-          const financeManager = new FinanceManager();
-          const itemValue = parseFloat(item.unitPrice) * quantity;
-          
+          const itemValue = Number(item.unitPrice ?? 0) * quantity;
+
           // Journal Entry: Restore inventory value
           // Debit: Persediaan (Inventory), Credit: Beban Garansi (Warranty Expense)
           const journalResult = await financeManager.createJournalEntry({
@@ -3131,19 +3306,19 @@ export class DatabaseStorage implements IStorage {
             ],
             userId: userId
           });
-          
+
           if (!journalResult.success) {
             console.warn(`Failed to create journal entry for normal warranty return: ${journalResult.error}`);
-            
+
             // For normal stock returns, we should NOT create any financial record
             // as it should be financially neutral - only restore inventory
             // The warranty return does not generate new revenue/income
             console.log(`Normal warranty return processed without financial impact - only inventory restored`);
           }
-        
+
         } else if (returnCondition === 'damaged_stock') {
           // Handle damaged stock with proper accounting principles
-          
+
           // Create stock movement record for damaged goods tracking
           await db.insert(stockMovements).values({
             productId: productId,
@@ -3152,13 +3327,13 @@ export class DatabaseStorage implements IStorage {
             quantity: quantity,
             referenceId: originalTransactionId,
             notes: `Retur garansi - barang rusak tidak dapat dijual kembali`,
-            userId: userId
+            userId: userId,
+            clientId: clientId ?? originalTransaction.clientId ?? null,
           });
 
           // Create proper journal entries for damaged goods
-          const financeManager = new FinanceManager();
-          const itemValue = parseFloat(item.unitPrice) * quantity;
-          
+          const itemValue = Number(item.unitPrice ?? 0) * quantity;
+
           // Journal Entry: Record damaged goods inventory and write-off
           // Debit: Kerugian Barang Rusak (Loss), Credit: Persediaan (Inventory)
           const journalResult = await financeManager.createJournalEntry({
@@ -3179,10 +3354,10 @@ export class DatabaseStorage implements IStorage {
             ],
             userId: userId
           });
-          
+
           if (!journalResult.success) {
             console.warn(`Failed to create journal entry for damaged goods: ${journalResult.error}`);
-            
+
             // Fallback: Create financial record entry if journal entry fails
             await db.insert(financialRecords).values({
               type: 'expense',
@@ -3192,12 +3367,14 @@ export class DatabaseStorage implements IStorage {
               amount: itemValue.toString(),
               reference: originalTransactionId,
               referenceType: 'warranty_return_damaged',
-              userId: userId
+              userId: userId,
+              clientId: clientId ?? originalTransaction.clientId ?? null,
             });
           }
         }
       }
 
+      return processedItems;
     } catch (error) {
       console.error('Error processing sales return warranty:', error);
       throw error;

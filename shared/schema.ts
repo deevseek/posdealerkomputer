@@ -297,7 +297,7 @@ export const serviceTickets = pgTable("service_tickets", {
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancelledBy: varchar("cancelled_by").references(() => users.id),
   cancellationType: cancellationTypeEnum("cancellation_type"),
-  
+
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
 });
@@ -319,28 +319,31 @@ export const warrantyClaims = pgTable("warranty_claims", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id"), // Add tenant ID for SaaS multi-tenancy
   claimNumber: varchar("claim_number").notNull().unique(),
-  
+
   // Reference to original transaction/service
   originalTransactionId: varchar("original_transaction_id").references(() => transactions.id),
   originalServiceTicketId: varchar("original_service_ticket_id").references(() => serviceTickets.id),
-  
+  warrantyServiceTicketId: varchar("warranty_service_ticket_id").references(() => serviceTickets.id),
+
   // Claim details
   claimType: warrantyClaimTypeEnum("claim_type").notNull(), // 'service' | 'sales_return'
   status: warrantyClaimStatusEnum("status").default('pending'), // 'pending' | 'approved' | 'rejected' | 'processed'
   customerId: varchar("customer_id").references(() => customers.id).notNull(),
   claimReason: text("claim_reason").notNull(),
-  
+
   // Dates and processing
   claimDate: timestamp("claim_date", { withTimezone: true }).default(sql`now()`),
   processedDate: timestamp("processed_date", { withTimezone: true }),
   processedBy: varchar("processed_by").references(() => users.id),
-  
+
   // Return condition (for sales returns)
   returnCondition: returnConditionEnum("return_condition"), // 'normal_stock' | 'damaged_stock'
-  
+
   // Additional information
   notes: text("notes"),
-  
+  adminNotes: text("admin_notes"),
+  claimedItems: jsonb("claimed_items"),
+
   // Timestamps
   createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
@@ -1029,6 +1032,15 @@ export const insertWarrantyClaimSchema = createInsertSchema(warrantyClaims).omit
   claimNumber: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  claimedItems: z
+    .array(z.object({
+      transactionItemId: z.string(),
+      productId: z.string(),
+      quantity: z.number().int().positive(),
+      unitPrice: transformNumericField("0.00"),
+    }))
+    .optional(),
 });
 
 export const insertFinancialRecordSchema = createInsertSchema(financialRecords).omit({
