@@ -302,17 +302,30 @@ export default function ServiceTickets() {
       // Update specific item in cache immediately
       queryClient.setQueryData(["/api/service-tickets"], (oldData: any) => {
         if (!oldData) return oldData;
-        return oldData.map((ticket: any) => 
+        return oldData.map((ticket: any) =>
           ticket.id === variables.id ? { ...ticket, ...updatedTicket } : ticket
         );
       });
-      
+
       // Then invalidate to refresh from server
       queryClient.invalidateQueries({ queryKey: ["/api/service-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["/api/finance/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/finance/summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      
+
+      const updatedStatus = normalizeServiceStatus(updatedTicket?.status ?? undefined);
+      const submittedStatus = normalizeServiceStatus((variables as any)?.data?.status);
+
+      if (updatedStatus === "delivered" || submittedStatus === "delivered") {
+        const combinedTicketData = {
+          ...(editingTicket ?? {}),
+          ...(updatedTicket as ServiceTicket),
+        } as ServiceTicket;
+
+        setPaymentReceiptData(combinedTicketData);
+        setShowPaymentReceipt(true);
+      }
+
       setShowDialog(false);
       setEditingTicket(null);
       setSelectedParts([]);
