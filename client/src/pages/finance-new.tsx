@@ -643,13 +643,10 @@ export default function FinanceNew() {
               {formatCurrency(summary?.netProfit || '0')}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              = {formatCurrency(summary?.totalIncome || '0')} - {formatCurrency(summary?.totalExpense || '0')}
+              Laba bersih dihitung dari total pemasukan dikurangi total pengeluaran.
             </div>
             <div className="text-xs text-muted-foreground">
-              Laba penjualan (harga jual - HPP): {formatCurrency(summary?.grossProfit || '0')}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Harga jual produk: {formatCurrency(summary?.totalSalesRevenue || '0')} • HPP: {formatCurrency(summary?.totalCOGS || '0')}
+              Laba penjualan merupakan selisih antara total harga jual dan HPP.
             </div>
           </CardContent>
         </Card>
