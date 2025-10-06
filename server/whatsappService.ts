@@ -160,6 +160,18 @@ export class WhatsAppService {
     return this.qrCode;
   }
 
+  /**
+   * Hydrate QR code from persisted storage when service
+   * instance hasn't received a fresh QR event yet. This is
+   * useful right after a server restart where the QR is still
+   * stored in database but not in memory.
+   */
+  hydrateQRCode(qr: string | null) {
+    if (qr && !this.qrCode) {
+      this.qrCode = qr;
+    }
+  }
+
   isConnected(): boolean {
     return this.connectionState === 'open';
   }

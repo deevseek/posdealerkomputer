@@ -2838,11 +2838,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // WhatsApp API endpoints
   
   // Get WhatsApp status
-  app.get('/api/whatsapp/status', isAuthenticated, async (req, res) => {
+  app.get('/api/whatsapp/status', isAuthenticated, async (req: any, res) => {
     try {
-      const rawQrCode = whatsappService.getQRCode();
+      const clientId = req.tenant?.id || req.tenant?.clientId || req.session?.user?.clientId || undefined;
+      let rawQrCode = whatsappService.getQRCode();
+
+      if (!rawQrCode) {
+        try {
+          const config = await storage.getStoreConfig(clientId);
+          if (config?.whatsappQR) {
+            rawQrCode = config.whatsappQR;
+            whatsappService.hydrateQRCode(config.whatsappQR);
+          }
+        } catch (configError) {
+          console.error('Error loading WhatsApp QR from storage:', configError);
+        }
+      }
       let qrCodeDataUrl = null;
-      
+
       // Convert raw QR string to data URL for frontend display
       if (rawQrCode) {
         try {
