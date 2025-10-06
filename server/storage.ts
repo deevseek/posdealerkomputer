@@ -266,6 +266,8 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   protected readonly db = db;
 
+  private warrantyClaimAdminNotesColumnExists?: boolean;
+
   private resolveClientId(explicitClientId?: string | null) {
     if (typeof explicitClientId !== 'undefined') {
       return explicitClientId;
@@ -273,6 +275,30 @@ export class DatabaseStorage implements IStorage {
 
     const tenantContext = getCurrentTenantContext();
     return tenantContext?.clientId ?? null;
+  }
+
+  private async warrantyAdminNotesColumnExists(): Promise<boolean> {
+    if (typeof this.warrantyClaimAdminNotesColumnExists !== 'undefined') {
+      return this.warrantyClaimAdminNotesColumnExists;
+    }
+
+    try {
+      const result = await db.execute(
+        sql`select exists (
+            select 1
+            from information_schema.columns
+            where table_name = 'warranty_claims'
+              and table_schema = current_schema()
+              and column_name = 'admin_notes'
+          ) as "exists"`
+      );
+      const exists = Boolean(result.rows?.[0]?.exists);
+      this.warrantyClaimAdminNotesColumnExists = exists;
+      return exists;
+    } catch {
+      this.warrantyClaimAdminNotesColumnExists = false;
+      return false;
+    }
   }
 
   // User operations (mandatory for Replit Auth)
@@ -2851,6 +2877,11 @@ export class DatabaseStorage implements IStorage {
     const clientId = this.resolveClientId(clientIdParam);
     const conditions: SQL[] = [];
 
+    const hasAdminNotesColumn = await this.warrantyAdminNotesColumnExists();
+    const adminNotesSelect = hasAdminNotesColumn
+      ? sql`wc.admin_notes as "adminNotes",`
+      : sql`null::text as "adminNotes",`;
+
     if (clientId) {
       conditions.push(sql`wc.client_id = ${clientId}`);
     }
@@ -2874,7 +2905,7 @@ export class DatabaseStorage implements IStorage {
         wc.processed_date as "processedDate",
         wc.return_condition as "returnCondition",
         wc.notes,
-        wc.admin_notes as "adminNotes",
+        ${adminNotesSelect}
         wc.claimed_items as "claimedItems",
         wc.created_at as "createdAt",
         wc.updated_at as "updatedAt",
@@ -2959,6 +2990,13 @@ export class DatabaseStorage implements IStorage {
       Object.assign(updateData, extra);
     }
 
+    if ('adminNotes' in updateData) {
+      const hasAdminNotesColumn = await this.warrantyAdminNotesColumnExists();
+      if (!hasAdminNotesColumn) {
+        delete updateData.adminNotes;
+      }
+    }
+
     const [claim] = await db
       .update(warrantyClaims)
       .set(updateData)
@@ -2986,7 +3024,9 @@ export class DatabaseStorage implements IStorage {
     }
 
     if (typeof options?.adminNotes !== 'undefined') {
-      updateData.adminNotes = options.adminNotes;
+      if (await this.warrantyAdminNotesColumnExists()) {
+        updateData.adminNotes = options.adminNotes;
+      }
     }
 
     const [claim] = await db
