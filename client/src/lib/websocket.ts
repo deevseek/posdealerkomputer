@@ -14,13 +14,15 @@ interface WebSocketMessage {
 class WebSocketManager {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttemptsPerUrl = 3;
   private reconnectInterval = 3000;
   private isConnecting = false;
   private queryClient: any = null;
   private toast: any = null;
+  private connectionUrls: string[] = [];
+  private currentUrlIndex = 0;
 
-  private resolveWebSocketUrl(): string {
+  private resolveWebSocketUrls(): string[] {
     const DEFAULT_WS_PATH = '/api/ws';
     const envWsUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim();
     const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
@@ -87,9 +89,22 @@ class WebSocketManager {
       return ensureWsPath(`${fallbackProtocol}//${trimmed}`, allowCustomPath);
     };
 
+    const urlCandidates = new Set<string>();
+
+    const addUrlCandidate = (value: string | null | undefined, allowCustomPath = false) => {
+      if (!value) return;
+
+      try {
+        const normalized = ensureWsPath(value, allowCustomPath);
+        urlCandidates.add(normalized);
+      } catch (error) {
+        console.warn('Skipping invalid WebSocket URL candidate:', value, error);
+      }
+    };
+
     const normalizedEnvWsUrl = envWsUrl ? normalizeWsUrl(envWsUrl, true) : null;
     if (normalizedEnvWsUrl) {
-      return normalizedEnvWsUrl;
+      urlCandidates.add(normalizedEnvWsUrl);
     }
 
     if (envApiUrl) {
@@ -108,13 +123,30 @@ class WebSocketManager {
         wsUrl.search = '';
         wsUrl.hash = '';
 
-        return wsUrl.toString();
+        urlCandidates.add(wsUrl.toString());
       } catch (error) {
         console.warn('Unable to parse VITE_API_URL for websocket usage:', error);
       }
     }
 
-    return `${fallbackProtocol}//${window.location.host}${DEFAULT_WS_PATH}`;
+    const currentHostUrl = `${fallbackProtocol}//${window.location.host}`;
+    addUrlCandidate(currentHostUrl);
+
+    // Handle common development scenarios where the frontend runs on the Vite dev server
+    const devServerPorts = new Set(['5173', '4173', '4174', '4175']);
+    if (devServerPorts.has(window.location.port)) {
+      const hostname = window.location.hostname || 'localhost';
+      ['3000', '5000'].forEach((port) => {
+        addUrlCandidate(`${fallbackProtocol}//${hostname}:${port}`);
+      });
+    }
+
+    // As a final fallback, try the hostname without an explicit port (useful behind proxies)
+    if (window.location.hostname) {
+      addUrlCandidate(`${fallbackProtocol}//${window.location.hostname}`);
+    }
+
+    return Array.from(urlCandidates, (value) => ensureWsPath(value, true));
   }
 
   private notifyConnectionFailure() {
@@ -133,60 +165,90 @@ class WebSocketManager {
 
     this.queryClient = queryClient;
     this.toast = toast;
+    this.connectionUrls = this.resolveWebSocketUrls();
+    this.currentUrlIndex = 0;
+    this.reconnectAttempts = 0;
+
+    if (this.connectionUrls.length === 0) {
+      console.error('No valid WebSocket URLs resolved');
+      this.notifyConnectionFailure();
+      return;
+    }
+
+    this.connectToCurrentUrl();
+  }
+
+  private connectToCurrentUrl() {
+    const wsUrl = this.connectionUrls[this.currentUrlIndex];
     this.isConnecting = true;
 
+    console.log('🔄 Connecting to WebSocket...', wsUrl);
+
     try {
-      const wsUrl = this.resolveWebSocketUrl();
-
-      console.log('🔄 Connecting to WebSocket...', wsUrl);
       this.ws = new WebSocket(wsUrl);
-
-      this.ws.onopen = () => {
-        console.log('✅ WebSocket connected');
-        this.reconnectAttempts = 0;
-        this.isConnecting = false;
-        
-        // Send authentication if user is logged in
-        // We'll get user info from session/auth state
-        this.sendAuth();
-      };
-
-      this.ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          this.handleMessage(message);
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-
-      this.ws.onclose = (event) => {
-        console.log('🔌 WebSocket disconnected', event.code, event.reason);
-        this.isConnecting = false;
-        this.ws = null;
-
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-          this.reconnectAttempts++;
-          console.log(`🔄 Attempting reconnect ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-          setTimeout(() => this.connect(queryClient, toast), this.reconnectInterval);
-        } else {
-          this.notifyConnectionFailure();
-        }
-      };
-
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        this.isConnecting = false;
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          this.notifyConnectionFailure();
-        }
-      };
-
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
       this.isConnecting = false;
-      this.notifyConnectionFailure();
+      this.handleReconnectFailure();
+      return;
     }
+
+    this.ws.onopen = () => {
+      console.log('✅ WebSocket connected');
+      this.reconnectAttempts = 0;
+      this.isConnecting = false;
+
+      // Send authentication if user is logged in
+      // We'll get user info from session/auth state
+      this.sendAuth();
+    };
+
+    this.ws.onmessage = (event) => {
+      try {
+        const message: WebSocketMessage = JSON.parse(event.data);
+        this.handleMessage(message);
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    };
+
+    this.ws.onclose = (event) => {
+      console.log('🔌 WebSocket disconnected', event.code, event.reason);
+      this.isConnecting = false;
+      this.ws = null;
+
+      if (!this.handleReconnectFailure()) {
+        this.notifyConnectionFailure();
+      }
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      this.isConnecting = false;
+      if (!this.handleReconnectFailure()) {
+        this.notifyConnectionFailure();
+      }
+    };
+  }
+
+  private handleReconnectFailure(): boolean {
+    if (!this.connectionUrls.length) {
+      return false;
+    }
+
+    if (this.reconnectAttempts < this.maxReconnectAttemptsPerUrl) {
+      this.reconnectAttempts++;
+      console.log(`🔄 Attempting reconnect ${this.reconnectAttempts}/${this.maxReconnectAttemptsPerUrl} for ${this.connectionUrls[this.currentUrlIndex]}`);
+    } else if (this.currentUrlIndex < this.connectionUrls.length - 1) {
+      this.currentUrlIndex++;
+      this.reconnectAttempts = 0;
+      console.log('🔁 Switching to fallback WebSocket URL:', this.connectionUrls[this.currentUrlIndex]);
+    } else {
+      return false;
+    }
+
+    setTimeout(() => this.connectToCurrentUrl(), this.reconnectInterval);
+    return true;
   }
 
   private sendAuth() {
@@ -309,6 +371,9 @@ class WebSocketManager {
       this.ws.close();
       this.ws = null;
     }
+    this.reconnectAttempts = 0;
+    this.currentUrlIndex = 0;
+    this.connectionUrls = [];
   }
 
   isConnected(): boolean {
