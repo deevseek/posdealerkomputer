@@ -50,7 +50,6 @@ export default function Dashboard() {
             <StatCard
               title="Penjualan Hari Ini"
               value={statsLoading ? "Memuat..." : `Rp ${Number(stats?.todaySales || 0).toLocaleString('id-ID')}`}
-              change="+12% dari kemarin"
               icon="money-bill-wave"
               color="primary"
               data-testid="stat-today-sales"

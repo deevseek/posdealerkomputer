@@ -10,7 +10,7 @@ import {
 interface StatCardProps {
   title: string;
   value: string;
-  change: string;
+  change?: string;
   icon: string;
   color: "primary" | "accent" | "destructive" | "secondary";
   "data-testid"?: string;
@@ -43,9 +43,11 @@ export default function StatCard({ title, value, change, icon, color, ...props }
             <p className="text-2xl font-bold text-foreground" data-testid={`stat-value-${title.toLowerCase().replace(/\s+/g, '-')}`}>
               {value}
             </p>
-            <p className="text-sm text-accent mt-1">
-              {change}
-            </p>
+            {change && (
+              <p className="text-sm text-accent mt-1">
+                {change}
+              </p>
+            )}
           </div>
           <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${colorMap[color]}`}>
             <IconComponent className="w-6 h-6" />
