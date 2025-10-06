@@ -21,9 +21,28 @@ class WebSocketManager {
   private toast: any = null;
 
   private resolveWebSocketUrl(): string {
+    const DEFAULT_WS_PATH = '/api/ws';
     const envWsUrl = (import.meta.env.VITE_WS_URL as string | undefined)?.trim();
     const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
     const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+    const ensureWsPath = (value: string): string => {
+      try {
+        const url = new URL(value);
+        const trimmedPath = url.pathname.replace(/\/+$/, '');
+
+        if (!trimmedPath || trimmedPath === '/' || trimmedPath === '/ws') {
+          url.pathname = DEFAULT_WS_PATH;
+        } else if (!trimmedPath.endsWith('/ws')) {
+          url.pathname = `${trimmedPath}/ws`;
+        }
+
+        return url.toString();
+      } catch (error) {
+        console.warn('Unable to normalize websocket path, using raw value:', error);
+        return value;
+      }
+    };
 
     const normalizeWsUrl = (value: string): string | null => {
       if (!value) return null;
@@ -37,12 +56,12 @@ class WebSocketManager {
         if (hasScheme) {
           const parsed = new URL(trimmed);
           if (parsed.protocol === 'ws:' || parsed.protocol === 'wss:') {
-            return parsed.toString();
+            return ensureWsPath(parsed.toString());
           }
 
           if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
             parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-            return parsed.toString();
+            return ensureWsPath(parsed.toString());
           }
         }
       } catch (error) {
@@ -50,22 +69,22 @@ class WebSocketManager {
       }
 
       if (trimmed.startsWith('//')) {
-        return `${fallbackProtocol}${trimmed}`;
+        return ensureWsPath(`${fallbackProtocol}${trimmed}`);
       }
 
       if (/^[\w.-]+:\d+(\/.*)?$/.test(trimmed)) {
-        return `${fallbackProtocol}//${trimmed}`;
+        return ensureWsPath(`${fallbackProtocol}//${trimmed}`);
       }
 
       if (trimmed.startsWith('/')) {
-        return `${fallbackProtocol}//${window.location.host}${trimmed}`;
+        return ensureWsPath(`${fallbackProtocol}//${window.location.host}${trimmed}`);
       }
 
       if (trimmed.includes('/')) {
-        return `${fallbackProtocol}//${window.location.host}/${trimmed.replace(/^\/+/, '')}`;
+        return ensureWsPath(`${fallbackProtocol}//${window.location.host}/${trimmed.replace(/^\/+/, '')}`);
       }
 
-      return `${fallbackProtocol}//${trimmed}`;
+      return ensureWsPath(`${fallbackProtocol}//${trimmed}`);
     };
 
     const normalizedEnvWsUrl = envWsUrl ? normalizeWsUrl(envWsUrl) : null;
@@ -75,16 +94,27 @@ class WebSocketManager {
 
     if (envApiUrl) {
       try {
-        const url = new URL(envApiUrl, window.location.href);
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = url.host;
-        return `${protocol}//${host}/ws`;
+        const apiUrl = new URL(envApiUrl, window.location.href);
+        const wsUrl = new URL(apiUrl.toString());
+        wsUrl.protocol = apiUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+
+        const apiPath = apiUrl.pathname.replace(/\/+$/, '');
+        if (apiPath && apiPath !== '/') {
+          wsUrl.pathname = `${apiPath}/ws`;
+        } else {
+          wsUrl.pathname = DEFAULT_WS_PATH;
+        }
+
+        wsUrl.search = '';
+        wsUrl.hash = '';
+
+        return wsUrl.toString();
       } catch (error) {
         console.warn('Unable to parse VITE_API_URL for websocket usage:', error);
       }
     }
 
-    return `${fallbackProtocol}//${window.location.host}/ws`;
+    return `${fallbackProtocol}//${window.location.host}${DEFAULT_WS_PATH}`;
   }
 
   private notifyConnectionFailure() {
