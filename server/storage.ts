@@ -225,6 +225,8 @@ export interface IStorage {
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    monthlySalesProfit: string;
+    monthlyServiceProfit: string;
     whatsappConnected: boolean;
   }>;
   
@@ -2471,6 +2473,8 @@ export class DatabaseStorage implements IStorage {
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    monthlySalesProfit: string;
+    monthlyServiceProfit: string;
     whatsappConnected: boolean;
   }> {
     const clientId = this.resolveClientId();
@@ -2735,6 +2739,8 @@ export class DatabaseStorage implements IStorage {
       activeServices: activeServicesResult?.count || 0,
       lowStockCount: lowStockResult?.count || 0,
       monthlyProfit: monthlyProfit.toString(),
+      monthlySalesProfit: monthlySalesProfit.toString(),
+      monthlyServiceProfit: monthlyServiceProfit.toString(),
       whatsappConnected,
     };
   }

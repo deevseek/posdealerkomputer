@@ -44,6 +44,15 @@ export default function Dashboard() {
     retry: false,
   });
 
+  const monthlySalesProfit = Number((stats as any)?.monthlySalesProfit ?? 0);
+  const monthlyServiceProfit = Number((stats as any)?.monthlyServiceProfit ?? 0);
+  const hasDetailedProfitBreakdown =
+    (stats as any)?.monthlySalesProfit !== undefined ||
+    (stats as any)?.monthlyServiceProfit !== undefined;
+  const displayedMonthlyProfit = hasDetailedProfitBreakdown
+    ? monthlySalesProfit + monthlyServiceProfit
+    : Number((stats as any)?.monthlyProfit || 0);
+
   // Auto-refresh data setiap 5 detik untuk dashboard real-time
   useEffect(() => {
     const interval = setInterval(() => {
@@ -150,8 +159,12 @@ export default function Dashboard() {
             />
             <StatCard
               title="Profit Bulanan"
-              value={statsLoading ? "Memuat..." : `Rp ${Number((stats as any)?.monthlyProfit || 0).toLocaleString('id-ID')}`}
-              change="Harga jual - HPP"
+              value={
+                statsLoading
+                  ? "Memuat..."
+                  : `Rp ${displayedMonthlyProfit.toLocaleString('id-ID')}`
+              }
+              change="Laba penjualan + servis"
               icon="chart-line"
               color="accent"
               data-testid="stat-monthly-profit"

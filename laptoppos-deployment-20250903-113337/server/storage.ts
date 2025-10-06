@@ -191,9 +191,12 @@ export interface IStorage {
   // Dashboard Statistics
   getDashboardStats(): Promise<{
     todaySales: string;
+    todayRevenue: string;
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    monthlySalesProfit: string;
+    monthlyServiceProfit: string;
   }>;
 }
 
@@ -1664,6 +1667,8 @@ export class DatabaseStorage implements IStorage {
     activeServices: number;
     lowStockCount: number;
     monthlyProfit: string;
+    monthlySalesProfit: string;
+    monthlyServiceProfit: string;
   }> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1749,6 +1754,8 @@ export class DatabaseStorage implements IStorage {
       activeServices: activeServicesResult.count,
       lowStockCount: lowStockResult.count,
       monthlyProfit: monthlyProfit.toString(),
+      monthlySalesProfit: monthlyProfit.toString(),
+      monthlyServiceProfit: '0',
     };
   }
   
