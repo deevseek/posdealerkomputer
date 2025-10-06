@@ -44,14 +44,7 @@ export default function Dashboard() {
     retry: false,
   });
 
-  const monthlySalesProfit = Number((stats as any)?.monthlySalesProfit ?? 0);
-  const monthlyServiceProfit = Number((stats as any)?.monthlyServiceProfit ?? 0);
-  const hasDetailedProfitBreakdown =
-    (stats as any)?.monthlySalesProfit !== undefined ||
-    (stats as any)?.monthlyServiceProfit !== undefined;
-  const displayedMonthlyProfit = hasDetailedProfitBreakdown
-    ? monthlySalesProfit + monthlyServiceProfit
-    : Number((stats as any)?.monthlyProfit || 0);
+  const monthlyNetProfit = Number((stats as any)?.monthlyProfit ?? 0);
 
   // Auto-refresh data setiap 5 detik untuk dashboard real-time
   useEffect(() => {
@@ -158,13 +151,13 @@ export default function Dashboard() {
               data-testid="stat-low-stock"
             />
             <StatCard
-              title="Profit Bulanan"
+              title="Laba Bersih Bulanan"
               value={
                 statsLoading
                   ? "Memuat..."
-                  : `Rp ${displayedMonthlyProfit.toLocaleString('id-ID')}`
+                  : `Rp ${monthlyNetProfit.toLocaleString('id-ID')}`
               }
-              change="Laba penjualan + servis"
+              change="Mengacu pada laporan keuangan"
               icon="chart-line"
               color="accent"
               data-testid="stat-monthly-profit"

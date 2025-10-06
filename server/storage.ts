@@ -2617,18 +2617,26 @@ export class DatabaseStorage implements IStorage {
             ? fallbackSummaryGrossProfitValue
             : summaryGrossProfitValue;
 
+      const summaryNetProfitValue =
+        summary.netProfit !== undefined && summary.netProfit !== null
+          ? Number(summary.netProfit)
+          : null;
+
+      const resolvedNetProfitValue =
+        summaryNetProfitValue !== null && !Number.isNaN(summaryNetProfitValue) && summaryNetProfitValue !== 0
+          ? summaryNetProfitValue
+          : summaryGrossProfitValue !== 0
+            ? summaryGrossProfitValue
+            : resolvedGrossProfitValue;
+
       monthlySalesProfit = resolvedGrossProfitValue;
-      monthlyProfit = resolvedGrossProfitValue;
+      monthlyProfit = resolvedNetProfitValue;
     } catch (error) {
       console.error("Error getting monthly profit from finance manager:", error);
     }
 
     if (monthlySalesProfit === 0 && fallbackGrossProfit !== 0) {
       monthlySalesProfit = fallbackGrossProfit;
-    }
-
-    if (monthlyProfit === 0 && fallbackGrossProfit !== 0) {
-      monthlyProfit = fallbackGrossProfit;
     }
 
     if (monthlyProfit === 0) {
@@ -2675,7 +2683,46 @@ export class DatabaseStorage implements IStorage {
         }
 
         if (monthlyProfit === 0) {
-          monthlyProfit = fallbackProfitValue;
+          const incomeConditions = [
+            eq(financialRecords.type, 'income'),
+            gte(financialRecords.createdAt, startOfMonth),
+            lte(financialRecords.createdAt, now),
+            confirmedCondition
+          ];
+
+          const expenseConditions = [
+            eq(financialRecords.type, 'expense'),
+            gte(financialRecords.createdAt, startOfMonth),
+            lte(financialRecords.createdAt, now),
+            confirmedCondition
+          ];
+
+          if (clientId) {
+            incomeConditions.push(eq(financialRecords.clientId, clientId));
+            expenseConditions.push(eq(financialRecords.clientId, clientId));
+          }
+
+          const [allIncomeResult] = await db
+            .select({ total: sum(financialRecords.amount) })
+            .from(financialRecords)
+            .where(and(...incomeConditions));
+
+          const [allExpenseResult] = await db
+            .select({ total: sum(financialRecords.amount) })
+            .from(financialRecords)
+            .where(and(...expenseConditions));
+
+          const totalIncome = Number(allIncomeResult.total || 0);
+          const totalExpense = Number(allExpenseResult.total || 0);
+          const fallbackNetProfit = Number((totalIncome - totalExpense).toFixed(2));
+
+          if (!Number.isNaN(fallbackNetProfit)) {
+            monthlyProfit = fallbackNetProfit;
+          }
+
+          if (monthlyProfit === 0 && fallbackProfitValue !== 0) {
+            monthlyProfit = fallbackProfitValue;
+          }
         }
       } catch (fallbackError) {
         console.error("Error calculating monthly profit from financial records:", fallbackError);
@@ -2727,7 +2774,11 @@ export class DatabaseStorage implements IStorage {
       console.error("Error calculating monthly service profit:", error);
     }
 
-    monthlyProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
+    const combinedOperationalProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
+
+    if (monthlyProfit === 0 && combinedOperationalProfit !== 0) {
+      monthlyProfit = combinedOperationalProfit;
+    }
 
     // Get WhatsApp connection status from store config
     const storeConfig = await this.getStoreConfig();
