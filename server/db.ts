@@ -255,30 +255,72 @@ const parseDatabaseUrlParts = (connectionString: string): ParsedDatabaseUrl => {
 
 const quoteIdentifier = (identifier: string) => `"${identifier.replace(/"/g, '""')}"`;
 
-const getDrizzleCliCommand = () => {
+type DrizzleCliMode = 'push' | 'migrate';
+
+const getDrizzleCliCommand = (
+  mode: DrizzleCliMode,
+  options: { force?: boolean; extraArgs?: string[] } = {},
+) => {
   const cwd = process.cwd();
   const unixPath = path.join(cwd, 'node_modules', '.bin', 'drizzle-kit');
   const windowsPath = path.join(cwd, 'node_modules', '.bin', 'drizzle-kit.cmd');
 
+  const args: string[] = [mode];
+  const shouldForce = mode === 'push' ? options.force ?? true : false;
+
+  if (shouldForce) {
+    args.push('--force');
+  }
+
+  if (options.extraArgs?.length) {
+    args.push(...options.extraArgs);
+  }
+
+  const joinedArgs = args.join(' ');
+
   if (process.platform === 'win32') {
     if (existsSync(windowsPath)) {
-      return `"${windowsPath}" push --force`;
+      return `"${windowsPath}" ${joinedArgs}`.trim();
     }
-    return 'npx.cmd drizzle-kit push --force';
+    return `npx.cmd drizzle-kit ${joinedArgs}`.trim();
   }
 
   if (existsSync(unixPath)) {
-    return `"${unixPath}" push --force`;
+    return `"${unixPath}" ${joinedArgs}`.trim();
   }
 
-  return 'npx drizzle-kit push --force';
+  return `npx drizzle-kit ${joinedArgs}`.trim();
 };
 
-const runDrizzlePush = async (connectionString: string) => {
-  const command = getDrizzleCliCommand();
+export const runDrizzleCli = async (
+  connectionString: string,
+  mode: DrizzleCliMode,
+  options: { force?: boolean; extraArgs?: string[] } = {},
+) => {
+  const command = getDrizzleCliCommand(mode, options);
   await execAsync(command, {
     cwd: process.cwd(),
     env: { ...process.env, DATABASE_URL: connectionString },
+  });
+};
+
+export const runDrizzlePush = async (
+  connectionString: string,
+  options: { force?: boolean; extraArgs?: string[] } = {},
+) => {
+  await runDrizzleCli(connectionString, 'push', {
+    force: options.force ?? true,
+    extraArgs: options.extraArgs,
+  });
+};
+
+export const runDrizzleMigrate = async (
+  connectionString: string,
+  options: { extraArgs?: string[] } = {},
+) => {
+  await runDrizzleCli(connectionString, 'migrate', {
+    force: false,
+    extraArgs: options.extraArgs,
   });
 };
 
@@ -458,6 +500,24 @@ export const ensureTenantDbForSettings = async (
 
   const tenantDb = await getTenantDb(connectionString);
   return { db: tenantDb, connectionString, created, databaseName };
+};
+
+export const shutdownAllDbPools = async () => {
+  const tenantPoolClosures = Array.from(tenantPools.values()).map(async (pool) => {
+    try {
+      await pool.end();
+    } catch (error) {
+      console.warn('Failed to close tenant pool cleanly:', error);
+    }
+  });
+
+  await Promise.allSettled(tenantPoolClosures);
+
+  try {
+    await primaryPool.end();
+  } catch (error) {
+    console.warn('Failed to close primary pool cleanly:', error);
+  }
 };
 
 export const db = new Proxy({} as ReturnType<typeof drizzle>, {
