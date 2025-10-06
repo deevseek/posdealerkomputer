@@ -26,14 +26,14 @@ class WebSocketManager {
     const envApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
     const fallbackProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
-    const ensureWsPath = (value: string): string => {
+    const ensureWsPath = (value: string, allowCustomPath = false): string => {
       try {
         const url = new URL(value);
         const trimmedPath = url.pathname.replace(/\/+$/, '');
 
-        if (!trimmedPath || trimmedPath === '/' || trimmedPath === '/ws') {
+        if (!trimmedPath || trimmedPath === '/') {
           url.pathname = DEFAULT_WS_PATH;
-        } else if (!trimmedPath.endsWith('/ws')) {
+        } else if (!allowCustomPath && !trimmedPath.endsWith('/ws')) {
           url.pathname = `${trimmedPath}/ws`;
         }
 
@@ -44,7 +44,7 @@ class WebSocketManager {
       }
     };
 
-    const normalizeWsUrl = (value: string): string | null => {
+    const normalizeWsUrl = (value: string, allowCustomPath = false): string | null => {
       if (!value) return null;
 
       const trimmed = value.trim();
@@ -56,12 +56,12 @@ class WebSocketManager {
         if (hasScheme) {
           const parsed = new URL(trimmed);
           if (parsed.protocol === 'ws:' || parsed.protocol === 'wss:') {
-            return ensureWsPath(parsed.toString());
+            return ensureWsPath(parsed.toString(), allowCustomPath);
           }
 
           if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
             parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-            return ensureWsPath(parsed.toString());
+            return ensureWsPath(parsed.toString(), allowCustomPath);
           }
         }
       } catch (error) {
@@ -69,25 +69,25 @@ class WebSocketManager {
       }
 
       if (trimmed.startsWith('//')) {
-        return ensureWsPath(`${fallbackProtocol}${trimmed}`);
+        return ensureWsPath(`${fallbackProtocol}${trimmed}`, allowCustomPath);
       }
 
       if (/^[\w.-]+:\d+(\/.*)?$/.test(trimmed)) {
-        return ensureWsPath(`${fallbackProtocol}//${trimmed}`);
+        return ensureWsPath(`${fallbackProtocol}//${trimmed}`, allowCustomPath);
       }
 
       if (trimmed.startsWith('/')) {
-        return ensureWsPath(`${fallbackProtocol}//${window.location.host}${trimmed}`);
+        return ensureWsPath(`${fallbackProtocol}//${window.location.host}${trimmed}`, allowCustomPath);
       }
 
       if (trimmed.includes('/')) {
-        return ensureWsPath(`${fallbackProtocol}//${window.location.host}/${trimmed.replace(/^\/+/, '')}`);
+        return ensureWsPath(`${fallbackProtocol}//${window.location.host}/${trimmed.replace(/^\/+/, '')}`, allowCustomPath);
       }
 
-      return ensureWsPath(`${fallbackProtocol}//${trimmed}`);
+      return ensureWsPath(`${fallbackProtocol}//${trimmed}`, allowCustomPath);
     };
 
-    const normalizedEnvWsUrl = envWsUrl ? normalizeWsUrl(envWsUrl) : null;
+    const normalizedEnvWsUrl = envWsUrl ? normalizeWsUrl(envWsUrl, true) : null;
     if (normalizedEnvWsUrl) {
       return normalizedEnvWsUrl;
     }
