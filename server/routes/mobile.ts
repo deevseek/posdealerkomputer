@@ -1,6 +1,7 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
 import { z } from 'zod';
-import jwt, { type JwtPayload, TokenExpiredError, type Secret, type SignOptions } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import type { JwtPayload, Secret, SignOptions } from 'jsonwebtoken';
 import type { StringValue } from 'ms';
 import { authenticateUser } from '../auth';
 import { storage } from '../storage';
@@ -292,7 +293,7 @@ const mobileAuth: RequestHandler = async (req: Request, res: Response, next: Nex
 
     return next();
   } catch (error) {
-    if (error instanceof TokenExpiredError) {
+    if (error instanceof jwt.TokenExpiredError) {
       return res.status(401).json({ message: 'Authorization token has expired' });
     }
 
