@@ -68,6 +68,10 @@ app.use((req, res, next) => {
   const clientRoutes = await import('./routes/client');
   app.use('/api/client', clientRoutes.default);
 
+  // Mobile API routes for Flutter integration
+  const mobileRoutes = await import('./routes/mobile');
+  app.use('/api/mobile', mobileRoutes.default);
+
   // Apply tenant middleware to remaining routes
   app.use(tenantMiddleware);
 
