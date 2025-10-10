@@ -4153,6 +4153,143 @@ Terima kasih!
     }
   });
 
+  const PAYMENT_STATUS_VALUES = ['pending', 'paid', 'failed', 'cancelled'] as const;
+
+  const paymentStatusUpdateSchema = z.object({
+    status: z
+      .string()
+      .transform((value) => value.toLowerCase())
+      .pipe(z.enum(PAYMENT_STATUS_VALUES)),
+    paidAt: z.union([z.string(), z.date()]).optional(),
+  });
+
+  app.patch(
+    '/api/admin/saas/subscriptions/:id/payment-status',
+    isAuthenticated,
+    requirePermission('saas_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const parsedBody = paymentStatusUpdateSchema.safeParse(req.body ?? {});
+
+        if (!parsedBody.success) {
+          return res.status(400).json({
+            message: 'Invalid payment status payload',
+            errors: parsedBody.error.flatten(),
+          });
+        }
+
+        const { status, paidAt } = parsedBody.data;
+
+        const [existingSubscription] = await db
+          .select()
+          .from(subscriptions)
+          .where(eq(subscriptions.id, id))
+          .limit(1);
+
+        if (!existingSubscription) {
+          return res.status(404).json({ message: 'Subscription not found' });
+        }
+
+        const now = new Date();
+        const [updatedSubscription] = await db
+          .update(subscriptions)
+          .set({
+            paymentStatus: status,
+            updatedAt: now,
+          })
+          .where(eq(subscriptions.id, id))
+          .returning();
+
+        const [existingPayment] = await db
+          .select()
+          .from(payments)
+          .where(eq(payments.subscriptionId, id))
+          .orderBy(desc(payments.createdAt))
+          .limit(1);
+
+        const resolvedPaidAt = paidAt
+          ? paidAt instanceof Date
+            ? paidAt
+            : new Date(paidAt)
+          : null;
+
+        const normalizedPaidAt =
+          status === 'paid'
+            ? resolvedPaidAt && !Number.isNaN(resolvedPaidAt.getTime())
+              ? resolvedPaidAt
+              : now
+            : null;
+
+        const parsedAmount = Number.parseInt(existingSubscription.amount ?? '0', 10);
+        const paymentAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+        const paymentCurrency = existingSubscription.currency ?? 'IDR';
+
+        if (existingPayment) {
+          await db
+            .update(payments)
+            .set({
+              status,
+              paidAt: normalizedPaidAt,
+              updatedAt: now,
+            })
+            .where(eq(payments.id, existingPayment.id));
+        } else {
+          await db.insert(payments).values({
+            subscriptionId: existingSubscription.id,
+            clientId: existingSubscription.clientId,
+            amount: paymentAmount,
+            currency: paymentCurrency,
+            status,
+            paidAt: normalizedPaidAt,
+          });
+        }
+
+        if (status === 'paid') {
+          await db
+            .update(clients)
+            .set({ status: 'active', updatedAt: now })
+            .where(eq(clients.id, existingSubscription.clientId));
+        }
+
+        const [clientRecord] = await db
+          .select({
+            id: clients.id,
+            name: clients.name,
+            subdomain: clients.subdomain,
+            customDomain: clients.customDomain,
+            email: clients.email,
+            status: clients.status,
+            trialEndsAt: clients.trialEndsAt,
+            createdAt: clients.createdAt,
+          })
+          .from(clients)
+          .where(eq(clients.id, existingSubscription.clientId))
+          .limit(1);
+
+        if (clientRecord) {
+          realtimeService.broadcast({
+            resource: 'saas-clients',
+            action: 'update',
+            data: {
+              ...clientRecord,
+              subscription: updatedSubscription,
+            },
+            id: clientRecord.id,
+          });
+        }
+
+        res.json({
+          message: 'Subscription payment status updated successfully',
+          subscription: updatedSubscription,
+        });
+      } catch (error) {
+        console.error('Error updating subscription payment status:', error);
+        res.status(500).json({ message: 'Failed to update subscription payment status' });
+      }
+    },
+  );
+
   // SaaS Dashboard Stats
   app.get('/api/admin/saas/stats', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
     try {

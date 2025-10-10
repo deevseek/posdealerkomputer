@@ -10,6 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Pencil, Eye } from 'lucide-react';
 
+type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
+
+const PAYMENT_STATUS_OPTIONS: Array<{ value: PaymentStatus; label: string }> = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
 interface ClientTableProps {
   clients: any[];
   refetchClients: () => void;
@@ -57,6 +66,8 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
   const { toast } = useToast();
 
   const [editClient, setEditClient] = useState<any>(null);
+  const [localPaymentStatus, setLocalPaymentStatus] = useState<Partial<Record<string, PaymentStatus>>>({});
+  const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | null>(null);
 
   const updateClientMutation = useMutation({
     mutationFn: async (data: { id: string; name: string; email: string; planId?: string | null }) =>
@@ -85,6 +96,32 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
       toast({ title: 'Error', description: error.message || 'Failed to update client status', variant: 'destructive' }),
   });
 
+  const updatePaymentStatusMutation = useMutation({
+    mutationFn: async ({ subscriptionId, status }: { subscriptionId: string; status: PaymentStatus }) =>
+      apiRequest('PATCH', `/api/admin/saas/subscriptions/${subscriptionId}/payment-status`, { status }),
+  });
+
+  const handlePaymentStatusChange = async (subscriptionId: string, status: PaymentStatus) => {
+    setLocalPaymentStatus((prev) => ({ ...prev, [subscriptionId]: status }));
+    setUpdatingSubscriptionId(subscriptionId);
+
+    try {
+      await updatePaymentStatusMutation.mutateAsync({ subscriptionId, status });
+      toast({ title: 'Success', description: 'Payment status updated successfully' });
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/clients'] });
+      await refetchClients();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || 'Failed to update payment status', variant: 'destructive' });
+    } finally {
+      setUpdatingSubscriptionId((prev) => (prev === subscriptionId ? null : prev));
+      setLocalPaymentStatus((prev) => {
+        const next = { ...prev };
+        delete next[subscriptionId];
+        return next;
+      });
+    }
+  };
+
   return (
     <>
       <Table>
@@ -111,6 +148,11 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
               matchedPlan?.price ?? (subscription?.amount ? Number(subscription.amount) : undefined);
             const formattedPrice = formatCurrency(displayPrice);
             const paymentStatusLabel = formatPaymentStatus(subscription?.paymentStatus);
+            const currentPaymentStatus = subscription
+              ? (subscription.paymentStatus as PaymentStatus)
+              : 'pending';
+            const pendingStatusSelection = subscription?.id ? localPaymentStatus[subscription.id] : undefined;
+            const paymentStatusValue = pendingStatusSelection ?? currentPaymentStatus;
             const domain = client.customDomain
               ? client.customDomain
               : client.subdomain
@@ -127,13 +169,37 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
                 </TableCell>
                 <TableCell>
                   {subscription ? (
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 font-medium">
-                        <span>{subscription.planName || subscription.plan || '-'}</span>
-                        {paymentStatusLabel && subscription.paymentStatus !== 'paid' ? (
-                          <Badge variant="outline" className="uppercase tracking-wide">
-                            {paymentStatusLabel}
-                          </Badge>
+                    <div className="space-y-2">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 font-medium">
+                          <span>{subscription.planName || subscription.plan || '-'}</span>
+                          {paymentStatusLabel ? (
+                            <Badge variant={subscription.paymentStatus === 'paid' ? 'outline' : 'secondary'} className="uppercase tracking-wide">
+                              {paymentStatusLabel}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        {subscription.id ? (
+                          <Select
+                            value={paymentStatusValue}
+                            onValueChange={(value) => {
+                              if (subscription.id) {
+                                void handlePaymentStatusChange(subscription.id, value as PaymentStatus);
+                              }
+                            }}
+                            disabled={updatingSubscriptionId === subscription.id || updatePaymentStatusMutation.isPending}
+                          >
+                            <SelectTrigger className="h-8 w-[150px] text-xs">
+                              <SelectValue placeholder="Payment Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_STATUS_OPTIONS.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : null}
                       </div>
                       {formattedPrice ? (
