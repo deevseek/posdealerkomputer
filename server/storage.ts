@@ -267,6 +267,7 @@ export class DatabaseStorage implements IStorage {
   protected readonly db = db;
 
   private warrantyClaimAdminNotesColumnExists?: boolean;
+  private warrantyClaimClaimedItemsColumnExists?: boolean;
 
   private resolveClientId(explicitClientId?: string | null) {
     if (typeof explicitClientId !== 'undefined') {
@@ -297,6 +298,30 @@ export class DatabaseStorage implements IStorage {
       return exists;
     } catch {
       this.warrantyClaimAdminNotesColumnExists = false;
+      return false;
+    }
+  }
+
+  private async warrantyClaimedItemsColumnExists(): Promise<boolean> {
+    if (typeof this.warrantyClaimClaimedItemsColumnExists !== 'undefined') {
+      return this.warrantyClaimClaimedItemsColumnExists;
+    }
+
+    try {
+      const result = await db.execute(
+        sql`select exists (
+            select 1
+            from information_schema.columns
+            where table_name = 'warranty_claims'
+              and table_schema = current_schema()
+              and column_name = 'claimed_items'
+          ) as "exists"`
+      );
+      const exists = Boolean(result.rows?.[0]?.exists);
+      this.warrantyClaimClaimedItemsColumnExists = exists;
+      return exists;
+    } catch {
+      this.warrantyClaimClaimedItemsColumnExists = false;
       return false;
     }
   }
@@ -2894,6 +2919,12 @@ export class DatabaseStorage implements IStorage {
       ? sql`where ${sql.join(conditions, sql` and `)}`
       : sql``;
 
+    const hasClaimedItemsColumn = await this.warrantyClaimedItemsColumnExists();
+
+    const claimedItemsSelect = hasClaimedItemsColumn
+      ? sql`wc.claimed_items as "claimedItems",`
+      : sql`'[]'::jsonb as "claimedItems",`;
+
     const result = await db.execute(sql`
       select
         wc.id,
@@ -2903,10 +2934,11 @@ export class DatabaseStorage implements IStorage {
         wc.claim_reason as "claimReason",
         wc.claim_date as "claimDate",
         wc.processed_date as "processedDate",
+        wc.processed_by as "processedBy",
         wc.return_condition as "returnCondition",
         wc.notes,
         ${adminNotesSelect}
-        wc.claimed_items as "claimedItems",
+        ${claimedItemsSelect}
         wc.created_at as "createdAt",
         wc.updated_at as "updatedAt",
         wc.original_transaction_id as "originalTransactionId",
@@ -2929,11 +2961,53 @@ export class DatabaseStorage implements IStorage {
 
   async getWarrantyClaimById(id: string, clientIdParam?: string | null): Promise<WarrantyClaim | undefined> {
     const clientId = this.resolveClientId(clientIdParam);
-    const conditions = clientId
-      ? and(eq(warrantyClaims.id, id), eq(warrantyClaims.clientId, clientId))
-      : eq(warrantyClaims.id, id);
+    const hasAdminNotesColumn = await this.warrantyAdminNotesColumnExists();
+    const hasClaimedItemsColumn = await this.warrantyClaimedItemsColumnExists();
 
-    const [claim] = await db.select().from(warrantyClaims).where(conditions);
+    const adminNotesSelect = hasAdminNotesColumn
+      ? sql`wc.admin_notes as "adminNotes",`
+      : sql`null::text as "adminNotes",`;
+
+    const claimedItemsSelect = hasClaimedItemsColumn
+      ? sql`wc.claimed_items as "claimedItems",`
+      : sql`'[]'::jsonb as "claimedItems",`;
+
+    const conditions: SQL[] = [sql`wc.id = ${id}`];
+    if (clientId) {
+      conditions.push(sql`wc.client_id = ${clientId}`);
+    }
+
+    const whereClause = conditions.length
+      ? sql`where ${sql.join(conditions, sql` and `)}`
+      : sql``;
+
+    const result = await db.execute(sql`
+      select
+        wc.id,
+        wc.claim_number as "claimNumber",
+        wc.claim_type as "claimType",
+        wc.status,
+        wc.claim_reason as "claimReason",
+        wc.claim_date as "claimDate",
+        wc.processed_date as "processedDate",
+        wc.processed_by as "processedBy",
+        wc.return_condition as "returnCondition",
+        wc.notes,
+        ${adminNotesSelect}
+        ${claimedItemsSelect}
+        wc.created_at as "createdAt",
+        wc.updated_at as "updatedAt",
+        wc.original_transaction_id as "originalTransactionId",
+        wc.original_service_ticket_id as "originalServiceTicketId",
+        wc.warranty_service_ticket_id as "warrantyServiceTicketId",
+        wc.customer_id as "customerId",
+        wc.client_id as "clientId"
+      from warranty_claims wc
+      ${whereClause}
+      limit 1
+    `);
+
+    const claim = result.rows?.[0] as WarrantyClaim | undefined;
     return claim;
   }
 
@@ -2946,15 +3020,28 @@ export class DatabaseStorage implements IStorage {
 
     const clientId = this.resolveClientId(options.clientId);
 
+    const hasClaimedItemsColumn = await this.warrantyClaimedItemsColumnExists();
+    const hasAdminNotesColumn = await this.warrantyAdminNotesColumnExists();
+
     const claim = await db.transaction(async (tx) => {
+      const claimValues: any = {
+        ...claimData,
+        claimNumber,
+        clientId: clientId ?? claimData.clientId ?? null,
+        // Let database use default timestamps
+      };
+
+      if (!hasClaimedItemsColumn) {
+        delete claimValues.claimedItems;
+      }
+
+      if (!hasAdminNotesColumn) {
+        delete claimValues.adminNotes;
+      }
+
       const [createdClaim] = await tx
         .insert(warrantyClaims)
-        .values({
-          ...claimData,
-          claimNumber,
-          clientId: clientId ?? claimData.clientId ?? null,
-          // Let database use default timestamps
-        })
+        .values(claimValues)
         .returning();
 
       if (!createdClaim) {
@@ -3008,6 +3095,13 @@ export class DatabaseStorage implements IStorage {
       const hasAdminNotesColumn = await this.warrantyAdminNotesColumnExists();
       if (!hasAdminNotesColumn) {
         delete updateData.adminNotes;
+      }
+    }
+
+    if ('claimedItems' in updateData) {
+      const hasClaimedItemsColumn = await this.warrantyClaimedItemsColumnExists();
+      if (!hasClaimedItemsColumn) {
+        delete updateData.claimedItems;
       }
     }
 
