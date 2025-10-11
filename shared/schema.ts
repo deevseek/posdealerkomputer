@@ -39,6 +39,8 @@ export const serviceStatusEnum = pgEnum('service_status', [
   'pending',
   'checking',
   'in-progress',
+  'waiting-technician',
+  'testing',
   'waiting-confirmation',
   'waiting-parts',
   'completed',
