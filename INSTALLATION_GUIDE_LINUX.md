@@ -208,6 +208,11 @@ npm run build
 
 # Run database migration
 npm run db:push
+
+# Perintah di atas akan otomatis menormalkan nilai kolom `service_tickets.status`
+# (misalnya mengubah `sedang-dikerjakan` menjadi `in-progress`) sebelum menjalankan
+# `drizzle-kit push`. Langkah ini mencegah error `column "status" cannot be cast automatically
+# to type service_status` pada database yang sebelumnya masih memakai tipe teks untuk kolom tersebut.
 ```
 
 ## 6. Setup Process Manager dengan PM2

@@ -20,7 +20,7 @@
 
 ## Rekomendasi Penanganan
 1. **Sinkronkan struktur database melalui workflow Drizzle** yang sudah digunakan sehari-hari:
-   - Jalankan `npx drizzle-kit push` (atau skrip `npm run db:push` yang menjadi alias resmi di repo) terhadap environment target agar definisi `jsonb("claimed_items")` dari skema Drizzle benar-benar tertulis di database.【F:package.json†L7-L12】【F:shared/schema.ts†L333-L349】
+   - Jalankan `npx drizzle-kit push` (atau skrip `npm run db:push` yang menjadi alias resmi di repo). Alias tersebut sekarang mengeksekusi skrip normalisasi `service_tickets.status` sebelum `drizzle-kit push` sehingga perubahan tipe enum tidak gagal pada data lama yang masih bertipe teks.【F:package.json†L7-L13】【F:server/scripts/normalize-service-status.ts†L1-L126】
    - Bila Anda mengandalkan folder migrasi, pastikan ada file migrasi yang menambahkan kolom `claimed_items` dan jalankan `npx drizzle-kit migrate` sampai statusnya "Nothing to migrate" sebelum mencoba ulang API.【F:drizzle.config.ts†L1-L15】
    - Opsi manual `ALTER TABLE warranty_claims ADD COLUMN claimed_items jsonb` tetap relevan untuk patch cepat di produksi ketika tidak memungkinkan menjalankan pipeline Drizzle penuh. Jalankan perintah ini pada setiap database yang melayani tenant (termasuk tenant "utama"/default) agar seluruh instance memiliki kolom yang sama sebelum API garansi dipakai kembali.
 2. **Otomatisasikan eksekusi Drizzle untuk seluruh tenant** supaya tidak perlu lagi menjalankan perintah manual satu per satu:
