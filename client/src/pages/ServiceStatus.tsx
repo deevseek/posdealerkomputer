@@ -14,11 +14,9 @@ import ServiceStatusTracker from "@/components/ServiceStatusTracker";
 const statusConfig: Record<ServiceStatus, { label: string; color: string; icon: typeof Clock }> = {
   pending: { label: SERVICE_STATUS_LABELS.pending, color: 'bg-yellow-500', icon: Clock },
   checking: { label: SERVICE_STATUS_LABELS.checking, color: 'bg-yellow-500', icon: Clock },
-  'waiting-technician': { label: SERVICE_STATUS_LABELS['waiting-technician'], color: 'bg-gray-500', icon: AlertCircle },
   'waiting-confirmation': { label: SERVICE_STATUS_LABELS['waiting-confirmation'], color: 'bg-red-500', icon: AlertCircle },
   'waiting-parts': { label: SERVICE_STATUS_LABELS['waiting-parts'], color: 'bg-orange-500', icon: Package },
   'in-progress': { label: SERVICE_STATUS_LABELS['in-progress'], color: 'bg-blue-500', icon: Settings },
-  testing: { label: SERVICE_STATUS_LABELS.testing, color: 'bg-indigo-500', icon: Settings },
   completed: { label: SERVICE_STATUS_LABELS.completed, color: 'bg-green-500', icon: CheckCircle },
   delivered: { label: SERVICE_STATUS_LABELS.delivered, color: 'bg-emerald-500', icon: CheckCircle },
   cancelled: { label: SERVICE_STATUS_LABELS.cancelled, color: 'bg-red-600', icon: AlertCircle },

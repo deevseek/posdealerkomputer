@@ -19,11 +19,9 @@ export default function ServiceStatus() {
   const statusConfig: Record<ServiceStatus, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock; label: string }> = {
     pending: { variant: "secondary", icon: Clock, label: SERVICE_STATUS_LABELS.pending },
     checking: { variant: "secondary", icon: Clock, label: SERVICE_STATUS_LABELS.checking },
-    "waiting-technician": { variant: "outline", icon: AlertTriangle, label: SERVICE_STATUS_LABELS["waiting-technician"] },
     "waiting-confirmation": { variant: "destructive", icon: AlertTriangle, label: SERVICE_STATUS_LABELS["waiting-confirmation"] },
     "waiting-parts": { variant: "secondary", icon: Package, label: SERVICE_STATUS_LABELS["waiting-parts"] },
     "in-progress": { variant: "default", icon: Settings, label: SERVICE_STATUS_LABELS["in-progress"] },
-    testing: { variant: "default", icon: Settings, label: SERVICE_STATUS_LABELS.testing },
     completed: { variant: "default", icon: CheckCircle, label: SERVICE_STATUS_LABELS.completed },
     delivered: { variant: "secondary", icon: CheckCircle, label: SERVICE_STATUS_LABELS.delivered },
     cancelled: { variant: "destructive", icon: AlertTriangle, label: SERVICE_STATUS_LABELS.cancelled },

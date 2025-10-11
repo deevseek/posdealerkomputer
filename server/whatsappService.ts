@@ -456,7 +456,6 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
         nextSteps = 'Tim teknisi kami sedang memeriksa perangkat Anda untuk menentukan kerusakan dan solusi yang tepat.';
         break;
       case 'in-progress':
-      case 'testing':
         statusText = 'SEDANG DIKERJAKAN';
         emoji = '🔧';
         nextSteps = 'Perangkat Anda sedang dalam proses perbaikan. Tim teknisi kami bekerja untuk menyelesaikan masalah.';
@@ -483,11 +482,6 @@ ${storeConfig?.email ? `📧 ${storeConfig.email}` : ''}`;
         if (serviceTicket.estimatedCost) {
           estimatedCostInfo = `\n\n💰 *Estimasi Biaya Service:* ${formatCurrency(serviceTicket.estimatedCost)}`;
         }
-        break;
-      case 'waiting-technician':
-        statusText = 'MENUNGGU TEKNISI';
-        emoji = '🧑‍🔧';
-        nextSteps = 'Kami sedang menjadwalkan teknisi untuk menangani perangkat Anda. Mohon menunggu informasi selanjutnya.';
         break;
       case 'delivered':
         statusText = 'SUDAH DIAMBIL';

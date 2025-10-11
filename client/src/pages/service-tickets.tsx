@@ -112,8 +112,6 @@ const statusColors: Record<ServiceTicketStatus, { bg: string; text: string; icon
   pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: Clock },
   checking: { bg: "bg-amber-100", text: "text-amber-800", icon: Clock },
   "in-progress": { bg: "bg-blue-100", text: "text-blue-800", icon: Settings },
-  "waiting-technician": { bg: "bg-gray-100", text: "text-gray-800", icon: AlertCircle },
-  testing: { bg: "bg-indigo-100", text: "text-indigo-800", icon: Settings },
   "waiting-confirmation": { bg: "bg-red-100", text: "text-red-800", icon: FileText },
   "waiting-parts": { bg: "bg-orange-100", text: "text-orange-800", icon: Package },
   completed: { bg: "bg-green-100", text: "text-green-800", icon: CheckCircle },
@@ -121,17 +119,21 @@ const statusColors: Record<ServiceTicketStatus, { bg: string; text: string; icon
   cancelled: { bg: "bg-red-100", text: "text-red-800", icon: AlertCircle },
 };
 
-const serviceStatusOptions: { value: ServiceTicketStatus; label: string }[] = [
+const serviceStatusValues: ServiceTicketStatus[] = [
   'pending',
-  'waiting-technician',
+  'checking',
   'waiting-confirmation',
   'waiting-parts',
   'in-progress',
-  'testing',
   'completed',
   'delivered',
   'cancelled'
-].map((value) => ({ value, label: SERVICE_STATUS_LABELS[value] }));
+];
+
+const serviceStatusOptions: { value: ServiceTicketStatus; label: string }[] = serviceStatusValues.map((value) => ({
+  value,
+  label: SERVICE_STATUS_LABELS[value],
+}));
 
 const FALLBACK_STATUS: ServiceTicketStatus = "pending";
 
