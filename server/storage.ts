@@ -3154,15 +3154,7 @@ export class DatabaseStorage implements IStorage {
     try {
       const clientId = this.resolveClientId(clientIdParam);
       if (originalTransactionId) {
-        // Validate sales warranty
-        const [transaction] = await db
-          .select()
-          .from(transactions)
-          .where(
-            clientId
-              ? and(eq(transactions.id, originalTransactionId), eq(transactions.clientId, clientId))
-              : eq(transactions.id, originalTransactionId)
-          );
+        const transaction = await this.findTransactionWithTenantFallback(originalTransactionId, clientId);
 
         if (!transaction) {
           return { isValid: false, message: 'Original transaction not found' };
@@ -3181,15 +3173,7 @@ export class DatabaseStorage implements IStorage {
           }
         }
 
-        // Check for existing warranty claims
-        const [existingClaim] = await db
-          .select()
-          .from(warrantyClaims)
-          .where(
-            clientId
-              ? and(eq(warrantyClaims.originalTransactionId, originalTransactionId), eq(warrantyClaims.clientId, clientId))
-              : eq(warrantyClaims.originalTransactionId, originalTransactionId)
-          );
+        const existingClaim = await this.findExistingClaimForTransaction(originalTransactionId, clientId);
 
         if (existingClaim && existingClaim.status !== 'rejected') {
           return { isValid: false, message: 'A warranty claim already exists for this transaction' };
@@ -3199,15 +3183,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (originalServiceTicketId) {
-        // Validate service warranty
-        const [serviceTicket] = await db
-          .select()
-          .from(serviceTickets)
-          .where(
-            clientId
-              ? and(eq(serviceTickets.id, originalServiceTicketId), eq(serviceTickets.clientId, clientId))
-              : eq(serviceTickets.id, originalServiceTicketId)
-          );
+        const serviceTicket = await this.findServiceTicketWithTenantFallback(originalServiceTicketId, clientId);
 
         if (!serviceTicket) {
           return { isValid: false, message: 'Original service ticket not found' };
@@ -3226,15 +3202,7 @@ export class DatabaseStorage implements IStorage {
           }
         }
 
-        // Check for existing warranty claims
-        const [existingClaim] = await db
-          .select()
-          .from(warrantyClaims)
-          .where(
-            clientId
-              ? and(eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId), eq(warrantyClaims.clientId, clientId))
-              : eq(warrantyClaims.originalServiceTicketId, originalServiceTicketId)
-          );
+        const existingClaim = await this.findExistingClaimForService(originalServiceTicketId, clientId);
 
         if (existingClaim && existingClaim.status !== 'rejected') {
           return { isValid: false, message: 'A warranty claim already exists for this service' };
@@ -3243,11 +3211,99 @@ export class DatabaseStorage implements IStorage {
         return { isValid: true, message: 'Service ticket is eligible for warranty claim' };
       }
 
-      return { isValid: false, message: 'No original transaction or service ticket specified' };
+      return { isValid: false, message: 'No warranty identifier provided' };
     } catch (error) {
       console.error('Error validating warranty eligibility:', error);
-      return { isValid: false, message: 'Error validating warranty eligibility' };
+      return { isValid: false, message: 'Failed to validate warranty eligibility' };
     }
+  }
+
+  private async findTransactionWithTenantFallback(transactionId: string, clientId?: string | null) {
+    if (!transactionId) {
+      return null;
+    }
+
+    if (clientId) {
+      const [scopedTransaction] = await db
+        .select()
+        .from(transactions)
+        .where(and(eq(transactions.id, transactionId), eq(transactions.clientId, clientId)));
+
+      if (scopedTransaction) {
+        return scopedTransaction;
+      }
+    }
+
+    const [legacyTransaction] = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, transactionId));
+
+    return legacyTransaction ?? null;
+  }
+
+  private async findServiceTicketWithTenantFallback(serviceTicketId: string, clientId?: string | null) {
+    if (!serviceTicketId) {
+      return null;
+    }
+
+    if (clientId) {
+      const [scopedTicket] = await db
+        .select()
+        .from(serviceTickets)
+        .where(and(eq(serviceTickets.id, serviceTicketId), eq(serviceTickets.clientId, clientId)));
+
+      if (scopedTicket) {
+        return scopedTicket;
+      }
+    }
+
+    const [legacyTicket] = await db
+      .select()
+      .from(serviceTickets)
+      .where(eq(serviceTickets.id, serviceTicketId));
+
+    return legacyTicket ?? null;
+  }
+
+  private async findExistingClaimForTransaction(transactionId: string, clientId?: string | null) {
+    if (clientId) {
+      const [tenantClaim] = await db
+        .select()
+        .from(warrantyClaims)
+        .where(and(eq(warrantyClaims.originalTransactionId, transactionId), eq(warrantyClaims.clientId, clientId)));
+
+      if (tenantClaim) {
+        return tenantClaim;
+      }
+    }
+
+    const [legacyClaim] = await db
+      .select()
+      .from(warrantyClaims)
+      .where(eq(warrantyClaims.originalTransactionId, transactionId));
+
+    return legacyClaim ?? null;
+  }
+
+  private async findExistingClaimForService(serviceTicketId: string, clientId?: string | null) {
+    if (clientId) {
+      const [tenantClaim] = await db
+        .select()
+        .from(warrantyClaims)
+        .where(and(eq(warrantyClaims.originalServiceTicketId, serviceTicketId), eq(warrantyClaims.clientId, clientId)));
+
+      if (tenantClaim) {
+        return tenantClaim;
+      }
+    }
+
+    const [legacyClaim] = await db
+      .select()
+      .from(warrantyClaims)
+      .where(eq(warrantyClaims.originalServiceTicketId, serviceTicketId));
+
+    return legacyClaim ?? null;
   }
 
   // Private helper method for processing service warranty claims
