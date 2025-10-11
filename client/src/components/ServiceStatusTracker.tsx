@@ -76,11 +76,9 @@ const serviceSteps: ServiceStep[] = [
 const statusMapping: Record<ServiceStatus, number> = {
   pending: 0,
   checking: 0,
-  'waiting-technician': 1,
   'waiting-confirmation': 1,
   'waiting-parts': 2,
   'in-progress': 3,
-  testing: 3,
   completed: 4,
   delivered: 5,
   cancelled: -1,

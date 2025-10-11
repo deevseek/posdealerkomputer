@@ -58,7 +58,7 @@ const getCancellationScenarios = (ticket: any): CancellationType[] => {
   }
 
   // For tickets not yet completed/delivered
-  if (['pending', 'checking', 'waiting-technician', 'waiting-confirmation', 'waiting-parts', 'in-progress', 'testing'].includes(status)) {
+  if (['pending', 'checking', 'waiting-confirmation', 'waiting-parts', 'in-progress'].includes(status)) {
     return ['before_completed'];
   }
 
