@@ -120,6 +120,52 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+const DEFAULT_CLIENT_ID_ENV_KEYS = [
+  'DEFAULT_MOBILE_CLIENT_ID',
+  'DEFAULT_CLIENT_ID',
+  'DEFAULT_TENANT_ID',
+] as const;
+
+const findFallbackClient = async () => {
+  const seen = new Set<string>();
+
+  for (const key of DEFAULT_CLIENT_ID_ENV_KEYS) {
+    const value = process.env[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed && !seen.has(trimmed)) {
+        const [client] = await primaryDb
+          .select()
+          .from(clients)
+          .where(eq(clients.id, trimmed))
+          .limit(1);
+
+        seen.add(trimmed);
+
+        if (client) {
+          return client;
+        }
+      }
+    }
+  }
+
+  const statusFilter = or(eq(clients.status, 'active'), eq(clients.status, 'trial'));
+
+  const [activeClient] = await primaryDb
+    .select()
+    .from(clients)
+    .where(statusFilter)
+    .orderBy(asc(clients.createdAt))
+    .limit(1);
+
+  if (activeClient) {
+    return activeClient;
+  }
+
+  const [anyClient] = await primaryDb.select().from(clients).orderBy(asc(clients.createdAt)).limit(1);
+  return anyClient ?? null;
+};
+
 const productQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -177,17 +223,27 @@ const sanitizeStoreConfig = (config: typeof storeConfigTable.$inferSelect | unde
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const credentials = loginSchema.parse(req.body);
-    const user = await authenticateUser(credentials);
+    let user = await authenticateUser(credentials);
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
 
     if (!user.clientId) {
-      return res.status(403).json({ message: 'User is not associated with a tenant' });
+      const fallbackClient = await findFallbackClient();
+
+      if (!fallbackClient) {
+        return res.status(403).json({
+          message: 'User is not associated with a tenant',
+          hint: 'Create a tenant and associate the user before using the mobile API.',
+        });
+      }
+
+      await storage.updateUser(user.id, { clientId: fallbackClient.id });
+      user = { ...user, clientId: fallbackClient.id };
     }
 
-    const { client, tenantDb, connectionString } = await resolveTenantContext(user.clientId);
+    const { client, tenantDb, connectionString } = await resolveTenantContext(user.clientId!);
 
     setTenantDbForRequest(tenantDb, { clientId: client.id, connectionString });
 
