@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { tenantMiddleware } from "./middleware/tenant";
+import { createCorsMiddleware } from "./middleware/cors";
 import saasRoutes from "./routes/saas";
 import adminRoutes from "./routes/admin";
 import { databaseContextMiddleware } from "./db";
@@ -17,6 +18,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: { secure: false } // set true jika pakai https
 }));
+app.use(createCorsMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(databaseContextMiddleware);
