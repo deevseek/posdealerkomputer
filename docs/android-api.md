@@ -119,6 +119,18 @@ Menyediakan daftar produk dengan pagination dan parameter `search`. Response men
 Mengambil detail produk lengkap, termasuk informasi stok, harga, serta spesifikasi (apabila disimpan dalam format JSON). Error
 `404` dikembalikan jika produk tidak ditemukan atau bukan milik tenant yang sama.【F:server/routes/mobile.ts†L545-L652】
 
+### 4.7 Fitur CRUD Lengkap di Mobile
+
+Versi terbaru API menambahkan seluruh endpoint yang sebelumnya hanya ada di dashboard web, sehingga aplikasi Android dapat mengelola semua modul bisnis secara native.【F:server/routes/mobile.ts†L655-L1297】
+
+- **Manajemen Kategori & Produk** – endpoint `POST/PUT/DELETE` untuk `/categories` dan `/products` memungkinkan penambahan inventori baru, update harga, hingga menonaktifkan produk langsung dari perangkat mobile.【F:server/routes/mobile.ts†L655-L781】
+- **CRM Pelanggan & Supplier** – daftar, detail, serta CRUD lengkap untuk `/customers` dan `/suppliers` agar tim lapangan bisa memperbarui kontak secara real time.【F:server/routes/mobile.ts†L783-L922】
+- **Transaksi Penjualan** – `/transactions` mendukung pembacaan riwayat dan pembuatan transaksi baru lengkap dengan auto-number dan sinkronisasi stok/keuangan.【F:server/routes/mobile.ts†L924-L995】
+- **Servis & Teknisi** – `/service-tickets` kini menyediakan daftar aktif, detail, parts, pembaruan status, serta pembatalan dengan validasi aturan bisnis yang sama seperti web.【F:server/routes/mobile.ts†L997-L1114】
+- **Pergerakan Stok & Keuangan** – endpoint `/stock-movements` dan `/financial-records` memastikan mutasi gudang serta pencatatan keuangan bisa dilakukan dari Android.【F:server/routes/mobile.ts†L1116-L1188】
+- **Laporan & Akuntansi** – `/reports/sales`, `/reports/service`, `/reports/financial`, `/reports/inventory`, `/reports/balance-sheet`, `/reports/income-statement`, dan `/reports/chart-of-accounts` memudahkan pembuatan dashboard ringkas di aplikasi.【F:server/routes/mobile.ts†L1189-L1229】
+- **Klaim Garansi** – seluruh siklus hidup klaim (`GET/POST/PATCH`) tersedia di `/warranty-claims`, termasuk validasi eligibility sebelum pengajuan baru.【F:server/routes/mobile.ts†L1231-L1297】
+
 ## 5. Penanganan Error
 
 | Status | Kapan terjadi |
