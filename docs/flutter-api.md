@@ -288,6 +288,40 @@ Retrieve a single product by its identifier.
 
 If the product does not exist or does not belong to the tenant, the API returns `404`. Validation failures (e.g., missing ID) return `400` with Zod error details.【F:server/routes/mobile.ts†L546-L652】
 
+## Extended Feature Endpoints
+
+The mobile API now mirrors the full web feature set so the Flutter client can manage every operational module directly from a phone or tablet.【F:server/routes/mobile.ts†L655-L1130】 The most notable additions are grouped below.
+
+### Inventory Management
+
+- `POST /categories`, `PUT /categories/:id`, `DELETE /categories/:id` to create, update, and archive product categories with tenant scoping.【F:server/routes/mobile.ts†L655-L715】
+- `POST /products`, `PUT /products/:id`, `DELETE /products/:id` for full product CRUD; SKUs/barcodes are auto-generated when omitted to match the web experience.【F:server/routes/mobile.ts†L717-L781】
+
+### CRM (Customers & Suppliers)
+
+- `GET /customers`, `GET /customers/:id`, plus `POST`, `PUT`, `DELETE` to manage the entire customer directory, including search support.【F:server/routes/mobile.ts†L783-L854】
+- `GET /suppliers`, `GET /suppliers/:id`, and the corresponding `POST`, `PUT`, `DELETE` endpoints for supplier records.【F:server/routes/mobile.ts†L856-L922】
+
+### Sales & Transactions
+
+- `GET /transactions`, `GET /transactions/:id` expose full history with item breakdowns, while `POST /transactions` records new POS sales complete with automatic number generation and stock/finance integration.【F:server/routes/mobile.ts†L924-L995】
+
+### Service Operations
+
+- `GET /service-tickets`, detail view, parts lookup, and CRUD endpoints (`POST`, `PUT`, `DELETE`) let technicians work queues from mobile. Cancel flows reuse the same business-rule validation as the web dashboard.【F:server/routes/mobile.ts†L997-L1114】
+
+### Inventory Movements & Stock Control
+
+- `GET /stock-movements` and `POST /stock-movements` capture inbound/outbound adjustments with user attribution, keeping inventory figures consistent on mobile.【F:server/routes/mobile.ts†L1116-L1147】
+
+### Finance & Reporting
+
+- `GET /financial-records` and `POST /financial-records` manage bookkeeping entries, while the `/reports/*` endpoints deliver sales, service, financial, inventory, balance sheet, income statement, and chart-of-accounts data for dashboards.【F:server/routes/mobile.ts†L1149-L1229】
+
+### Warranty Management
+
+- `GET /warranty-claims`, detail retrieval, creation, status updates, processing, and validation mirror the desktop workflow so after-sales teams can operate entirely from mobile clients.【F:server/routes/mobile.ts†L1231-L1297】
+
 ## Error Handling Summary
 
 | HTTP Status | When it occurs |
