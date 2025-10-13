@@ -822,15 +822,20 @@ const createClaimSchema = z.object({
 });
 
 // Dynamic schema for process claim - returnCondition required for approved sales_return
-const createProcessClaimSchema = (claimType: string, action: string) => z.object({
-  action: z.enum(['approve', 'reject']),
-  adminNotes: z.string().optional(),
-  returnCondition: (claimType === 'sales_return' && action === 'approve')
-    ? z.enum(['normal_stock', 'damaged_stock'], {
-        required_error: "Pilih kondisi barang untuk sales return yang disetujui"
-      })
-    : z.enum(['normal_stock', 'damaged_stock']).optional(),
-});
+const createProcessClaimSchema = (claimType: string) =>
+  z.object({
+    action: z.enum(['approve', 'reject']),
+    adminNotes: z.string().optional(),
+    returnCondition: z.enum(['normal_stock', 'damaged_stock']).optional(),
+  }).superRefine((data, ctx) => {
+    if (claimType === 'sales_return' && data.action === 'approve' && !data.returnCondition) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Pilih kondisi barang untuk sales return yang disetujui",
+        path: ['returnCondition'],
+      });
+    }
+  });
 
 // Dynamic schema validation for accept warranty - returnCondition required for sales_return
 const createAcceptWarrantySchema = (claimType: string) => z.object({
@@ -1064,12 +1069,9 @@ function CreateClaimForm({ onSuccess, warrantyItems }: { onSuccess: () => void; 
 
 function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; onSuccess: () => void }) {
   const { toast } = useToast();
-  const [action, setAction] = useState<'approve' | 'reject'>('approve');
-  
-  const schema = createProcessClaimSchema(claim.claimType, action);
 
   const form = useForm({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(createProcessClaimSchema(claim.claimType)),
     defaultValues: {
       action: "approve" as const,
       adminNotes: "",
@@ -1077,6 +1079,8 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
     },
     shouldUnregister: true,
   });
+
+  const action = (form.watch("action") as 'approve' | 'reject' | undefined) ?? 'approve';
 
   useEffect(() => {
     if (!(claim.claimType === 'sales_return' && action === 'approve')) {
@@ -1124,12 +1128,12 @@ function ProcessClaimForm({ claim, onSuccess }: { claim: EnhancedWarrantyClaim; 
       >
         <div>
           <Label>Keputusan</Label>
+          <input type="hidden" {...form.register("action")} />
           <Select
             value={action}
             onValueChange={(value) => {
               const newAction = value as 'approve' | 'reject';
-              setAction(newAction);
-              form.setValue("action", newAction as any);
+              form.setValue("action", newAction as any, { shouldDirty: true, shouldValidate: true });
               if (!(claim.claimType === 'sales_return' && newAction === 'approve')) {
                 form.setValue("returnCondition", undefined as any, { shouldDirty: false, shouldValidate: false });
               }
