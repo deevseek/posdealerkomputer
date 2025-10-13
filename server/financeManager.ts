@@ -903,15 +903,23 @@ export class FinanceManager {
       inventory: { [key: string]: { value: number; stock: number; avgCost: number } };
     };
   }> {
-    const conditions = [];
-    if (startDate) conditions.push(gte(financialRecords.createdAt, startDate));
-    if (endDate) conditions.push(lte(financialRecords.createdAt, endDate));
+    const buildWhereClause = (clauses: any[]) => {
+      if (clauses.length === 0) {
+        return undefined;
+      }
+      if (clauses.length === 1) {
+        return clauses[0];
+      }
+      return and(...clauses);
+    };
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const dateRangeClauses = [];
+    if (startDate) dateRangeClauses.push(gte(financialRecords.createdAt, startDate));
+    if (endDate) dateRangeClauses.push(lte(financialRecords.createdAt, endDate));
 
-    // Only consider confirmed operational records for supporting breakdowns
-    const confirmedCondition = eq(financialRecords.status, 'confirmed');
-    const whereClauseWithStatus = whereClause ? and(confirmedCondition, whereClause) : confirmedCondition;
+    const baseRecordClauses = [eq(financialRecords.status, 'confirmed'), ...dateRangeClauses];
+    const baseRecordWhere = buildWhereClause(baseRecordClauses);
+    const withRecordClauses = (...extra: any[]) => buildWhereClause([...baseRecordClauses, ...extra]);
 
     // Ledger activity based on posted journal entries (standard accounting)
     const journalConditions = [eq(journalEntries.status, 'posted')];
@@ -1047,6 +1055,120 @@ export class FinanceManager {
     let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
     let totalRefundsValue = Number(totalRefunds.toFixed(2));
 
+    const recordAggregates = baseRecordWhere
+      ? await db
+          .select({
+            type: financialRecords.type,
+            total: sum(financialRecords.amount),
+            count: count(),
+          })
+          .from(financialRecords)
+          .where(baseRecordWhere)
+          .groupBy(financialRecords.type)
+      : [];
+
+    const totalsByType = new Map<string, { total: number; count: number }>();
+    recordAggregates.forEach((row) => {
+      const typeKey = row.type ?? '';
+      const existing = totalsByType.get(typeKey) ?? { total: 0, count: 0 };
+      const rowTotal = Number(row.total ?? 0);
+      const rowCount = Number(row.count ?? 0);
+      totalsByType.set(typeKey, {
+        total: existing.total + rowTotal,
+        count: existing.count + rowCount,
+      });
+    });
+
+    const fallbackIncomeTotal = totalsByType.get('income')?.total ?? 0;
+    const fallbackExpenseTotal = totalsByType.get('expense')?.total ?? 0;
+
+    if (fallbackIncomeTotal > 0) {
+      totalIncomeValue = Number(Math.max(totalIncomeValue, fallbackIncomeTotal).toFixed(2));
+    }
+
+    if (fallbackExpenseTotal > 0) {
+      totalExpenseValue = Number(Math.max(totalExpenseValue, fallbackExpenseTotal).toFixed(2));
+      netExpenseValue = Number(Math.max(netExpenseValue, fallbackExpenseTotal).toFixed(2));
+    }
+
+    const salesKeywordCondition = sql`
+      (
+        LOWER(${financialRecords.category}) LIKE '%sales%' OR
+        LOWER(${financialRecords.category}) LIKE '%penjualan%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%sales%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%penjualan%' OR
+        LOWER(${financialRecords.referenceType}) LIKE '%sale%' OR
+        LOWER(${financialRecords.description}) LIKE '%penjualan%'
+      )
+    `;
+    const salesWhere = withRecordClauses(eq(financialRecords.type, 'income'), salesKeywordCondition);
+    if (salesWhere) {
+      const [salesRow] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(salesWhere);
+      const fallbackSalesTotal = Number(salesRow?.total ?? 0);
+      if (fallbackSalesTotal > 0) {
+        totalSalesRevenueValue = Number(Math.max(totalSalesRevenueValue, fallbackSalesTotal).toFixed(2));
+      }
+    }
+
+    const cogsKeywordCondition = sql`
+      (
+        LOWER(${financialRecords.category}) LIKE '%cost of goods%' OR
+        LOWER(${financialRecords.category}) LIKE '%hpp%' OR
+        LOWER(${financialRecords.category}) LIKE '%harga pokok%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%cost of goods%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%hpp%' OR
+        LOWER(${financialRecords.description}) LIKE '%harga pokok%'
+      )
+    `;
+    const cogsWhere = withRecordClauses(eq(financialRecords.type, 'expense'), cogsKeywordCondition);
+    if (cogsWhere) {
+      const [cogsRow] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(cogsWhere);
+      const fallbackCOGSTotal = Number(cogsRow?.total ?? 0);
+      if (fallbackCOGSTotal > 0) {
+        totalCOGSValue = Number(Math.max(totalCOGSValue, fallbackCOGSTotal).toFixed(2));
+      }
+    }
+
+    const refundKeywordCondition = sql`
+      (
+        LOWER(${financialRecords.category}) LIKE '%refund%' OR
+        LOWER(${financialRecords.category}) LIKE '%return%' OR
+        LOWER(${financialRecords.category}) LIKE '%cancel%' OR
+        LOWER(${financialRecords.category}) LIKE '%cancellation%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%refund%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%return%' OR
+        LOWER(${financialRecords.subcategory}) LIKE '%cancel%' OR
+        LOWER(${financialRecords.description}) LIKE '%refund%' OR
+        LOWER(${financialRecords.description}) LIKE '%pengembalian%' OR
+        LOWER(${financialRecords.referenceType}) LIKE '%refund%' OR
+        LOWER(${financialRecords.referenceType}) LIKE '%reversal%' OR
+        LOWER(${financialRecords.referenceType}) LIKE '%cancellation%'
+      )
+    `;
+    const refundWhere = withRecordClauses(eq(financialRecords.type, 'expense'), refundKeywordCondition);
+    if (refundWhere) {
+      const [refundRow] = await db
+        .select({ total: sum(financialRecords.amount) })
+        .from(financialRecords)
+        .where(refundWhere);
+      const fallbackRefundTotal = Number(refundRow?.total ?? 0);
+      if (fallbackRefundTotal > 0) {
+        totalRefundsValue = Number(Math.max(totalRefundsValue, fallbackRefundTotal).toFixed(2));
+      }
+    }
+
+    const recordTransactionCount = totalsByType.size > 0
+      ? Array.from(totalsByType.values()).reduce((acc, value) => acc + value.count, 0)
+      : 0;
+
+    grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+
     let fallbackCategoryData:
       | Array<{ category: string | null; type: string | null; total: string | null; count: number }>
       | null = null;
@@ -1105,10 +1227,13 @@ export class FinanceManager {
         totalExpenseValue === 0 || categoryTotals.size === 0 || subcategoryTotals.size === 0;
 
       if (needsIncomeFallback) {
-        const [legacyIncomeRow] = await db
-          .select({ total: sum(financialRecords.amount) })
-          .from(financialRecords)
-          .where(and(whereClauseWithStatus, eq(financialRecords.type, 'income')));
+        const incomeWhere = withRecordClauses(eq(financialRecords.type, 'income'));
+        const [legacyIncomeRow] = incomeWhere
+          ? await db
+              .select({ total: sum(financialRecords.amount) })
+              .from(financialRecords)
+              .where(incomeWhere)
+          : [];
 
         const fallbackIncomeTotal = Number(legacyIncomeRow?.total ?? 0);
         if (fallbackIncomeTotal > 0) {
@@ -1117,13 +1242,16 @@ export class FinanceManager {
       }
 
       if (needsExpenseFallback) {
-        const expenseRows = await db
-          .select({
-            category: financialRecords.category,
-            amount: financialRecords.amount,
-          })
-          .from(financialRecords)
-          .where(and(whereClauseWithStatus, eq(financialRecords.type, 'expense')));
+        const expenseWhere = withRecordClauses(eq(financialRecords.type, 'expense'));
+        const expenseRows = expenseWhere
+          ? await db
+              .select({
+                category: financialRecords.category,
+                amount: financialRecords.amount,
+              })
+              .from(financialRecords)
+              .where(expenseWhere)
+          : [];
 
         const filteredExpenses = expenseRows.filter((expense) => {
           const categoryName = (expense.category || '').toLowerCase();
@@ -1145,27 +1273,31 @@ export class FinanceManager {
         }
 
         if (categoryTotals.size === 0 || subcategoryTotals.size === 0) {
-          fallbackCategoryData = await db
-            .select({
-              category: financialRecords.category,
-              type: financialRecords.type,
-              total: sum(financialRecords.amount),
-              count: count(),
-            })
-            .from(financialRecords)
-            .where(whereClauseWithStatus)
-            .groupBy(financialRecords.category, financialRecords.type);
+          fallbackCategoryData = baseRecordWhere
+            ? await db
+                .select({
+                  category: financialRecords.category,
+                  type: financialRecords.type,
+                  total: sum(financialRecords.amount),
+                  count: count(),
+                })
+                .from(financialRecords)
+                .where(baseRecordWhere)
+                .groupBy(financialRecords.category, financialRecords.type)
+            : null;
 
-          fallbackSubcategoryData = await db
-            .select({
-              subcategory: financialRecords.subcategory,
-              type: financialRecords.type,
-              total: sum(financialRecords.amount),
-              count: count(),
-            })
-            .from(financialRecords)
-            .where(whereClauseWithStatus)
-            .groupBy(financialRecords.subcategory, financialRecords.type);
+          fallbackSubcategoryData = baseRecordWhere
+            ? await db
+                .select({
+                  subcategory: financialRecords.subcategory,
+                  type: financialRecords.type,
+                  total: sum(financialRecords.amount),
+                  count: count(),
+                })
+                .from(financialRecords)
+                .where(baseRecordWhere)
+                .groupBy(financialRecords.subcategory, financialRecords.type)
+            : null;
         }
       }
     }
@@ -1268,25 +1400,29 @@ export class FinanceManager {
     }
 
     // Breakdown by payment method
-    const paymentBreakdown = await db
-      .select({
-        paymentMethod: financialRecords.paymentMethod,
-        total: sum(financialRecords.amount)
-      })
-      .from(financialRecords)
-      .where(whereClauseWithStatus)
-      .groupBy(financialRecords.paymentMethod);
+    const paymentBreakdown = baseRecordWhere
+      ? await db
+          .select({
+            paymentMethod: financialRecords.paymentMethod,
+            total: sum(financialRecords.amount)
+          })
+          .from(financialRecords)
+          .where(baseRecordWhere)
+          .groupBy(financialRecords.paymentMethod)
+      : [];
 
     // Breakdown by source/reference type
-    const sourceBreakdown = await db
-      .select({
-        referenceType: financialRecords.referenceType,
-        total: sum(financialRecords.amount),
-        count: count()
-      })
-      .from(financialRecords)
-      .where(whereClauseWithStatus)
-      .groupBy(financialRecords.referenceType);
+    const sourceBreakdown = baseRecordWhere
+      ? await db
+          .select({
+            referenceType: financialRecords.referenceType,
+            total: sum(financialRecords.amount),
+            count: count()
+          })
+          .from(financialRecords)
+          .where(baseRecordWhere)
+          .groupBy(financialRecords.referenceType)
+      : [];
 
     // Inventory value calculation
     const inventoryBreakdown = await db
@@ -1481,7 +1617,7 @@ export class FinanceManager {
       totalSalesRevenue: totalSalesRevenueValue.toString(),
       totalCOGS: totalCOGSValue.toString(),
       totalRefunds: totalRefundsValue.toString(),
-      transactionCount: journalEntryIds.size,
+      transactionCount: Math.max(journalEntryIds.size, recordTransactionCount),
       inventoryValue: totalInventoryValue.toString(),
       inventoryCount: totalInventoryCount,
       breakdown: {
