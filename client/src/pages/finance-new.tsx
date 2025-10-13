@@ -511,10 +511,29 @@ export default function FinanceNew() {
       };
     }
 
+    const normalizedReferenceType = transaction.referenceType?.toLowerCase() || '';
+    const normalizedCategory = transaction.category?.toLowerCase() || '';
+
+    const isServiceCancellationExpense =
+      transaction.type === 'expense' && (
+        normalizedReferenceType.includes('service_cancellation') ||
+        normalizedReferenceType.includes('warranty') ||
+        normalizedCategory.includes('service cancellation')
+      );
+
+    if (isServiceCancellationExpense) {
+      return {
+        sign: '-',
+        color: 'text-red-600',
+        badge: 'destructive',
+        label: 'Pengeluaran'
+      };
+    }
+
     // Handle refunds separately - they should NOT be shown as income
     if (transaction.category === 'Returns and Allowances' ||
         transaction.category?.includes('Refund') ||
-        transaction.description?.toLowerCase().includes('refund')) {
+        (transaction.description?.toLowerCase().includes('refund') && !isServiceCancellationExpense)) {
       return {
         sign: '-',
         color: 'text-orange-600',
