@@ -56,6 +56,8 @@ export const defaultAccounts = [
   { code: '5100', name: 'Harga Pokok Penjualan', type: 'expense', subtype: 'cost_of_goods_sold', normalBalance: 'debit', parentCode: '5000', description: 'HPP barang yang dijual' },
   { code: '5110', name: 'HPP Laptop', type: 'expense', subtype: 'cost_of_goods_sold', normalBalance: 'debit', parentCode: '5100', description: 'Harga pokok laptop yang dijual' },
   { code: '5120', name: 'HPP Aksesoris', type: 'expense', subtype: 'cost_of_goods_sold', normalBalance: 'debit', parentCode: '5100', description: 'Harga pokok aksesoris yang dijual' },
+  { code: '5130', name: 'Kerugian Barang Rusak', type: 'expense', subtype: 'cost_of_goods_sold', normalBalance: 'debit', parentCode: '5100', description: 'Kerugian karena barang garansi rusak atau tidak dapat dijual kembali' },
+  { code: '5140', name: 'Beban Garansi', type: 'expense', subtype: 'cost_of_goods_sold', normalBalance: 'debit', parentCode: '5100', description: 'Biaya perbaikan atau penggantian selama masa garansi' },
   
   // Operating Expenses (Biaya Operasional)
   { code: '5200', name: 'Biaya Operasional', type: 'expense', subtype: 'operating_expense', normalBalance: 'debit', parentCode: '5000', description: 'Biaya untuk menjalankan usaha' },
