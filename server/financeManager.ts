@@ -1523,26 +1523,33 @@ export class FinanceManager {
       const fallbackCOGSTotal = Number(cogsFallback?.total ?? 0);
 
       if (fallbackCOGSTotal > 0) {
-        totalCOGSValue = Number(fallbackCOGSTotal.toFixed(2));
+        const previousCOGSValue = totalCOGSValue;
+        const resolvedCOGSValue = Number(Math.max(previousCOGSValue, fallbackCOGSTotal).toFixed(2));
+        const cogsDelta = Number((resolvedCOGSValue - previousCOGSValue).toFixed(2));
+
+        totalCOGSValue = resolvedCOGSValue;
         grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-        totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
-        netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
 
-        const cogsCategoryKey = 'Cost Of Goods Sold';
-        const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
-        categories[cogsCategoryKey] = {
-          income: existingCategory.income,
-          expense: Number((existingCategory.expense + totalCOGSValue).toFixed(2)),
-          count: existingCategory.count + Number(cogsFallback?.count ?? 0)
-        };
+        if (cogsDelta > 0) {
+          totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
+          netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
 
-        const fallbackSubcategoryKey = 'Cost Of Goods Sold (Fallback)';
-        const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
-        subcategories[fallbackSubcategoryKey] = {
-          amount: Number((existingSubcategory.amount + totalCOGSValue).toFixed(2)),
-          type: 'expense',
-          count: existingSubcategory.count + Number(cogsFallback?.count ?? 0)
-        };
+          const cogsCategoryKey = 'Cost Of Goods Sold';
+          const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
+          categories[cogsCategoryKey] = {
+            income: existingCategory.income,
+            expense: Number((existingCategory.expense + cogsDelta).toFixed(2)),
+            count: existingCategory.count + Number(cogsFallback?.count ?? 0)
+          };
+
+          const fallbackSubcategoryKey = 'Cost Of Goods Sold (Fallback)';
+          const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
+          subcategories[fallbackSubcategoryKey] = {
+            amount: Number((existingSubcategory.amount + cogsDelta).toFixed(2)),
+            type: 'expense',
+            count: existingSubcategory.count + Number(cogsFallback?.count ?? 0)
+          };
+        }
       }
 
       if (totalCOGSValue === 0) {
@@ -1574,31 +1581,38 @@ export class FinanceManager {
         const posSalesTotal = Number(posSummary?.totalSales ?? 0);
 
         if (posCOGSTotal > 0) {
-          totalCOGSValue = Number(posCOGSTotal.toFixed(2));
+          const previousCOGSValue = totalCOGSValue;
+          const resolvedCOGSValue = Number(Math.max(previousCOGSValue, posCOGSTotal).toFixed(2));
+          const cogsDelta = Number((resolvedCOGSValue - previousCOGSValue).toFixed(2));
+
+          totalCOGSValue = resolvedCOGSValue;
 
           if (totalSalesRevenueValue === 0 && posSalesTotal > 0) {
             totalSalesRevenueValue = Number(posSalesTotal.toFixed(2));
           }
 
           grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-          totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
-          netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
 
-          const cogsCategoryKey = 'Cost Of Goods Sold';
-          const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
-          categories[cogsCategoryKey] = {
-            income: existingCategory.income,
-            expense: Number((existingCategory.expense + totalCOGSValue).toFixed(2)),
-            count: existingCategory.count + 1
-          };
+          if (cogsDelta > 0) {
+            totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
+            netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
 
-          const fallbackSubcategoryKey = 'Cost Of Goods Sold (POS Fallback)';
-          const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
-          subcategories[fallbackSubcategoryKey] = {
-            amount: Number((existingSubcategory.amount + totalCOGSValue).toFixed(2)),
-            type: 'expense',
-            count: existingSubcategory.count + 1
-          };
+            const cogsCategoryKey = 'Cost Of Goods Sold';
+            const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
+            categories[cogsCategoryKey] = {
+              income: existingCategory.income,
+              expense: Number((existingCategory.expense + cogsDelta).toFixed(2)),
+              count: existingCategory.count + 1
+            };
+
+            const fallbackSubcategoryKey = 'Cost Of Goods Sold (POS Fallback)';
+            const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
+            subcategories[fallbackSubcategoryKey] = {
+              amount: Number((existingSubcategory.amount + cogsDelta).toFixed(2)),
+              type: 'expense',
+              count: existingSubcategory.count + 1
+            };
+          }
         }
       }
     }
