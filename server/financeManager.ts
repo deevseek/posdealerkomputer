@@ -1135,7 +1135,7 @@ export class FinanceManager {
         });
 
         const fallbackExpenseTotal = filteredExpenses.reduce(
-          (sumTotal, expense) => sumTotal + Number(expense.amount ?? 0),
+          (sumTotal, expense) => sumTotal + Math.abs(Number(expense.amount ?? 0)),
           0
         );
 
@@ -1186,12 +1186,13 @@ export class FinanceManager {
         }
         const key = item.category;
         const existingCategory = categories[key] ?? { income: 0, expense: 0, count: 0 };
-        const amount = Number(item.total ?? 0);
+        const rawAmount = Number(item.total ?? 0);
 
         if (item.type === 'income') {
-          existingCategory.income = Number((existingCategory.income + amount).toFixed(2));
+          existingCategory.income = Number((existingCategory.income + rawAmount).toFixed(2));
         } else if (item.type === 'expense') {
-          existingCategory.expense = Number((existingCategory.expense + amount).toFixed(2));
+          const normalizedAmount = Math.abs(rawAmount);
+          existingCategory.expense = Number((existingCategory.expense + normalizedAmount).toFixed(2));
         }
 
         existingCategory.count += item.count;
@@ -1253,9 +1254,14 @@ export class FinanceManager {
           return;
         }
 
+        const fallbackType = item.type ?? 'income';
+        const rawAmount = Number(item.total ?? 0);
+        const normalizedAmount =
+          fallbackType === 'expense' ? Math.abs(rawAmount) : rawAmount;
+
         subcategories[item.subcategory] = {
-          amount: Number(item.total ?? 0),
-          type: item.type ?? 'income',
+          amount: Number(normalizedAmount.toFixed(2)),
+          type: fallbackType,
           count: item.count,
         };
       });
@@ -1461,12 +1467,16 @@ export class FinanceManager {
       }
     }
 
+    netExpenseValue = Number(Math.max(netExpenseValue, 0).toFixed(2));
+    totalExpenseValue = Number(Math.max(totalExpenseValue, netExpenseValue).toFixed(2));
+
     const netProfitValue = Number((totalIncomeValue - netExpenseValue).toFixed(2));
+    const normalizedNetProfitValue = Number(Math.min(netProfitValue, totalIncomeValue).toFixed(2));
 
     return {
       totalIncome: totalIncomeValue.toString(),
       totalExpense: totalExpenseValue.toString(),
-      netProfit: netProfitValue.toString(),
+      netProfit: normalizedNetProfitValue.toString(),
       grossProfit: grossProfitValue.toString(),
       totalSalesRevenue: totalSalesRevenueValue.toString(),
       totalCOGS: totalCOGSValue.toString(),
