@@ -1039,13 +1039,20 @@ export class FinanceManager {
       subcategoryTotals.set(aggregate.name, subcategoryRecord);
     });
 
-    const totalIncomeValue = Number(totalRevenue.toFixed(2));
+    let totalIncomeValue = Number(totalRevenue.toFixed(2));
     let totalExpenseValue = Number(totalExpenseDebits.toFixed(2));
     let netExpenseValue = Number((totalExpenseDebits - totalExpenseCredits).toFixed(2));
     let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
     let totalCOGSValue = Number(totalCOGS.toFixed(2));
     let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-    const totalRefundsValue = Number(totalRefunds.toFixed(2));
+    let totalRefundsValue = Number(totalRefunds.toFixed(2));
+
+    let fallbackCategoryData:
+      | Array<{ category: string | null; type: string | null; total: string | null; count: number }>
+      | null = null;
+    let fallbackSubcategoryData:
+      | Array<{ subcategory: string | null; type: string | null; total: string | null; count: number }>
+      | null = null;
 
     const cancellationExpenseReferenceTypes = [
       'service_cancellation_service_reversal',
@@ -1087,6 +1094,82 @@ export class FinanceManager {
       netExpenseValue = Number((netExpenseValue + cancellationExpenseTotal).toFixed(2));
     }
 
+    if (
+      totalIncomeValue === 0 ||
+      totalExpenseValue === 0 ||
+      categoryTotals.size === 0 ||
+      subcategoryTotals.size === 0
+    ) {
+      const needsIncomeFallback = totalIncomeValue === 0;
+      const needsExpenseFallback =
+        totalExpenseValue === 0 || categoryTotals.size === 0 || subcategoryTotals.size === 0;
+
+      if (needsIncomeFallback) {
+        const [legacyIncomeRow] = await db
+          .select({ total: sum(financialRecords.amount) })
+          .from(financialRecords)
+          .where(and(whereClauseWithStatus, eq(financialRecords.type, 'income')));
+
+        const fallbackIncomeTotal = Number(legacyIncomeRow?.total ?? 0);
+        if (fallbackIncomeTotal > 0) {
+          totalIncomeValue = Number(fallbackIncomeTotal.toFixed(2));
+        }
+      }
+
+      if (needsExpenseFallback) {
+        const expenseRows = await db
+          .select({
+            category: financialRecords.category,
+            amount: financialRecords.amount,
+          })
+          .from(financialRecords)
+          .where(and(whereClauseWithStatus, eq(financialRecords.type, 'expense')));
+
+        const filteredExpenses = expenseRows.filter((expense) => {
+          const categoryName = (expense.category || '').toLowerCase();
+          return (
+            expense.category !== 'Inventory Purchase' &&
+            !categoryName.includes('purchase') &&
+            !categoryName.includes('asset')
+          );
+        });
+
+        const fallbackExpenseTotal = filteredExpenses.reduce(
+          (sumTotal, expense) => sumTotal + Number(expense.amount ?? 0),
+          0
+        );
+
+        if (fallbackExpenseTotal > 0) {
+          totalExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
+          netExpenseValue = totalExpenseValue;
+        }
+
+        if (categoryTotals.size === 0 || subcategoryTotals.size === 0) {
+          fallbackCategoryData = await db
+            .select({
+              category: financialRecords.category,
+              type: financialRecords.type,
+              total: sum(financialRecords.amount),
+              count: count(),
+            })
+            .from(financialRecords)
+            .where(whereClauseWithStatus)
+            .groupBy(financialRecords.category, financialRecords.type);
+
+          fallbackSubcategoryData = await db
+            .select({
+              subcategory: financialRecords.subcategory,
+              type: financialRecords.type,
+              total: sum(financialRecords.amount),
+              count: count(),
+            })
+            .from(financialRecords)
+            .where(whereClauseWithStatus)
+            .groupBy(financialRecords.subcategory, financialRecords.type);
+        }
+      }
+    }
+
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
     categoryTotals.forEach((value, key) => {
       categories[key] = {
@@ -1095,6 +1178,26 @@ export class FinanceManager {
         count: value.entryIds.size,
       };
     });
+
+    if (fallbackCategoryData) {
+      fallbackCategoryData.forEach((item) => {
+        if (!item.category) {
+          return;
+        }
+        const key = item.category;
+        const existingCategory = categories[key] ?? { income: 0, expense: 0, count: 0 };
+        const amount = Number(item.total ?? 0);
+
+        if (item.type === 'income') {
+          existingCategory.income = Number((existingCategory.income + amount).toFixed(2));
+        } else if (item.type === 'expense') {
+          existingCategory.expense = Number((existingCategory.expense + amount).toFixed(2));
+        }
+
+        existingCategory.count += item.count;
+        categories[key] = existingCategory;
+      });
+    }
 
     if (cancellationExpenseRows.length > 0) {
       cancellationExpenseRows.forEach((row, index) => {
@@ -1143,6 +1246,20 @@ export class FinanceManager {
         count: value.entryIds.size,
       };
     });
+
+    if (fallbackSubcategoryData) {
+      fallbackSubcategoryData.forEach((item) => {
+        if (!item.subcategory) {
+          return;
+        }
+
+        subcategories[item.subcategory] = {
+          amount: Number(item.total ?? 0),
+          type: item.type ?? 'income',
+          count: item.count,
+        };
+      });
+    }
 
     // Breakdown by payment method
     const paymentBreakdown = await db
