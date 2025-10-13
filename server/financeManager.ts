@@ -48,7 +48,7 @@ const ACCOUNT_CODES = {
 
   // Expenses (Beban)
   COST_OF_GOODS_SOLD: '5110', // Harga Pokok Penjualan
-  WARRANTY_EXPENSE: '5120', // Beban Garansi
+  WARRANTY_EXPENSE: '5140', // Beban Garansi
   DAMAGED_GOODS_LOSS: '5130', // Kerugian Barang Rusak
   PAYROLL_EXPENSE: '5210', // Beban Gaji
   RENT_EXPENSE: '5220', // Beban Sewa

@@ -3545,7 +3545,7 @@ export class DatabaseStorage implements IStorage {
                     debitAmount: itemValue.toString()
                   },
                   {
-                    accountCode: '5120', // WARRANTY_EXPENSE - Beban Garansi
+                    accountCode: '5140', // WARRANTY_EXPENSE - Beban Garansi
                     description: `Pemulihan beban garansi dari retur normal - Produk ID ${productId}`,
                     creditAmount: itemValue.toString()
                   }
