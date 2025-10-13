@@ -434,13 +434,33 @@ export default function FinanceNew() {
   });
 
   const formatCurrency = (amount: string | number) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+    const parsed = typeof amount === 'string' ? parseFloat(amount) : amount;
+    const num = Number.isFinite(parsed) ? parsed : 0;
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0
     }).format(num);
   };
+
+  const parseAmount = (value?: string | number | null) => {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+    const numeric = typeof value === 'string' ? parseFloat(value) : value;
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
+  const totalIncomeValue = parseAmount(summary?.totalIncome);
+  const rawExpenseValue = parseAmount(summary?.totalExpense);
+  const displayExpenseValue = Math.max(rawExpenseValue, 0);
+  const totalRefundsValue = Math.max(parseAmount(summary?.totalRefunds), 0);
+  const rawNetProfitValue = parseAmount(summary?.netProfit);
+  const safeNetProfitValue = rawNetProfitValue > totalIncomeValue ? totalIncomeValue : rawNetProfitValue;
+  const isNetProfitAdjusted = safeNetProfitValue !== rawNetProfitValue;
+  const totalSalesRevenueValue = parseAmount(summary?.totalSalesRevenue);
+  const totalCOGSValue = Math.max(parseAmount(summary?.totalCOGS), 0);
+  const inventoryValue = parseAmount(summary?.inventoryValue);
 
   const resolveAccountLabel = (value?: string) => {
     if (!value) return '-';
@@ -622,7 +642,7 @@ export default function FinanceNew() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(summary?.totalIncome || '0')}
+              {formatCurrency(totalIncomeValue)}
             </div>
           </CardContent>
         </Card>
@@ -634,8 +654,13 @@ export default function FinanceNew() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(summary?.totalExpense || '0')}
+              {formatCurrency(displayExpenseValue)}
             </div>
+            {displayExpenseValue === 0 && totalIncomeValue > 0 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Tidak ada pengeluaran tercatat pada periode ini setelah normalisasi data.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -646,7 +671,7 @@ export default function FinanceNew() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-600">
-              {formatCurrency(summary?.totalRefunds || '0')}
+              {formatCurrency(totalRefundsValue)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               Diklasifikasikan sebagai kontra pendapatan
@@ -661,8 +686,13 @@ export default function FinanceNew() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(summary?.netProfit || '0')}
+              {formatCurrency(safeNetProfitValue)}
             </div>
+            {isNetProfitAdjusted && (
+              <div className="text-xs text-amber-600 mt-1">
+                Nilai laba bersih dikoreksi agar tidak melebihi pendapatan tercatat.
+              </div>
+            )}
             <div className="text-xs text-muted-foreground mt-1">
               Laba bersih dihitung dari total pemasukan dikurangi total pengeluaran.
             </div>
@@ -679,7 +709,7 @@ export default function FinanceNew() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600">
-              {formatCurrency(summary?.inventoryValue || '0')}
+              {formatCurrency(inventoryValue)}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
               {summary?.inventoryCount || 0} item stok
@@ -749,9 +779,9 @@ export default function FinanceNew() {
                 <strong>Data Terkini:</strong> Total Pendapatan mencakup semua pemasukan dari penjualan produk (POS) dan layanan service.
                 Saat ini ada {summary?.breakdown?.sources ?
                   Object.values(summary.breakdown.sources).reduce((sum, source) => sum + source.count, 0) : 0} transaksi pemasukan
-                dengan total {formatCurrency(summary?.totalIncome || '0')}.
-                Laba bersih dihitung dari total pendapatan dikurangi seluruh pengeluaran (termasuk HPP/biaya modal) sebesar {formatCurrency(summary?.totalExpense || '0')}.
-                Total harga jual produk tercatat {formatCurrency(summary?.totalSalesRevenue || '0')} dengan HPP {formatCurrency(summary?.totalCOGS || '0')} sebagai bagian dari pengeluaran.
+                dengan total {formatCurrency(totalIncomeValue)}.
+                Laba bersih dihitung dari total pendapatan dikurangi seluruh pengeluaran (termasuk HPP/biaya modal) sebesar {formatCurrency(displayExpenseValue)}.
+                Total harga jual produk tercatat {formatCurrency(totalSalesRevenueValue)} dengan HPP {formatCurrency(totalCOGSValue)} sebagai bagian dari pengeluaran.
               </p>
             </div>
             <div className="p-3 bg-orange-50 rounded-lg">
