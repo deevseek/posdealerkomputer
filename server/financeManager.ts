@@ -1828,9 +1828,9 @@ export class FinanceManager {
       if (Number(cancellationFee) > 0) {
         await dbClient.insert(financialRecords).values({
           type: 'income',
-          category: 'Service Revenue',
+          category: 'Warranty Cancellation Fee',
           amount: cancellationFee,
-          description: `Warranty cancellation fee - ${reason}`,
+          description: `Pendapatan biaya cancel garansi - ${reason}`,
           reference: serviceId,
           referenceType: 'service_cancellation_warranty_refund',
           paymentMethod: 'cash',
@@ -1854,9 +1854,9 @@ export class FinanceManager {
         // Catat expense reversal
         await dbClient.insert(financialRecords).values({
           type: 'expense',
-          category: 'Service Revenue Reversal',
+          category: 'Return Cancel Garansi',
           amount: originalLaborCost,
-          description: `Reversal omset jasa service karena refund garansi - ${reason}`,
+          description: `Return cancel garansi - pembalikan pendapatan jasa (${reason})`,
           reference: serviceId,
           referenceType: 'warranty_labor_reversal',
           paymentMethod: 'cash',
@@ -1877,9 +1877,9 @@ export class FinanceManager {
         // Catat expense reversal
         await dbClient.insert(financialRecords).values({
           type: 'expense',
-          category: 'Parts Revenue Reversal',
+          category: 'Return Cancel Garansi',
           amount: originalPartsCost,
-          description: `Reversal omset sparepart service karena refund garansi - ${reason}`,
+          description: `Return cancel garansi - pembalikan pendapatan sparepart (${reason})`,
           reference: serviceId,
           referenceType: 'warranty_parts_reversal',
           paymentMethod: 'cash',
@@ -1895,12 +1895,12 @@ export class FinanceManager {
         journalLines.push(
           {
             accountCode: ACCOUNT_CODES.CASH,
-            description: `Warranty cancellation fee - ${reason}`,
+            description: `Pendapatan biaya cancel garansi - ${reason}`,
             debitAmount: cancellationFee
           },
           {
             accountCode: ACCOUNT_CODES.SERVICE_REVENUE,
-            description: `Warranty cancellation fee - ${reason}`,
+            description: `Pendapatan biaya cancel garansi - ${reason}`,
             creditAmount: cancellationFee
           }
         );
@@ -1911,12 +1911,12 @@ export class FinanceManager {
         journalLines.push(
           {
             accountCode: ACCOUNT_CODES.WARRANTY_EXPENSE,
-            description: `Warranty labor refund - ${reason}`,
+            description: `Return cancel garansi - pembalikan pendapatan jasa (${reason})`,
             debitAmount: originalLaborCost
           },
           {
             accountCode: ACCOUNT_CODES.CASH,
-            description: `Cash refund for labor - ${reason}`,
+            description: `Pengembalian dana jasa karena cancel garansi - ${reason}`,
             creditAmount: originalLaborCost
           }
         );
@@ -1928,12 +1928,12 @@ export class FinanceManager {
         journalLines.push(
           {
             accountCode: ACCOUNT_CODES.WARRANTY_EXPENSE,
-            description: `Warranty parts refund - ${reason}`,
+            description: `Return cancel garansi - pembalikan pendapatan sparepart (${reason})`,
             debitAmount: originalPartsCost
           },
           {
             accountCode: ACCOUNT_CODES.CASH,
-            description: `Cash refund for parts - ${reason}`,
+            description: `Pengembalian dana sparepart karena cancel garansi - ${reason}`,
             creditAmount: originalPartsCost
           }
         );
