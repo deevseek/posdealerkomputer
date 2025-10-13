@@ -2173,6 +2173,7 @@ export class DatabaseStorage implements IStorage {
               eq(financialRecords.referenceType, 'service_labor'),
               eq(financialRecords.referenceType, 'service_parts_revenue')
             ),
+            eq(financialRecords.status, 'confirmed'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate)
           )
@@ -2184,7 +2185,14 @@ export class DatabaseStorage implements IStorage {
         .where(
           and(
             eq(financialRecords.type, 'expense'),
-            eq(financialRecords.referenceType, 'service_parts_cost'),
+            or(
+              eq(financialRecords.referenceType, 'service_parts_cost'),
+              eq(financialRecords.referenceType, 'service_cancellation_service_reversal'),
+              eq(financialRecords.referenceType, 'service_cancellation_parts_reversal'),
+              eq(financialRecords.referenceType, 'warranty_labor_reversal'),
+              eq(financialRecords.referenceType, 'warranty_parts_reversal')
+            ),
+            eq(financialRecords.status, 'confirmed'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate)
           )
@@ -2198,6 +2206,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(financialRecords.type, 'income'),
             eq(financialRecords.referenceType, 'service_labor'),
+            eq(financialRecords.status, 'confirmed'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate)
           )
@@ -2211,6 +2220,7 @@ export class DatabaseStorage implements IStorage {
           and(
             eq(financialRecords.type, 'income'),
             eq(financialRecords.referenceType, 'service_parts_revenue'),
+            eq(financialRecords.status, 'confirmed'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate)
           )
@@ -2391,12 +2401,14 @@ export class DatabaseStorage implements IStorage {
             eq(financialRecords.type, 'income'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed'),
             eq(financialRecords.clientId, clientId)
           )
         : and(
             eq(financialRecords.type, 'income'),
             gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed')
           );
 
       const expenseWhere = clientId
@@ -2404,23 +2416,27 @@ export class DatabaseStorage implements IStorage {
             eq(financialRecords.type, 'expense'),
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed'),
             eq(financialRecords.clientId, clientId)
           )
         : and(
             eq(financialRecords.type, 'expense'),
             gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed')
           );
 
       const recordsWhere = clientId
         ? and(
             gte(financialRecords.createdAt, startDate),
             lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed'),
             eq(financialRecords.clientId, clientId)
           )
         : and(
             gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed')
           );
 
       const [incomeResult] = await db
@@ -2441,7 +2457,8 @@ export class DatabaseStorage implements IStorage {
             eq(financialRecords.type, 'expense'),
             sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
             gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed')
           )
         );
 
@@ -2453,7 +2470,8 @@ export class DatabaseStorage implements IStorage {
             eq(financialRecords.type, 'income'),
             sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
             gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
+            lte(financialRecords.createdAt, endDate),
+            eq(financialRecords.status, 'confirmed')
           )
         );
 
@@ -2821,7 +2839,13 @@ export class DatabaseStorage implements IStorage {
 
       const serviceCostConditions = [
         eq(financialRecords.type, 'expense'),
-        eq(financialRecords.referenceType, 'service_parts_cost'),
+        or(
+          eq(financialRecords.referenceType, 'service_parts_cost'),
+          eq(financialRecords.referenceType, 'service_cancellation_service_reversal'),
+          eq(financialRecords.referenceType, 'service_cancellation_parts_reversal'),
+          eq(financialRecords.referenceType, 'warranty_labor_reversal'),
+          eq(financialRecords.referenceType, 'warranty_parts_reversal')
+        ),
         gte(financialRecords.createdAt, startOfMonth),
         lte(financialRecords.createdAt, now),
         confirmedCondition
