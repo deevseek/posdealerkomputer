@@ -266,7 +266,8 @@ export default function FinanceNew() {
       const params = new URLSearchParams();
       if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
       if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-      return fetch(`/api/finance/summary?${params}`).then(res => res.json());
+      const query = params.toString();
+      return apiRequest('GET', `/api/finance/summary${query ? `?${query}` : ''}`);
     }
   });
 
@@ -277,20 +278,21 @@ export default function FinanceNew() {
       const params = new URLSearchParams();
       if (dateFilter.startDate) params.append('startDate', dateFilter.startDate);
       if (dateFilter.endDate) params.append('endDate', dateFilter.endDate);
-      return fetch(`/api/finance/transactions?${params}`).then(res => res.json());
+      const query = params.toString();
+      return apiRequest('GET', `/api/finance/transactions${query ? `?${query}` : ''}`);
     }
   });
 
   // Fetch employees
   const { data: employees } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
-    queryFn: () => fetch('/api/employees').then(res => res.json())
+    queryFn: () => apiRequest('GET', '/api/employees')
   });
 
   // Fetch payroll records
   const { data: payrolls } = useQuery<PayrollRecord[]>({
     queryKey: ['/api/payroll'],
-    queryFn: () => fetch('/api/payroll').then(res => res.json())
+    queryFn: () => apiRequest('GET', '/api/payroll')
   });
 
   // Create transaction mutation
