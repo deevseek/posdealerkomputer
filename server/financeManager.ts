@@ -26,7 +26,7 @@ import {
   type Account
 } from "@shared/schema";
 import { categoryToAccountMapping } from "./defaultAccounts";
-import { eq, and, gte, lte, desc, sum, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sum, count, sql, inArray } from "drizzle-orm";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
@@ -972,7 +972,8 @@ export class FinanceManager {
     }
 
     let totalRevenue = 0;
-    let totalExpenseNet = 0;
+    let totalExpenseDebits = 0;
+    let totalExpenseCredits = 0;
     let totalSalesRevenue = 0;
     let totalCOGS = 0;
     let totalRefunds = 0;
@@ -1011,11 +1012,13 @@ export class FinanceManager {
           totalSalesRevenue += aggregate.netAmount;
         }
       } else {
-        totalExpenseNet += aggregate.netAmount;
         if (aggregate.netAmount >= 0) {
+          totalExpenseDebits += aggregate.netAmount;
           categoryRecord.expense += aggregate.netAmount;
         } else {
-          categoryRecord.income += Math.abs(aggregate.netAmount);
+          const creditAmount = Math.abs(aggregate.netAmount);
+          totalExpenseCredits += creditAmount;
+          categoryRecord.income += creditAmount;
         }
         if (aggregate.subtype === 'cost_of_goods_sold') {
           totalCOGS += aggregate.netAmount;
@@ -1036,6 +1039,54 @@ export class FinanceManager {
       subcategoryTotals.set(aggregate.name, subcategoryRecord);
     });
 
+    const totalIncomeValue = Number(totalRevenue.toFixed(2));
+    let totalExpenseValue = Number(totalExpenseDebits.toFixed(2));
+    let netExpenseValue = Number((totalExpenseDebits - totalExpenseCredits).toFixed(2));
+    let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
+    let totalCOGSValue = Number(totalCOGS.toFixed(2));
+    let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+    const totalRefundsValue = Number(totalRefunds.toFixed(2));
+
+    const cancellationExpenseReferenceTypes = [
+      'service_cancellation_service_reversal',
+      'service_cancellation_parts_reversal'
+    ];
+
+    const cancellationExpenseConditions = [
+      eq(financialRecords.status, 'confirmed'),
+      eq(financialRecords.type, 'expense'),
+      inArray(financialRecords.referenceType, cancellationExpenseReferenceTypes)
+    ];
+
+    if (startDate) {
+      cancellationExpenseConditions.push(gte(financialRecords.createdAt, startDate));
+    }
+
+    if (endDate) {
+      cancellationExpenseConditions.push(lte(financialRecords.createdAt, endDate));
+    }
+
+    const cancellationExpenseRows = await db
+      .select({
+        category: financialRecords.category,
+        subcategory: financialRecords.subcategory,
+        total: sum(financialRecords.amount),
+        count: count()
+      })
+      .from(financialRecords)
+      .where(and(...cancellationExpenseConditions))
+      .groupBy(financialRecords.category, financialRecords.subcategory);
+
+    const cancellationExpenseTotal = cancellationExpenseRows.reduce(
+      (sumTotal, row) => sumTotal + Number(row.total ?? 0),
+      0
+    );
+
+    if (cancellationExpenseTotal > 0) {
+      totalExpenseValue = Number((totalExpenseValue + cancellationExpenseTotal).toFixed(2));
+      netExpenseValue = Number((netExpenseValue + cancellationExpenseTotal).toFixed(2));
+    }
+
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
     categoryTotals.forEach((value, key) => {
       categories[key] = {
@@ -1044,6 +1095,34 @@ export class FinanceManager {
         count: value.entryIds.size,
       };
     });
+
+    if (cancellationExpenseRows.length > 0) {
+      cancellationExpenseRows.forEach((row, index) => {
+        const amount = Number(row.total ?? 0);
+        if (amount <= 0) {
+          return;
+        }
+
+        const categoryKey = row.category || 'Service Cancellation';
+        const existingCategory = categories[categoryKey] ?? { income: 0, expense: 0, count: 0 };
+        categories[categoryKey] = {
+          income: existingCategory.income,
+          expense: Number((existingCategory.expense + amount).toFixed(2)),
+          count: existingCategory.count + Number(row.count ?? 0)
+        };
+
+        const subcategoryKey = row.subcategory || categoryKey;
+        const existingSubcategory = subcategoryTotals.get(subcategoryKey) ?? {
+          netAmount: 0,
+          accountType: 'expense' as LedgerAggregate['type'],
+          entryIds: new Set<string>(),
+        };
+        existingSubcategory.netAmount += amount;
+        existingSubcategory.accountType = 'expense';
+        existingSubcategory.entryIds.add(`manual-cancellation-${index}`);
+        subcategoryTotals.set(subcategoryKey, existingSubcategory);
+      });
+    }
 
     const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
     subcategoryTotals.forEach((value, name) => {
@@ -1151,13 +1230,6 @@ export class FinanceManager {
       };
     });
 
-    const totalIncomeValue = Number(totalRevenue.toFixed(2));
-    let totalExpenseValue = Number(totalExpenseNet.toFixed(2));
-    let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
-    let totalCOGSValue = Number(totalCOGS.toFixed(2));
-    let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-    const totalRefundsValue = Number(totalRefunds.toFixed(2));
-
     // Fallback to financial records when ledger-based COGS is missing (e.g. legacy data without journal entries)
     if (totalCOGSValue === 0) {
       const cogsConditions = [
@@ -1195,6 +1267,7 @@ export class FinanceManager {
         totalCOGSValue = Number(fallbackCOGSTotal.toFixed(2));
         grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
         totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
+        netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
 
         const cogsCategoryKey = 'Cost Of Goods Sold';
         const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
@@ -1250,6 +1323,7 @@ export class FinanceManager {
 
           grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
           totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
+          netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
 
           const cogsCategoryKey = 'Cost Of Goods Sold';
           const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
@@ -1270,7 +1344,7 @@ export class FinanceManager {
       }
     }
 
-    const netProfitValue = Number((totalIncomeValue - totalExpenseValue).toFixed(2));
+    const netProfitValue = Number((totalIncomeValue - netExpenseValue).toFixed(2));
 
     return {
       totalIncome: totalIncomeValue.toString(),
