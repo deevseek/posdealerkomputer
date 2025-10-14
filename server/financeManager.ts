@@ -11,6 +11,7 @@ import {
   serviceTickets,
   transactions,
   transactionItems,
+  stockMovements,
   type InsertFinancialRecord,
   type FinancialRecord,
   type InsertEmployee,
@@ -26,7 +27,7 @@ import {
   type Account
 } from "@shared/schema";
 import { categoryToAccountMapping } from "./defaultAccounts";
-import { eq, and, gte, lte, desc, sum, count, sql, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sum, count, sql, inArray, isNotNull } from "drizzle-orm";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
@@ -905,7 +906,7 @@ export class FinanceManager {
           value: number;
           stock: number;
           avgCost: number;
-          costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+          costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
         };
       };
     };
@@ -1476,6 +1477,7 @@ export class FinanceManager {
     // Inventory value calculation
     const inventoryBreakdown = await db
       .select({
+        id: products.id,
         name: products.name,
         stock: products.stock,
         averageCost: products.averageCost,
@@ -1494,6 +1496,7 @@ export class FinanceManager {
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
 
     type InventoryBreakdownRow = {
+      id: string;
       name: string | null;
       stock: number | null;
       averageCost: string | null;
@@ -1505,24 +1508,112 @@ export class FinanceManager {
     };
 
     const inventoryBreakdownRows = inventoryBreakdown as InventoryBreakdownRow[];
+    type StockMovementCostRow = {
+      productId: string;
+      totalCost: string | number | null;
+      totalQuantity: string | number | null;
+      latestCost: string | number | null;
+    };
 
-    const totalInventoryValue = inventoryBreakdownRows.reduce((total, item) => {
-      const value = Number(item.totalValue ?? 0);
-      if (Number.isFinite(value) && value > 0) {
-        return total + value;
+    const productIds = inventoryBreakdownRows.map((row) => row.id);
+
+    const stockMovementCostRows: StockMovementCostRow[] =
+      productIds.length === 0
+        ? []
+        : ((await db
+            .select({
+              productId: stockMovements.productId,
+              totalCost: sql<string>`COALESCE(SUM(${stockMovements.quantity}::numeric * ${stockMovements.unitCost}::numeric), 0)`,
+              totalQuantity: sql<string>`COALESCE(SUM(${stockMovements.quantity}), 0)`,
+              latestCost: sql<string | null>`MAX(${stockMovements.unitCost})`
+            })
+            .from(stockMovements)
+            .where(
+              and(
+                eq(stockMovements.movementType, 'in'),
+                isNotNull(stockMovements.unitCost),
+                inArray(stockMovements.productId, productIds)
+              )
+            )
+            .groupBy(stockMovements.productId)) as StockMovementCostRow[]);
+
+    const parseNumeric = (value: unknown) => {
+      const numeric = Number(value ?? 0);
+      return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const stockMovementCostMap = new Map<string, { avgCost: number; latestCost: number }>();
+    stockMovementCostRows.forEach((row) => {
+      const totalQuantity = parseNumeric(row.totalQuantity);
+      const totalCost = parseNumeric(row.totalCost);
+      const latestCost = parseNumeric(row.latestCost);
+      const avgCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
+
+      if (avgCost > 0 || latestCost > 0) {
+        stockMovementCostMap.set(row.productId, {
+          avgCost: Number(avgCost.toFixed(2)),
+          latestCost: Number(latestCost.toFixed(2))
+        });
+      }
+    });
+
+    type ProcessedInventoryRow = {
+      id: string;
+      name: string | null;
+      stock: number;
+      unitCost: number;
+      value: number;
+      costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
+    };
+
+    const processedInventoryRows: ProcessedInventoryRow[] = inventoryBreakdownRows.map((item) => {
+      const productId = item.id;
+      const normalizedStock = Math.max(parseNumeric(item.stock), 0);
+
+      let costSource = (item.costSource ?? 'none') as ProcessedInventoryRow['costSource'];
+      let unitCost = parseNumeric(
+        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice
+      );
+
+      const movementFallback = stockMovementCostMap.get(productId);
+
+      if ((unitCost <= 0 || !Number.isFinite(unitCost)) && movementFallback) {
+        const fallbackCost = movementFallback.avgCost > 0 ? movementFallback.avgCost : movementFallback.latestCost;
+        if (fallbackCost > 0) {
+          unitCost = fallbackCost;
+          costSource = 'stockMovement';
+        }
       }
 
-      const fallbackCost = Number(
-        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice ?? 0
-      );
-      const fallbackStock = Number(item.stock ?? 0);
-      return total + fallbackCost * Math.max(fallbackStock, 0);
-    }, 0);
+      let value = parseNumeric(item.totalValue);
+      if (value <= 0 && normalizedStock > 0) {
+        value = unitCost * normalizedStock;
+      }
 
-    const totalInventoryCount = inventoryBreakdownRows.reduce(
-      (total, item) => total + Number(item.stock ?? 0),
-      0
-    );
+      if ((value <= 0 || !Number.isFinite(value)) && movementFallback && normalizedStock > 0) {
+        const fallbackCost = movementFallback.avgCost > 0 ? movementFallback.avgCost : movementFallback.latestCost;
+        if (fallbackCost > 0) {
+          value = fallbackCost * normalizedStock;
+          if (unitCost <= 0) {
+            unitCost = fallbackCost;
+          }
+          costSource = 'stockMovement';
+        }
+      }
+
+      return {
+        id: productId,
+        name: item.name,
+        stock: normalizedStock,
+        unitCost: Number(unitCost.toFixed(2)),
+        value: Number(Math.max(value, 0).toFixed(2)),
+        costSource
+      };
+    });
+
+    const totalInventoryValue = processedInventoryRows.reduce((total, item) => total + item.value, 0);
+
+    const totalInventoryCount = processedInventoryRows.reduce((total, item) => total + item.stock, 0);
 
     // Process payment method breakdown
     const paymentMethods: { [key: string]: number } = {};
@@ -1549,34 +1640,19 @@ export class FinanceManager {
         value: number;
         stock: number;
         avgCost: number;
-        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
       };
     } = {};
-    inventoryBreakdownRows.forEach((item) => {
+    processedInventoryRows.forEach((item) => {
       if (!item.name) {
         return;
       }
 
-      const normalizedCost = Number(
-        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice ?? 0
-      );
-      const normalizedCostSource = (item.costSource ?? 'none') as
-        | 'averageCost'
-        | 'lastPurchasePrice'
-        | 'sellingPrice'
-        | 'none';
-
-      const rawValue = Number(item.totalValue ?? 0);
-      const normalizedStock = Number(item.stock ?? 0);
-      const resolvedValue = Number.isFinite(rawValue) && rawValue > 0
-        ? rawValue
-        : normalizedCost * Math.max(normalizedStock, 0);
-
       inventory[item.name] = {
-        value: Number(resolvedValue.toFixed(2)),
-        stock: normalizedStock,
-        avgCost: Number(normalizedCost.toFixed(2)),
-        costSource: normalizedCostSource
+        value: Number(item.value.toFixed(2)),
+        stock: Number(item.stock.toFixed(2)),
+        avgCost: Number(item.unitCost.toFixed(2)),
+        costSource: item.costSource
       };
     });
 
