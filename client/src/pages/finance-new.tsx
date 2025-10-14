@@ -55,7 +55,7 @@ interface FinancialSummary {
         value: number;
         stock: number;
         avgCost: number;
-        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
       };
     };
   };
@@ -459,12 +459,13 @@ export default function FinanceNew() {
   };
 
   const inventoryCostSourceLabels: Record<
-    'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none',
+    'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none',
     string
   > = {
     averageCost: 'HPP rata-rata',
     lastPurchasePrice: 'Harga beli terakhir',
     sellingPrice: 'Harga jual (fallback)',
+    stockMovement: 'Riwayat pembelian stok',
     none: 'Belum ada data modal'
   };
 
@@ -805,11 +806,11 @@ export default function FinanceNew() {
               {summary?.inventoryCount || 0} item stok
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              Dihitung dari stok × harga modal (HPP rata-rata atau harga beli terakhir).
+              Dihitung dari stok × harga modal (HPP rata-rata, harga beli terakhir, atau riwayat pembelian masuk).
             </div>
             {inventoryValue === 0 && (
               <div className="text-xs text-muted-foreground mt-1">
-                Pastikan produk memiliki harga modal agar nilai aset tidak nol.
+                Pastikan produk memiliki harga modal atau transaksi pembelian agar nilai aset tidak nol.
               </div>
             )}
           </CardContent>
