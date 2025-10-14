@@ -900,7 +900,14 @@ export class FinanceManager {
       paymentMethods: { [key: string]: number };
       sources: { [key: string]: { amount: number; count: number } };
       subcategories: { [key: string]: { amount: number; type: string; count: number } };
-      inventory: { [key: string]: { value: number; stock: number; avgCost: number } };
+      inventory: {
+        [key: string]: {
+          value: number;
+          stock: number;
+          avgCost: number;
+          costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+        };
+      };
     };
   }> {
     const buildWhereClause = (clauses: any[]) => {
@@ -1472,8 +1479,16 @@ export class FinanceManager {
         name: products.name,
         stock: products.stock,
         averageCost: products.averageCost,
+        lastPurchasePrice: products.lastPurchasePrice,
         sellingPrice: products.sellingPrice,
-        totalValue: sql<number>`${products.stock} * COALESCE(${products.averageCost}, 0)`,
+        effectiveCost: sql<number>`COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)`,
+        costSource: sql<string>`CASE
+          WHEN ${products.averageCost} IS NOT NULL THEN 'averageCost'
+          WHEN ${products.lastPurchasePrice} IS NOT NULL THEN 'lastPurchasePrice'
+          WHEN ${products.sellingPrice} IS NOT NULL THEN 'sellingPrice'
+          ELSE 'none'
+        END`,
+        totalValue: sql<number>`${products.stock} * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)`,
       })
       .from(products)
       .where(and(eq(products.isActive, true), gte(products.stock, 0)));
@@ -1482,16 +1497,27 @@ export class FinanceManager {
       name: string | null;
       stock: number | null;
       averageCost: string | null;
+      lastPurchasePrice: string | null;
       sellingPrice: string | null;
+      effectiveCost: number | null;
+      costSource: string | null;
       totalValue: number | null;
     };
 
     const inventoryBreakdownRows = inventoryBreakdown as InventoryBreakdownRow[];
 
-    const totalInventoryValue = inventoryBreakdownRows.reduce(
-      (total, item) => total + Number(item.totalValue ?? 0),
-      0
-    );
+    const totalInventoryValue = inventoryBreakdownRows.reduce((total, item) => {
+      const value = Number(item.totalValue ?? 0);
+      if (Number.isFinite(value) && value > 0) {
+        return total + value;
+      }
+
+      const fallbackCost = Number(
+        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice ?? 0
+      );
+      const fallbackStock = Number(item.stock ?? 0);
+      return total + fallbackCost * Math.max(fallbackStock, 0);
+    }, 0);
 
     const totalInventoryCount = inventoryBreakdownRows.reduce(
       (total, item) => total + Number(item.stock ?? 0),
@@ -1518,16 +1544,39 @@ export class FinanceManager {
     });
 
     // Process inventory breakdown
-    const inventory: { [key: string]: { value: number; stock: number; avgCost: number } } = {};
+    const inventory: {
+      [key: string]: {
+        value: number;
+        stock: number;
+        avgCost: number;
+        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+      };
+    } = {};
     inventoryBreakdownRows.forEach((item) => {
       if (!item.name) {
         return;
       }
 
+      const normalizedCost = Number(
+        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice ?? 0
+      );
+      const normalizedCostSource = (item.costSource ?? 'none') as
+        | 'averageCost'
+        | 'lastPurchasePrice'
+        | 'sellingPrice'
+        | 'none';
+
+      const rawValue = Number(item.totalValue ?? 0);
+      const normalizedStock = Number(item.stock ?? 0);
+      const resolvedValue = Number.isFinite(rawValue) && rawValue > 0
+        ? rawValue
+        : normalizedCost * Math.max(normalizedStock, 0);
+
       inventory[item.name] = {
-        value: Number(item.totalValue ?? 0),
-        stock: Number(item.stock ?? 0),
-        avgCost: Number(item.averageCost ?? 0)
+        value: Number(resolvedValue.toFixed(2)),
+        stock: normalizedStock,
+        avgCost: Number(normalizedCost.toFixed(2)),
+        costSource: normalizedCostSource
       };
     });
 
