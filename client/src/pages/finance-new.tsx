@@ -50,7 +50,14 @@ interface FinancialSummary {
     paymentMethods: { [key: string]: number };
     sources: { [key: string]: { amount: number; count: number } };
     subcategories: { [key: string]: { amount: number; type: string; count: number } };
-    inventory: { [key: string]: { value: number; stock: number; avgCost: number } };
+    inventory: {
+      [key: string]: {
+        value: number;
+        stock: number;
+        avgCost: number;
+        costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none';
+      };
+    };
   };
 }
 
@@ -451,6 +458,20 @@ export default function FinanceNew() {
     return Number.isFinite(numeric) ? numeric : 0;
   };
 
+  const inventoryCostSourceLabels: Record<
+    'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'none',
+    string
+  > = {
+    averageCost: 'HPP rata-rata',
+    lastPurchasePrice: 'Harga beli terakhir',
+    sellingPrice: 'Harga jual (fallback)',
+    none: 'Belum ada data modal'
+  };
+
+  const getInventoryCostSourceLabel = (
+    source: FinancialSummary['breakdown']['inventory'][string]['costSource'] | undefined
+  ) => inventoryCostSourceLabels[source ?? 'none'];
+
   const totalIncomeValue = parseAmount(summary?.totalIncome);
   const rawExpenseValue = parseAmount(summary?.totalExpense);
   const displayExpenseValue = Math.max(rawExpenseValue, 0);
@@ -783,6 +804,14 @@ export default function FinanceNew() {
             <div className="text-xs text-muted-foreground mt-1">
               {summary?.inventoryCount || 0} item stok
             </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Dihitung dari stok × harga modal (HPP rata-rata atau harga beli terakhir).
+            </div>
+            {inventoryValue === 0 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Pastikan produk memiliki harga modal agar nilai aset tidak nol.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -985,11 +1014,16 @@ export default function FinanceNew() {
                         {productName}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {data.stock} stok • {formatCurrency(data.avgCost.toString())} avg
+                        {data.stock} stok • {formatCurrency(data.avgCost.toString())} modal
                       </span>
                     </div>
-                    <div className="text-sm font-medium text-orange-600">
-                      {formatCurrency(data.value.toString())}
+                    <div className="flex flex-col items-end">
+                      <div className="text-sm font-medium text-orange-600">
+                        {formatCurrency(data.value.toString())}
+                      </div>
+                      <Badge variant="outline" className="mt-1 text-[10px] uppercase tracking-wide">
+                        {getInventoryCostSourceLabel(data.costSource)}
+                      </Badge>
                     </div>
                   </div>
                 ))}

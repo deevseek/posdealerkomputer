@@ -2509,41 +2509,42 @@ export class DatabaseStorage implements IStorage {
     totalAssetValue: string;
     totalStockQuantity: number;
   }> {
+    const clientId = this.resolveClientId();
+    const clientFilter = clientId ? eq(products.clientId, clientId) : isNull(products.clientId);
+
     const [lowStockResult] = await db
       .select({ count: count() })
       .from(products)
-      .where(
-        and(
-          eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
-        )
-      );
+      .where(and(
+        eq(products.isActive, true),
+        sql`${products.stock} <= ${products.minStock}`,
+        clientFilter
+      ));
 
     const lowStockProducts = await db
       .select()
       .from(products)
       .leftJoin(categories, eq(products.categoryId, categories.id))
-      .where(
-        and(
-          eq(products.isActive, true),
-          sql`${products.stock} <= ${products.minStock}`
-        )
-      )
+      .where(and(
+        eq(products.isActive, true),
+        sql`${products.stock} <= ${products.minStock}`,
+        clientFilter
+      ))
       .orderBy(products.stock);
 
     const [totalResult] = await db
       .select({ count: count() })
       .from(products)
-      .where(eq(products.isActive, true));
+      .where(and(eq(products.isActive, true), clientFilter));
 
     // Calculate total asset value (stock × purchase price)
     const assetValueResult = await db
       .select({
-        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.lastPurchasePrice}, 0))`,
+        totalValue: sql<number>`SUM(${products.stock} * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0))`,
         totalQuantity: sql<number>`SUM(${products.stock})`
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
+      .where(and(eq(products.isActive, true), gte(products.stock, 0), clientFilter));
 
     const totalAssetValue = Number(assetValueResult[0]?.totalValue || 0);
     const totalStockQuantity = Number(assetValueResult[0]?.totalQuantity || 0);
