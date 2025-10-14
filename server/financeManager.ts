@@ -996,6 +996,37 @@ export class FinanceManager {
         .join(' ');
     };
 
+    const hasPurchaseKeyword = (value?: string | null) => {
+      if (!value) {
+        return false;
+      }
+      const normalized = value.toLowerCase();
+      return normalized.includes('purchase') || normalized.includes('pembelian');
+    };
+
+    const hasAssetOrInventoryKeyword = (value?: string | null) => {
+      if (!value) {
+        return false;
+      }
+      const normalized = value.toLowerCase();
+      return (
+        normalized === 'inventory purchase' ||
+        normalized.includes('inventory purchase') ||
+        normalized.includes('inventory') ||
+        normalized.includes('persediaan') ||
+        normalized.includes('stock') ||
+        normalized.includes('aset') ||
+        normalized.includes('asset')
+      );
+    };
+
+    const shouldTreatAsAssetExpense = (category?: string | null, subcategory?: string | null) => {
+      if (hasAssetOrInventoryKeyword(category) || hasAssetOrInventoryKeyword(subcategory)) {
+        return true;
+      }
+      return hasPurchaseKeyword(category) || hasPurchaseKeyword(subcategory);
+    };
+
     const categoryTotals = new Map<string, { income: number; expense: number; entryIds: Set<string> }>();
     const subcategoryTotals = new Map<string, { netAmount: number; accountType: LedgerAggregate['type']; entryIds: Set<string> }>();
 
@@ -1079,8 +1110,33 @@ export class FinanceManager {
       });
     });
 
+    const expenseWhere = withRecordClauses(eq(financialRecords.type, 'expense'));
+    type LegacyExpenseRow = {
+      category: string | null;
+      subcategory: string | null;
+      amount: string | null;
+    };
+
+    const legacyExpenseRows: LegacyExpenseRow[] = expenseWhere
+      ? await db
+          .select({
+            category: financialRecords.category,
+            subcategory: financialRecords.subcategory,
+            amount: financialRecords.amount,
+          })
+          .from(financialRecords)
+          .where(expenseWhere)
+      : [];
+
+    const filteredLegacyExpenseRows = legacyExpenseRows.filter(
+      (expense) => !shouldTreatAsAssetExpense(expense.category, expense.subcategory)
+    );
+
     const fallbackIncomeTotal = totalsByType.get('income')?.total ?? 0;
-    const fallbackExpenseTotal = totalsByType.get('expense')?.total ?? 0;
+    const fallbackExpenseTotal = filteredLegacyExpenseRows.reduce(
+      (sumTotal, expense) => sumTotal + Math.abs(Number(expense.amount ?? 0)),
+      0
+    );
 
     if (fallbackIncomeTotal > 0) {
       totalIncomeValue = Number(Math.max(totalIncomeValue, fallbackIncomeTotal).toFixed(2));
@@ -1242,27 +1298,7 @@ export class FinanceManager {
       }
 
       if (needsExpenseFallback) {
-        const expenseWhere = withRecordClauses(eq(financialRecords.type, 'expense'));
-        const expenseRows = expenseWhere
-          ? await db
-              .select({
-                category: financialRecords.category,
-                amount: financialRecords.amount,
-              })
-              .from(financialRecords)
-              .where(expenseWhere)
-          : [];
-
-        const filteredExpenses = expenseRows.filter((expense) => {
-          const categoryName = (expense.category || '').toLowerCase();
-          return (
-            expense.category !== 'Inventory Purchase' &&
-            !categoryName.includes('purchase') &&
-            !categoryName.includes('asset')
-          );
-        });
-
-        const fallbackExpenseTotal = filteredExpenses.reduce(
+        const fallbackExpenseTotal = filteredLegacyExpenseRows.reduce(
           (sumTotal, expense) => sumTotal + Math.abs(Number(expense.amount ?? 0)),
           0
         );
@@ -1314,6 +1350,9 @@ export class FinanceManager {
     if (fallbackCategoryData) {
       fallbackCategoryData.forEach((item) => {
         if (!item.category) {
+          return;
+        }
+        if (shouldTreatAsAssetExpense(item.category, null)) {
           return;
         }
         const key = item.category;
@@ -1383,6 +1422,9 @@ export class FinanceManager {
     if (fallbackSubcategoryData) {
       fallbackSubcategoryData.forEach((item) => {
         if (!item.subcategory) {
+          return;
+        }
+        if (shouldTreatAsAssetExpense(null, item.subcategory)) {
           return;
         }
 
