@@ -32,8 +32,25 @@ import { formatDateShort } from '@shared/utils/timezone';
 import ImportResultsDialog from "@/components/ImportResultsDialog";
 
 const pricingSchema = z.object({
-  sellingPrice: z.string().min(1, "Harga jual harus diisi"),
+  pricingMode: z.enum(["fixed", "percentage"]),
+  sellingPrice: z.string().optional(),
   marginPercent: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.pricingMode === "fixed" && (!data.sellingPrice || data.sellingPrice === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["sellingPrice"],
+      message: "Harga jual harus diisi",
+    });
+  }
+
+  if (data.pricingMode === "percentage" && (!data.marginPercent || data.marginPercent === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["marginPercent"],
+      message: "Persentase margin harus diisi",
+    });
+  }
 });
 
 type PricingFormData = z.infer<typeof pricingSchema>;
@@ -389,18 +406,19 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
   const form = useForm<PricingFormData>({
     resolver: zodResolver(pricingSchema),
     defaultValues: {
+      pricingMode: "fixed",
       sellingPrice: product.sellingPrice?.toString() || "",
-      marginPercent: "",
+      marginPercent: product.marginPercent?.toString() || "",
     },
   });
 
   const updatePricingMutation = useMutation({
-    mutationFn: async (data: { sellingPrice: string }) => {
+    mutationFn: async (data: { sellingPrice: string; marginPercent?: string }) => {
       const response = await fetch(`/api/products/${product.id}/pricing`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ sellingPrice: data.sellingPrice }),
+        body: JSON.stringify({ sellingPrice: data.sellingPrice, marginPercent: data.marginPercent }),
       });
       if (!response.ok) throw new Error('Failed to update pricing');
       return response.json();
@@ -411,14 +429,27 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
     },
   });
 
-  const onSubmit = (data: PricingFormData) => {
-    updatePricingMutation.mutate({ sellingPrice: data.sellingPrice });
-  };
-
   const hpp = Number(product.averageCost || 0);
+  const pricingMode = form.watch("pricingMode");
   const currentSellingPrice = form.watch("sellingPrice");
-  const calculatedMargin = hpp > 0 && currentSellingPrice ? 
-    ((Number(currentSellingPrice) - hpp) / hpp * 100).toFixed(1) : "0";
+  const marginPercent = form.watch("marginPercent");
+  const calculatedSellingPriceFromMargin = pricingMode === "percentage"
+    ? (hpp + (hpp * (Number(marginPercent || 0) / 100))).toFixed(2)
+    : currentSellingPrice;
+  const effectiveSellingPrice = pricingMode === "percentage" ? calculatedSellingPriceFromMargin : currentSellingPrice;
+  const calculatedMargin = hpp > 0 && effectiveSellingPrice ?
+    ((Number(effectiveSellingPrice) - hpp) / hpp * 100).toFixed(1) : "0";
+
+  const onSubmit = (data: PricingFormData) => {
+    const sellingPriceToSave = data.pricingMode === "percentage"
+      ? (hpp + (hpp * (Number(data.marginPercent || 0) / 100))).toFixed(2)
+      : data.sellingPrice || "0";
+
+    updatePricingMutation.mutate({
+      sellingPrice: sellingPriceToSave,
+      marginPercent: data.pricingMode === "percentage" ? data.marginPercent : undefined,
+    });
+  };
 
   return (
     <Form {...form}>
@@ -436,22 +467,75 @@ function PricingEditForm({ product, onSuccess }: { product: any; onSuccess: () =
 
         <FormField
           control={form.control}
-          name="sellingPrice"
+          name="pricingMode"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Harga Jual</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="Masukkan harga jual" 
-                  type="number"
-                  step="0.01"
-                  {...field} 
-                />
-              </FormControl>
+              <FormLabel>Metode Harga</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih metode harga" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="fixed">Harga Tetap</SelectItem>
+                  <SelectItem value="percentage">HPP + Persentase</SelectItem>
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {pricingMode === "fixed" ? (
+          <FormField
+            control={form.control}
+            name="sellingPrice"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Harga Jual</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="Masukkan harga jual"
+                    type="number"
+                    step="0.01"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ) : (
+          <div className="space-y-3">
+            <FormField
+              control={form.control}
+              name="marginPercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Persentase Margin (%)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Contoh: 20"
+                      type="number"
+                      step="0.1"
+                      value={field.value || ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="p-3 bg-green-50 dark:bg-green-900 rounded-md border border-green-200 dark:border-green-800">
+              <p className="text-sm text-green-700 dark:text-green-300 font-medium">Harga Jual Terhitung</p>
+              <p className="text-lg font-bold text-green-800 dark:text-green-200">
+                Rp {Number(calculatedSellingPriceFromMargin || 0).toLocaleString('id-ID')}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end space-x-2">
           <Button 
