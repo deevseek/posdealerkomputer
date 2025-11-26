@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Pencil, Eye } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
 
@@ -81,6 +82,9 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
   const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | null>(null);
   const [serviceDialogClient, setServiceDialogClient] = useState<any>(null);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [renewDialogClient, setRenewDialogClient] = useState<any>(null);
+  const [renewalMonths, setRenewalMonths] = useState<number>(1);
+  const [renewalStartDate, setRenewalStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
 
   const parseServicesFromSettings = (clientSettings: any): string[] => {
     const rawSettings = typeof clientSettings === 'string' ? (() => {
@@ -149,6 +153,27 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
     },
   });
 
+  const renewSubscriptionMutation = useMutation({
+    mutationFn: async ({ subscriptionId, months, startDate }: { subscriptionId: string; months: number; startDate: string }) =>
+      apiRequest('POST', `/api/admin/saas/subscriptions/${subscriptionId}/renew`, {
+        months,
+        startDate,
+      }),
+    onSuccess: async () => {
+      toast({ title: 'Berhasil', description: 'Langganan berhasil diperpanjang' });
+      setRenewDialogClient(null);
+      await queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/clients'] });
+      await refetchClients();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Gagal memperpanjang langganan',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const updatePaymentStatusMutation = useMutation({
     mutationFn: async ({ subscriptionId, status }: { subscriptionId: string; status: PaymentStatus }) =>
       apiRequest('PATCH', `/api/admin/saas/subscriptions/${subscriptionId}/payment-status`, { status }),
@@ -210,6 +235,42 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
     }
 
     updateServicesMutation.mutate({ id: serviceDialogClient.id, services: selectedServices });
+  };
+
+  const handleOpenRenewDialog = (client: any, subscription: any, open: boolean) => {
+    if (open) {
+      setRenewDialogClient(client);
+
+      if (subscription?.endDate) {
+        const nextDay = new Date(subscription.endDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        setRenewalStartDate(nextDay.toISOString().slice(0, 10));
+      } else {
+        setRenewalStartDate(new Date().toISOString().slice(0, 10));
+      }
+
+      setRenewalMonths(1);
+      return;
+    }
+
+    setRenewDialogClient(null);
+  };
+
+  const handleRenewSubscription = (subscriptionId: string) => {
+    if (!renewalStartDate || Number.isNaN(new Date(renewalStartDate).getTime())) {
+      toast({
+        title: 'Tanggal tidak valid',
+        description: 'Pilih tanggal mulai yang valid untuk perpanjangan.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    renewSubscriptionMutation.mutate({
+      subscriptionId,
+      months: renewalMonths,
+      startDate: renewalStartDate,
+    });
   };
 
   return (
@@ -377,6 +438,58 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
                       </div>
                     </DialogContent>
                   </Dialog>
+                  {client.status === 'expired' && subscription?.id ? (
+                    <Dialog
+                      open={!!renewDialogClient && renewDialogClient.id === client.id}
+                      onOpenChange={(open) => handleOpenRenewDialog(client, subscription, open)}
+                    >
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="default">Perpanjang</Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-[480px]">
+                        <DialogHeader>
+                          <DialogTitle>Perpanjang Layanan</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="renew-start">Tanggal Mulai</Label>
+                            <Input
+                              id="renew-start"
+                              type="date"
+                              value={renewalStartDate}
+                              onChange={(e) => setRenewalStartDate(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="renew-months">Durasi (bulan)</Label>
+                            <Input
+                              id="renew-months"
+                              type="number"
+                              min={1}
+                              max={24}
+                              value={renewalMonths}
+                              onChange={(e) => setRenewalMonths(Math.max(1, Number(e.target.value) || 1))}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              onClick={() => handleOpenRenewDialog(client, subscription, false)}
+                              disabled={renewSubscriptionMutation.isPending}
+                            >
+                              Batal
+                            </Button>
+                            <Button
+                              onClick={() => handleRenewSubscription(subscription.id)}
+                              disabled={renewSubscriptionMutation.isPending}
+                            >
+                              {renewSubscriptionMutation.isPending ? 'Memproses...' : 'Perpanjang Sekarang'}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  ) : null}
                   <Dialog
                     open={!!serviceDialogClient && serviceDialogClient.id === client.id}
                     onOpenChange={(open) => handleOpenServiceDialog(client, open)}
