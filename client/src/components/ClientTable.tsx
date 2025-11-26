@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Pencil, Eye } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
 
@@ -17,6 +18,16 @@ const PAYMENT_STATUS_OPTIONS: Array<{ value: PaymentStatus; label: string }> = [
   { value: 'paid', label: 'Paid' },
   { value: 'failed', label: 'Failed' },
   { value: 'cancelled', label: 'Cancelled' },
+];
+
+const SERVICE_OPTIONS: Array<{ id: string; name: string; description: string }> = [
+  { id: 'pos', name: 'Point of Sale', description: 'Modul kasir dan transaksi penjualan.' },
+  { id: 'service', name: 'Servis', description: 'Manajemen tiket servis dan tracking perbaikan.' },
+  { id: 'inventory', name: 'Inventory', description: 'Stok barang, gudang, dan katalog produk.' },
+  { id: 'finance', name: 'Keuangan', description: 'Pencatatan pembayaran dan laporan keuangan.' },
+  { id: 'purchasing', name: 'Pembelian', description: 'Pengadaan dan purchase order ke supplier.' },
+  { id: 'reports', name: 'Laporan', description: 'Ringkasan performa bisnis dan laporan periodik.' },
+  { id: 'whatsapp', name: 'WhatsApp', description: 'Integrasi notifikasi dan pesan otomatis.' },
 ];
 
 interface ClientTableProps {
@@ -68,6 +79,31 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
   const [editClient, setEditClient] = useState<any>(null);
   const [localPaymentStatus, setLocalPaymentStatus] = useState<Partial<Record<string, PaymentStatus>>>({});
   const [updatingSubscriptionId, setUpdatingSubscriptionId] = useState<string | null>(null);
+  const [serviceDialogClient, setServiceDialogClient] = useState<any>(null);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+
+  const parseServicesFromSettings = (clientSettings: any): string[] => {
+    const rawSettings = typeof clientSettings === 'string' ? (() => {
+      try {
+        return JSON.parse(clientSettings);
+      } catch (error) {
+        console.warn('Failed to parse client settings', error);
+        return null;
+      }
+    })() : clientSettings;
+
+    if (rawSettings && typeof rawSettings === 'object') {
+      if (Array.isArray((rawSettings as any).features)) {
+        return (rawSettings as any).features.filter((feature: unknown): feature is string => typeof feature === 'string');
+      }
+
+      if (Array.isArray((rawSettings as any).services)) {
+        return (rawSettings as any).services.filter((feature: unknown): feature is string => typeof feature === 'string');
+      }
+    }
+
+    return [];
+  };
 
   const updateClientMutation = useMutation({
     mutationFn: async (data: { id: string; name: string; email: string; planId?: string | null }) =>
@@ -96,6 +132,23 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
       toast({ title: 'Error', description: error.message || 'Failed to update client status', variant: 'destructive' }),
   });
 
+  const updateServicesMutation = useMutation({
+    mutationFn: async ({ id, services }: { id: string; services: string[] }) =>
+      apiRequest('PATCH', `/api/admin/saas/clients/${id}/services`, { services }),
+    onSuccess: () => {
+      toast({ title: 'Success', description: 'Layanan tenant berhasil diperbarui' });
+      setServiceDialogClient(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/clients'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Gagal memperbarui layanan tenant',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const updatePaymentStatusMutation = useMutation({
     mutationFn: async ({ subscriptionId, status }: { subscriptionId: string; status: PaymentStatus }) =>
       apiRequest('PATCH', `/api/admin/saas/subscriptions/${subscriptionId}/payment-status`, { status }),
@@ -120,6 +173,43 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
         return next;
       });
     }
+  };
+
+  const handleOpenServiceDialog = (client: any, open: boolean) => {
+    if (open) {
+      setServiceDialogClient(client);
+      setSelectedServices(parseServicesFromSettings(client.settings));
+      return;
+    }
+
+    setServiceDialogClient(null);
+  };
+
+  const toggleService = (serviceId: string, enabled: boolean) => {
+    setSelectedServices((prev) => {
+      if (enabled) {
+        return Array.from(new Set([...prev, serviceId]));
+      }
+
+      return prev.filter((item) => item !== serviceId);
+    });
+  };
+
+  const handleSaveServices = () => {
+    if (!serviceDialogClient) {
+      return;
+    }
+
+    if (selectedServices.length === 0) {
+      toast({
+        title: 'Pilih layanan',
+        description: 'Minimal satu layanan harus diaktifkan untuk tenant ini.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    updateServicesMutation.mutate({ id: serviceDialogClient.id, services: selectedServices });
   };
 
   return (
@@ -282,6 +372,60 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
                             disabled={updateClientMutation.isPending}
                           >
                             Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <Dialog
+                    open={!!serviceDialogClient && serviceDialogClient.id === client.id}
+                    onOpenChange={(open) => handleOpenServiceDialog(client, open)}
+                  >
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="secondary">Layanan</Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[560px]">
+                      <DialogHeader>
+                        <DialogTitle>Kelola Layanan Tenant</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          Aktifkan atau nonaktifkan modul yang tersedia untuk tenant ini.
+                        </p>
+                        <div className="space-y-3">
+                          {SERVICE_OPTIONS.map((service) => {
+                            const enabled = selectedServices.includes(service.id);
+
+                            return (
+                              <div
+                                key={service.id}
+                                className="flex items-start justify-between rounded-md border p-3"
+                              >
+                                <div className="mr-4 space-y-1">
+                                  <p className="text-sm font-medium">{service.name}</p>
+                                  <p className="text-xs text-muted-foreground">{service.description}</p>
+                                </div>
+                                <Switch
+                                  checked={enabled}
+                                  onCheckedChange={(checked) => toggleService(service.id, checked)}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenServiceDialog(client, false)}
+                            disabled={updateServicesMutation.isPending}
+                          >
+                            Batal
+                          </Button>
+                          <Button
+                            onClick={handleSaveServices}
+                            disabled={updateServicesMutation.isPending || selectedServices.length === 0}
+                          >
+                            {updateServicesMutation.isPending ? 'Menyimpan...' : 'Simpan Layanan'}
                           </Button>
                         </div>
                       </div>
