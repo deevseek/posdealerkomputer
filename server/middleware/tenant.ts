@@ -218,6 +218,10 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     }
 
     if (clientData.status === 'expired' && !isRenewalRequest) {
+      if (req.accepts('html')) {
+        return res.redirect(`/topup?client=${clientData.subdomain}&reason=expired`);
+      }
+
       return res.status(402).json({
         error: 'Subscription expired',
         message: 'Your subscription has expired. Please renew to continue using the service.',
@@ -249,7 +253,11 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
         })
         .where(eq(clients.id, clientData.id));
 
-      return res.status(402).json({ 
+      if (req.accepts('html')) {
+        return res.redirect(`/topup?client=${clientData.subdomain}&reason=expired`);
+      }
+
+      return res.status(402).json({
         error: 'Subscription expired',
         message: 'Your subscription has expired. Please renew to continue using the service.',
         renewUrl: `/renew?client=${clientData.id}`
