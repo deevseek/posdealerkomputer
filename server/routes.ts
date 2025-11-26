@@ -3771,6 +3771,7 @@ Terima kasih!
           status: clients.status,
           trialEndsAt: clients.trialEndsAt,
           createdAt: clients.createdAt,
+          settings: clients.settings,
         })
         .from(clients)
         .orderBy(desc(clients.createdAt));
@@ -4109,6 +4110,69 @@ Terima kasih!
     } catch (error) {
       console.error('Error updating SaaS client:', error);
       res.status(500).json({ message: 'Failed to update client' });
+    }
+  });
+
+  app.patch('/api/admin/saas/clients/:id/services', isAuthenticated, requirePermission('saas_admin'), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { services: rawServices, limits } = req.body ?? {};
+
+      if (!Array.isArray(rawServices)) {
+        return res.status(400).json({ message: 'Services must be provided as an array' });
+      }
+
+      const services = rawServices
+        .map((service: unknown) => (typeof service === 'string' ? service.trim() : ''))
+        .filter((service: string): service is string => service.length > 0);
+
+      if (services.length === 0) {
+        return res.status(400).json({ message: 'At least one service must be selected' });
+      }
+
+      const [existingClient] = await db
+        .select()
+        .from(clients)
+        .where(eq(clients.id, id))
+        .limit(1);
+
+      if (!existingClient) {
+        return res.status(404).json({ message: 'Client not found' });
+      }
+
+      const parsedSettings = safeParseJson<unknown>(existingClient.settings);
+      const normalizedSettings =
+        parsedSettings && typeof parsedSettings === 'object' && !Array.isArray(parsedSettings)
+          ? (parsedSettings as Record<string, unknown>)
+          : {};
+
+      const nextSettings: Record<string, unknown> = {
+        ...normalizedSettings,
+        features: services,
+      };
+
+      if (limits && typeof limits === 'object' && !Array.isArray(limits)) {
+        nextSettings.limits = limits;
+      }
+
+      const [updatedClient] = await db
+        .update(clients)
+        .set({ settings: JSON.stringify(nextSettings), updatedAt: new Date() })
+        .where(eq(clients.id, id))
+        .returning({
+          id: clients.id,
+          name: clients.name,
+          email: clients.email,
+          settings: clients.settings,
+          updatedAt: clients.updatedAt,
+        });
+
+      realtimeService.broadcast({ resource: 'saas-clients', action: 'update', id, data: updatedClient });
+
+      return res.json({ message: 'Client services updated successfully', client: updatedClient });
+    } catch (error) {
+      console.error('Error updating client services:', error);
+      return res.status(500).json({ message: 'Failed to update client services' });
     }
   });
 
