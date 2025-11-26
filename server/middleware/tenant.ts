@@ -154,7 +154,9 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
     const renewalAllowedRoutes = [
       '/api/saas/subscription',
       '/api/saas/payment',
-      '/api/saas/client/info'
+      '/api/saas/client/info',
+      '/topup',
+      '/renew'
     ];
 
     const isRenewalRequest = renewalAllowedRoutes.some(route => req.path.startsWith(route));
