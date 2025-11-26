@@ -4219,6 +4219,15 @@ Terima kasih!
 
   const PAYMENT_STATUS_VALUES = ['pending', 'paid', 'failed', 'cancelled'] as const;
 
+  const renewSubscriptionSchema = z.object({
+    months: z
+      .preprocess((value) => Number(value), z.number().int().positive().max(24))
+      .optional()
+      .default(1),
+    startDate: z.union([z.string(), z.date()]).optional(),
+    paymentStatus: z.enum(PAYMENT_STATUS_VALUES).optional().default('paid'),
+  });
+
   const paymentStatusUpdateSchema = z.object({
     status: z
       .string()
@@ -4350,6 +4359,104 @@ Terima kasih!
       } catch (error) {
         console.error('Error updating subscription payment status:', error);
         res.status(500).json({ message: 'Failed to update subscription payment status' });
+      }
+    },
+  );
+
+  app.post(
+    '/api/admin/saas/subscriptions/:id/renew',
+    isAuthenticated,
+    requirePermission('saas_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const parsedBody = renewSubscriptionSchema.safeParse(req.body ?? {});
+
+        if (!parsedBody.success) {
+          return res.status(400).json({
+            message: 'Invalid renewal payload',
+            errors: parsedBody.error.flatten(),
+          });
+        }
+
+        const { months, startDate, paymentStatus } = parsedBody.data;
+
+        const [existingSubscription] = await db
+          .select()
+          .from(subscriptions)
+          .where(eq(subscriptions.id, id))
+          .limit(1);
+
+        if (!existingSubscription) {
+          return res.status(404).json({ message: 'Subscription not found' });
+        }
+
+        const resolvedStartDate = (() => {
+          if (startDate instanceof Date) {
+            return startDate;
+          }
+
+          if (typeof startDate === 'string') {
+            const parsed = new Date(startDate);
+            if (!Number.isNaN(parsed.getTime())) {
+              return parsed;
+            }
+          }
+
+          return new Date();
+        })();
+
+        const newEndDate = new Date(resolvedStartDate);
+        newEndDate.setMonth(newEndDate.getMonth() + months);
+
+        const now = new Date();
+        const [updatedSubscription] = await db
+          .update(subscriptions)
+          .set({
+            startDate: resolvedStartDate,
+            endDate: newEndDate,
+            paymentStatus,
+            cancelledAt: null,
+            updatedAt: now,
+          })
+          .where(eq(subscriptions.id, id))
+          .returning();
+
+        await db
+          .update(clients)
+          .set({
+            status: 'active',
+            updatedAt: now,
+          })
+          .where(eq(clients.id, existingSubscription.clientId));
+
+        const parsedAmount = Number.parseInt(existingSubscription.amount ?? '0', 10);
+        const paymentAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+        const paymentCurrency = existingSubscription.currency ?? 'IDR';
+
+        await db.insert(payments).values({
+          subscriptionId: id,
+          clientId: existingSubscription.clientId,
+          amount: paymentAmount,
+          currency: paymentCurrency,
+          status: paymentStatus,
+          paidAt: paymentStatus === 'paid' ? now : null,
+        });
+
+        realtimeService.broadcast({
+          resource: 'saas-clients',
+          action: 'update',
+          data: updatedSubscription,
+          id: existingSubscription.clientId,
+        });
+
+        res.json({
+          message: 'Subscription renewed successfully',
+          subscription: updatedSubscription,
+        });
+      } catch (error) {
+        console.error('Error renewing subscription:', error);
+        res.status(500).json({ message: 'Failed to renew subscription' });
       }
     },
   );
