@@ -140,6 +140,8 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       return next();
     }
 
+    const requestPath = req.baseUrl ? `${req.baseUrl}${req.path}` : req.path;
+
     // Skip tenant detection for certain routes and original app routes
     const skipRoutes = [
       '/api/auth',
@@ -159,12 +161,12 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       '/renew'
     ];
 
-    const isRenewalRequest = renewalAllowedRoutes.some(route => req.path.startsWith(route));
+    const isRenewalRequest = renewalAllowedRoutes.some(route => requestPath.startsWith(route));
     
     // Admin routes remain super-admin only, but allow setup routes for tenant onboarding
     const superAdminOnlyRoutes = ['/api/admin'];
 
-    if (superAdminOnlyRoutes.some(route => req.path.startsWith(route))) {
+    if (superAdminOnlyRoutes.some(route => requestPath.startsWith(route))) {
       if (subdomain !== 'admin' && subdomain !== 'main' && !req.path.startsWith('/api/admin')) {
         return res.status(403).json({
           error: 'Access denied',
@@ -175,7 +177,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       return next();
     }
     
-    const shouldSkipRoute = skipRoutes.some(route => req.path.startsWith(route));
+    const shouldSkipRoute = skipRoutes.some(route => requestPath.startsWith(route));
 
     if (shouldSkipRoute) {
       const requiresTenantContext =
