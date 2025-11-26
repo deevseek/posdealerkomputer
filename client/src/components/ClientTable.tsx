@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Pencil, Eye } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled';
 
@@ -85,6 +86,8 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
   const [renewDialogClient, setRenewDialogClient] = useState<any>(null);
   const [renewalMonths, setRenewalMonths] = useState<number>(1);
   const [renewalStartDate, setRenewalStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [credentialDialogClient, setCredentialDialogClient] = useState<any>(null);
+  const [credentialForm, setCredentialForm] = useState<{ username: string; password: string }>({ username: '', password: '' });
 
   const parseServicesFromSettings = (clientSettings: any): string[] => {
     const rawSettings = typeof clientSettings === 'string' ? (() => {
@@ -107,6 +110,31 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
     }
 
     return [];
+  };
+
+  const parseCredentialsFromSettings = (clientSettings: any) => {
+    const rawSettings = typeof clientSettings === 'string' ? (() => {
+      try {
+        return JSON.parse(clientSettings);
+      } catch (error) {
+        console.warn('Failed to parse client credentials', error);
+        return null;
+      }
+    })() : clientSettings;
+
+    if (rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings)) {
+      const credentials = (rawSettings as any).credentials;
+      if (credentials && typeof credentials === 'object') {
+        const username = typeof credentials.username === 'string' ? credentials.username : '';
+        const password = typeof credentials.password === 'string' ? credentials.password : '';
+
+        if (username || password) {
+          return { username, password };
+        }
+      }
+    }
+
+    return null;
   };
 
   const updateClientMutation = useMutation({
@@ -172,6 +200,18 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
         variant: 'destructive',
       });
     },
+  });
+
+  const updateCredentialsMutation = useMutation({
+    mutationFn: async ({ id, username, password }: { id: string; username: string; password: string }) =>
+      apiRequest('PATCH', `/api/admin/saas/clients/${id}/credentials`, { username, password }),
+    onSuccess: () => {
+      toast({ title: 'Berhasil', description: 'Credential tenant berhasil disimpan' });
+      setCredentialDialogClient(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/saas/clients'] });
+    },
+    onError: (error: any) =>
+      toast({ title: 'Error', description: error?.message || 'Gagal menyimpan credential', variant: 'destructive' }),
   });
 
   const updatePaymentStatusMutation = useMutation({
@@ -271,6 +311,40 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
       months: renewalMonths,
       startDate: renewalStartDate,
     });
+  };
+
+  const handleOpenCredentialDialog = (client: any, open: boolean) => {
+    if (open) {
+      setCredentialDialogClient(client);
+      const parsedCredentials = parseCredentialsFromSettings(client.settings);
+      setCredentialForm({
+        username: parsedCredentials?.username || client.email || '',
+        password: parsedCredentials?.password || '',
+      });
+      return;
+    }
+
+    setCredentialDialogClient(null);
+  };
+
+  const handleSaveCredentials = () => {
+    if (!credentialDialogClient) {
+      return;
+    }
+
+    const username = credentialForm.username.trim();
+    const password = credentialForm.password.trim();
+
+    if (!username || !password) {
+      toast({
+        title: 'Lengkapi data',
+        description: 'Username dan password wajib diisi.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    updateCredentialsMutation.mutate({ id: credentialDialogClient.id, username, password });
   };
 
   return (
@@ -544,6 +618,58 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
                       </div>
                     </DialogContent>
                   </Dialog>
+                  <Dialog
+                    open={!!credentialDialogClient && credentialDialogClient.id === client.id}
+                    onOpenChange={(open) => handleOpenCredentialDialog(client, open)}
+                  >
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="gap-2">
+                        <Eye className="h-4 w-4" /> Akun
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[520px]">
+                      <DialogHeader>
+                        <DialogTitle>Credential Tenant</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                          Simpan detail akses utama untuk tenant ini agar tim tidak lupa username dan password aplikasi.
+                        </p>
+                        <Separator />
+                        <div className="space-y-2">
+                          <Label htmlFor="tenant-username">Username</Label>
+                          <Input
+                            id="tenant-username"
+                            value={credentialForm.username}
+                            onChange={(e) => setCredentialForm((prev) => ({ ...prev, username: e.target.value }))}
+                            placeholder="admin@tenant.com"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="tenant-password">Password</Label>
+                          <Input
+                            id="tenant-password"
+                            type="text"
+                            value={credentialForm.password}
+                            onChange={(e) => setCredentialForm((prev) => ({ ...prev, password: e.target.value }))}
+                            placeholder="••••••••"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => handleOpenCredentialDialog(client, false)}
+                            disabled={updateCredentialsMutation.isPending}
+                          >
+                            Tutup
+                          </Button>
+                          <Button onClick={handleSaveCredentials} disabled={updateCredentialsMutation.isPending}>
+                            {updateCredentialsMutation.isPending ? 'Menyimpan...' : 'Simpan Credential'}
+                          </Button>
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <Button
                     size="sm"
                     variant={isActive ? 'destructive' : 'default'}
@@ -552,7 +678,6 @@ export default function ClientTable({ clients, refetchClients, plans = [] }: Cli
                   >
                     {isActive ? 'Suspend' : 'Activate'}
                   </Button>
-                  <Button size="sm" variant="ghost"><Eye className="h-4 w-4" /></Button>
                 </TableCell>
               </TableRow>
             );

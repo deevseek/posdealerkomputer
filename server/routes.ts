@@ -3807,10 +3807,31 @@ Terima kasih!
         }
       }
 
-      const clientsWithSubscriptions = baseClients.map((client) => ({
-        ...client,
-        subscription: subscriptionByClient.get(client.id) ?? null,
-      }));
+      const clientsWithSubscriptions = baseClients.map((client) => {
+        const parsedSettings = safeParseJson<unknown>(client.settings);
+        const normalizedSettings =
+          parsedSettings && typeof parsedSettings === 'object' && !Array.isArray(parsedSettings)
+            ? (parsedSettings as Record<string, unknown>)
+            : undefined;
+
+        const rawCredentials =
+          normalizedSettings && typeof normalizedSettings.credentials === 'object' && normalizedSettings.credentials
+            ? (normalizedSettings.credentials as Record<string, unknown>)
+            : null;
+
+        const credentials = rawCredentials
+          ? {
+              username: typeof rawCredentials.username === 'string' ? rawCredentials.username : '',
+              password: typeof rawCredentials.password === 'string' ? rawCredentials.password : '',
+            }
+          : null;
+
+        return {
+          ...client,
+          subscription: subscriptionByClient.get(client.id) ?? null,
+          credentials,
+        };
+      });
 
       res.json(clientsWithSubscriptions);
     } catch (error) {
@@ -4175,6 +4196,74 @@ Terima kasih!
       return res.status(500).json({ message: 'Failed to update client services' });
     }
   });
+
+  app.patch(
+    '/api/admin/saas/clients/:id/credentials',
+    isAuthenticated,
+    requirePermission('saas_admin'),
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { username, password } = req.body ?? {};
+
+        const trimmedUsername = typeof username === 'string' ? username.trim() : '';
+        const trimmedPassword = typeof password === 'string' ? password.trim() : '';
+
+        if (!trimmedUsername || !trimmedPassword) {
+          return res.status(400).json({ message: 'Username dan password wajib diisi' });
+        }
+
+        const [existingClient] = await db
+          .select({ settings: clients.settings })
+          .from(clients)
+          .where(eq(clients.id, id))
+          .limit(1);
+
+        if (!existingClient) {
+          return res.status(404).json({ message: 'Client tidak ditemukan' });
+        }
+
+        const parsedSettings = safeParseJson<unknown>(existingClient.settings);
+        const normalizedSettings =
+          parsedSettings && typeof parsedSettings === 'object' && !Array.isArray(parsedSettings)
+            ? (parsedSettings as Record<string, unknown>)
+            : {};
+
+        const nextSettings: Record<string, unknown> = {
+          ...normalizedSettings,
+          credentials: {
+            username: trimmedUsername,
+            password: trimmedPassword,
+          },
+        };
+
+        const [updatedClient] = await db
+          .update(clients)
+          .set({ settings: JSON.stringify(nextSettings), updatedAt: new Date() })
+          .where(eq(clients.id, id))
+          .returning({
+            id: clients.id,
+            settings: clients.settings,
+            updatedAt: clients.updatedAt,
+          });
+
+        realtimeService.broadcast({
+          resource: 'saas-clients',
+          action: 'update',
+          id,
+          data: updatedClient,
+        });
+
+        return res.json({
+          message: 'Credential tenant berhasil diperbarui',
+          credentials: nextSettings.credentials,
+        });
+      } catch (error) {
+        console.error('Error updating client credentials:', error);
+        return res.status(500).json({ message: 'Gagal memperbarui credential tenant' });
+      }
+    },
+  );
 
   // Update client status
   app.patch('/api/admin/saas/clients/:id/status', isAuthenticated, requirePermission('saas_admin'), async (req: any, res) => {
