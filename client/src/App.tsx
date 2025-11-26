@@ -28,6 +28,7 @@ import Setup from "@/pages/setup";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminSaaS from "@/pages/admin-saas";
 import ClientOnboarding from "@/pages/client-onboarding";
+import TopUpPage from "@/pages/topup";
 import Warranty from "@/pages/warranty";
 
 function Router() {
@@ -101,6 +102,7 @@ function Router() {
         </>
       )}
       <Route path="/service-status" component={ServiceStatus} />
+      <Route path="/topup" component={TopUpPage} />
       <Route path="/setup" component={Setup} />
       <Route path="/client-onboarding" component={ClientOnboarding} />
       <Route component={NotFound} />
