@@ -149,6 +149,15 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       '/api/saas/payment',
       '/api/payment-webhook'
     ];
+
+    // Allow expired tenants to access renewal-related endpoints
+    const renewalAllowedRoutes = [
+      '/api/saas/subscription',
+      '/api/saas/payment',
+      '/api/saas/client/info'
+    ];
+
+    const isRenewalRequest = renewalAllowedRoutes.some(route => req.path.startsWith(route));
     
     // Admin routes remain super-admin only, but allow setup routes for tenant onboarding
     const superAdminOnlyRoutes = ['/api/admin'];
@@ -208,8 +217,8 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       });
     }
 
-    if (clientData.status === 'expired') {
-      return res.status(402).json({ 
+    if (clientData.status === 'expired' && !isRenewalRequest) {
+      return res.status(402).json({
         error: 'Subscription expired',
         message: 'Your subscription has expired. Please renew to continue using the service.',
         renewUrl: `/renew?client=${clientData.id}`
@@ -230,7 +239,7 @@ export const tenantMiddleware = async (req: Request, res: Response, next: NextFu
       .limit(1);
 
     // Check subscription expiry
-    if (subscription.length && subscription[0].endDate < new Date()) {
+    if (subscription.length && subscription[0].endDate < new Date() && !isRenewalRequest) {
       // Update client status to expired
       await primaryDb
         .update(clients)
