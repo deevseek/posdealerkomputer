@@ -84,11 +84,28 @@ export default function POS() {
     setShowReceiptModal(true);
   };
 
+  // Derive quick stats with fallbacks so newly created transactions are reflected immediately
+  const saleTransactions = transactions.filter((transaction: any) => transaction.type === 'sale');
+  const calculatedTodaySales = saleTransactions.reduce((sum: number, transaction: any) => {
+    const total = parseFloat(transaction.total);
+    return sum + (Number.isFinite(total) ? total : 0);
+  }, 0);
+
+  const resolvedTodaySales =
+    stats?.todaySales && parseFloat(stats.todaySales) > 0
+      ? parseFloat(stats.todaySales)
+      : calculatedTodaySales;
+
+  const resolvedTodayRevenue =
+    stats?.todayRevenue && parseFloat(stats.todayRevenue) > 0
+      ? parseFloat(stats.todayRevenue)
+      : calculatedTodaySales;
+
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header 
+        <Header
           title="Kasir" 
           breadcrumb="Beranda / Kasir"
           action={
@@ -166,13 +183,13 @@ export default function POS() {
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Product Sales</span>
                     <span className="font-medium">
-                      {stats?.todaySales ? formatCurrency(parseFloat(stats.todaySales)) : 'Rp 0'}
+                      {formatCurrency(resolvedTodaySales)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Total Revenue</span>
                     <span className="font-medium">
-                      {stats?.todayRevenue ? formatCurrency(parseFloat(stats.todayRevenue)) : 'Rp 0'}
+                      {formatCurrency(resolvedTodayRevenue)}
                     </span>
                   </div>
                   <div className="flex justify-between">
