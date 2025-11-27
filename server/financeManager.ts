@@ -1097,7 +1097,6 @@ export class FinanceManager {
     let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
     let totalCOGSValue = Number(totalCOGS.toFixed(2));
     let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-    let cogsCountedInExpenses = false;
     let totalRefundsValue = Number(totalRefunds.toFixed(2));
 
     const recordAggregates = baseRecordWhere
