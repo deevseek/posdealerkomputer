@@ -1787,6 +1787,14 @@ export class FinanceManager {
       }
     }
 
+    // If we successfully derived COGS but don't have any other expense data,
+    // treat COGS as the minimum expense baseline so net profit isn't inflated
+    // by missing expense rows.
+    if (totalCOGSValue > 0 && totalExpenseValue === 0 && netExpenseValue === 0) {
+      totalExpenseValue = Number(totalCOGSValue.toFixed(2));
+      netExpenseValue = Number(totalCOGSValue.toFixed(2));
+    }
+
     netExpenseValue = Number(Math.max(netExpenseValue, 0).toFixed(2));
     totalExpenseValue = Number(Math.max(totalExpenseValue, netExpenseValue).toFixed(2));
 
