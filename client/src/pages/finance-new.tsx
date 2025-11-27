@@ -256,9 +256,10 @@ export default function FinanceNew() {
   });
 
   // Date filters
+  const todayIso = new Date().toISOString().split('T')[0];
   const [dateFilter, setDateFilter] = useState({
-    startDate: '',
-    endDate: ''
+    startDate: todayIso,
+    endDate: todayIso
   });
 
   // Dialog states
@@ -700,24 +701,79 @@ export default function FinanceNew() {
         <Header title="Keuangan & Payroll" breadcrumb="Beranda / Keuangan & Payroll" />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <Input
-            type="date"
-            value={dateFilter.startDate}
-            onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
-            placeholder="Tanggal Mulai"
-            className="w-40"
-          />
-          <Input
-            type="date"
-            value={dateFilter.endDate}
-            onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
-            placeholder="Tanggal Akhir"
-            className="w-40"
-          />
-        </div>
-      </div>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  value={dateFilter.startDate}
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, startDate: e.target.value }))}
+                  placeholder="Tanggal Mulai"
+                  className="w-40"
+                />
+                <Input
+                  type="date"
+                  value={dateFilter.endDate}
+                  onChange={(e) => setDateFilter(prev => ({ ...prev, endDate: e.target.value }))}
+                  placeholder="Tanggal Akhir"
+                  className="w-40"
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDateFilter({ startDate: todayIso, endDate: todayIso })}
+                    className="gap-2"
+                  >
+                    <Calendar className="w-4 h-4" /> Hari ini
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const now = new Date();
+                      const lastWeek = new Date(now);
+                      lastWeek.setDate(now.getDate() - 6);
+                      setDateFilter({
+                        startDate: lastWeek.toISOString().split('T')[0],
+                        endDate: now.toISOString().split('T')[0]
+                      });
+                    }}
+                  >
+                    7 hari terakhir
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const now = new Date();
+                      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                      setDateFilter({
+                        startDate: monthStart.toISOString().split('T')[0],
+                        endDate: now.toISOString().split('T')[0]
+                      });
+                    }}
+                  >
+                    Bulan ini
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setDateFilter({ startDate: todayIso, endDate: todayIso })}
+                  >
+                    <RotateCcw className="w-4 h-4" /> Reset ke hari ini
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Data laporan otomatis difokuskan ke hari ini agar laba rugi tidak tercampur dengan transaksi lama. Gunakan tombol di atas jika ingin melihat rentang lain.
+              </p>
+            </div>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">

@@ -2545,8 +2545,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters = {
         type: type as string,
         category: category as string,
-        startDate: startDate ? parseWithTimezone(startDate as string, false) : undefined,
-        endDate: endDate ? parseWithTimezone(endDate as string, false) : undefined,
+        startDate: startDate
+          ? getStartOfDayJakarta(parseWithTimezone(startDate as string, false))
+          : getStartOfDayJakarta(),
+        endDate: endDate
+          ? getEndOfDayJakarta(parseWithTimezone(endDate as string, false))
+          : getEndOfDayJakarta(),
         referenceType: referenceType as string
       };
       const transactions = await financeManager.getTransactions(filters);
@@ -2577,10 +2581,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/finance/summary', isAuthenticated, async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
-      const summary = await financeManager.getSummary(
-        startDate ? parseWithTimezone(startDate as string, false) : undefined,
-        endDate ? parseWithTimezone(endDate as string, false) : undefined
-      );
+
+      const parsedStart = startDate
+        ? getStartOfDayJakarta(parseWithTimezone(startDate as string, false))
+        : getStartOfDayJakarta();
+      const parsedEnd = endDate
+        ? getEndOfDayJakarta(parseWithTimezone(endDate as string, false))
+        : getEndOfDayJakarta();
+
+      const summary = await financeManager.getSummary(parsedStart, parsedEnd);
       res.json(summary);
     } catch (error) {
       console.error("Error fetching summary:", error);
