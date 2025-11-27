@@ -1789,11 +1789,19 @@ export class DatabaseStorage implements IStorage {
               // Get product details to get modal price
               const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
               if (product) {
+                // Use best available cost information to avoid zero-cost COGS on services
+                const costPrice = (
+                  product.averageCost ||
+                  product.lastPurchasePrice ||
+                  product.sellingPrice ||
+                  '0'
+                ).toString();
+
                 await financeManager.recordPartsCost(
                   ticket.id,
                   product.name,
                   part.quantity,
-                  product.lastPurchasePrice || '0', // modal price
+                  costPrice,
                   part.unitPrice, // selling price
                   userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
                 );
