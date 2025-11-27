@@ -1753,6 +1753,16 @@ export class FinanceManager {
         const posCOGSTotal = Number(posSummary?.totalCOGS ?? 0);
         const posSalesTotal = Number(posSummary?.totalSales ?? 0);
 
+        // Always anchor sales revenue to the POS gross sales so the revenue card
+        // isn't understated (e.g. when sales are recorded net of HPP elsewhere).
+        const alignedSalesRevenue = Math.max(totalSalesRevenueValue, posSalesTotal);
+        if (alignedSalesRevenue > totalSalesRevenueValue) {
+          const revenueDelta = Number((alignedSalesRevenue - totalSalesRevenueValue).toFixed(2));
+          totalSalesRevenueValue = alignedSalesRevenue;
+          totalIncomeValue = Number((totalIncomeValue + revenueDelta).toFixed(2));
+          grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+        }
+
         if (posCOGSTotal > 0) {
           const previousCOGSValue = totalCOGSValue;
           const resolvedCOGSValue = Number(Math.max(previousCOGSValue, posCOGSTotal).toFixed(2));
