@@ -993,6 +993,7 @@ export class FinanceManager {
     let totalSalesRevenue = 0;
     let totalCOGS = 0;
     let totalRefunds = 0;
+    let cogsCountedInExpenses = false;
 
     const formatCategoryName = (key: string | null) => {
       if (!key) {
