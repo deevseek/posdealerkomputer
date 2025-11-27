@@ -993,6 +993,7 @@ export class FinanceManager {
     let totalSalesRevenue = 0;
     let totalCOGS = 0;
     let totalRefunds = 0;
+    let cogsCountedInExpenses = false;
 
     const formatCategoryName = (key: string | null) => {
       if (!key) {
@@ -1069,6 +1070,7 @@ export class FinanceManager {
         }
         if (aggregate.subtype === 'cost_of_goods_sold') {
           totalCOGS += aggregate.netAmount;
+          cogsCountedInExpenses = true;
         }
       }
 
@@ -1703,6 +1705,7 @@ export class FinanceManager {
         if (cogsDelta > 0) {
           totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
           netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
+          cogsCountedInExpenses = true;
 
           const cogsCategoryKey = 'Cost Of Goods Sold';
           const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
@@ -1766,6 +1769,7 @@ export class FinanceManager {
           if (cogsDelta > 0) {
             totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
             netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
+            cogsCountedInExpenses = true;
 
             const cogsCategoryKey = 'Cost Of Goods Sold';
             const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
@@ -1785,6 +1789,15 @@ export class FinanceManager {
           }
         }
       }
+    }
+
+    // If we successfully derived COGS but don't have any other expense data,
+    // treat COGS as the minimum expense baseline so net profit isn't inflated
+    // by missing expense rows.
+    if (totalCOGSValue > 0 && !cogsCountedInExpenses) {
+      totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
+      netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
+      cogsCountedInExpenses = true;
     }
 
     netExpenseValue = Number(Math.max(netExpenseValue, 0).toFixed(2));
