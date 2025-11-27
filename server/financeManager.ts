@@ -1086,6 +1086,9 @@ export class FinanceManager {
       subcategoryTotals.set(aggregate.name, subcategoryRecord);
     });
 
+    const hasLedgerIncomeData = totalRevenue !== 0;
+    const hasLedgerExpenseData = totalExpenseDebits !== 0 || totalExpenseCredits !== 0;
+
     let totalIncomeValue = Number(totalRevenue.toFixed(2));
     let totalExpenseValue = Number(totalExpenseDebits.toFixed(2));
     let netExpenseValue = Number((totalExpenseDebits - totalExpenseCredits).toFixed(2));
@@ -1146,13 +1149,13 @@ export class FinanceManager {
       0
     );
 
-    if (fallbackIncomeTotal > 0) {
-      totalIncomeValue = Number(Math.max(totalIncomeValue, fallbackIncomeTotal).toFixed(2));
+    if (fallbackIncomeTotal > 0 && !hasLedgerIncomeData) {
+      totalIncomeValue = Number(fallbackIncomeTotal.toFixed(2));
     }
 
-    if (fallbackExpenseTotal > 0) {
-      totalExpenseValue = Number(Math.max(totalExpenseValue, fallbackExpenseTotal).toFixed(2));
-      netExpenseValue = Number(Math.max(netExpenseValue, fallbackExpenseTotal).toFixed(2));
+    if (fallbackExpenseTotal > 0 && !hasLedgerExpenseData) {
+      totalExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
+      netExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
     }
 
     const salesKeywordCondition = sql`
