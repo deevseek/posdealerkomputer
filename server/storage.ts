@@ -3074,15 +3074,27 @@ export class DatabaseStorage implements IStorage {
       }
 
       // For service warranty claims, auto-approve and create new service ticket
-      if (claimData.claimType === 'service' && claimData.originalServiceTicketId) {
-        await this.processServiceWarrantyClaim({
-          claimId: createdClaim.id,
-          originalServiceTicketId: claimData.originalServiceTicketId,
-          customerId: claimData.customerId,
-          processedBy: options.createdBy,
-          clientId: clientId ?? createdClaim.clientId ?? null,
-          tx,
-        });
+      if (claimData.claimType === 'service') {
+        if (claimData.originalServiceTicketId) {
+          await this.processServiceWarrantyClaim({
+            claimId: createdClaim.id,
+            originalServiceTicketId: claimData.originalServiceTicketId,
+            customerId: claimData.customerId,
+            processedBy: options.createdBy,
+            clientId: clientId ?? createdClaim.clientId ?? null,
+            tx,
+          });
+        } else if (claimData.originalTransactionId) {
+          await this.createWarrantyServiceTicketFromSale({
+            claimId: createdClaim.id,
+            originalTransactionId: claimData.originalTransactionId,
+            customerId: claimData.customerId,
+            claimReason: claimData.claimReason,
+            processedBy: options.createdBy,
+            clientId: clientId ?? createdClaim.clientId ?? null,
+            tx,
+          });
+        }
       }
 
       return createdClaim;
@@ -3329,6 +3341,85 @@ export class DatabaseStorage implements IStorage {
       .where(eq(warrantyClaims.originalServiceTicketId, serviceTicketId));
 
     return legacyClaim ?? null;
+  }
+
+  private async createWarrantyServiceTicketFromSale(params: {
+    claimId: string;
+    originalTransactionId: string;
+    customerId: string;
+    claimReason?: string;
+    processedBy: string;
+    clientId: string | null;
+    tx?: any;
+  }): Promise<void> {
+    const { claimId, originalTransactionId, customerId, claimReason, processedBy, clientId, tx } = params;
+    const dbClient = tx || db;
+
+    const [originalTransaction] = await dbClient
+      .select()
+      .from(transactions)
+      .where(
+        clientId
+          ? and(eq(transactions.id, originalTransactionId), eq(transactions.clientId, clientId))
+          : eq(transactions.id, originalTransactionId)
+      );
+
+    if (!originalTransaction) {
+      throw new Error('Original transaction not found');
+    }
+
+    const soldItems = await dbClient
+      .select({
+        productName: products.name,
+        productBrand: products.brand,
+        productModel: products.model,
+      })
+      .from(transactionItems)
+      .leftJoin(products, eq(transactionItems.productId, products.id))
+      .where(eq(transactionItems.transactionId, originalTransactionId));
+
+    const primaryProduct = soldItems[0];
+    const productDescription = soldItems
+      .filter((item) => !!item.productName)
+      .map((item) => item.productName)
+      .join(', ');
+
+    const warrantyDuration = Number(originalTransaction.warrantyDuration ?? 0);
+    const now = getCurrentJakartaTime();
+    const warrantyEndDate = warrantyDuration > 0
+      ? new Date(now.getTime() + warrantyDuration * 24 * 60 * 60 * 1000)
+      : null;
+
+    const [warrantyTicket] = await dbClient
+      .insert(serviceTickets)
+      .values({
+        ticketNumber: `WS-${Date.now()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+        customerId,
+        deviceType: primaryProduct?.productName || 'Produk garansi',
+        deviceBrand: primaryProduct?.productBrand || null,
+        deviceModel: primaryProduct?.productModel || productDescription || null,
+        problem: `Warranty Service - Klaim dari transaksi ${originalTransaction.transactionNumber || originalTransactionId}${
+          claimReason ? ` - ${claimReason}` : ''
+        }`,
+        status: 'pending',
+        laborCost: '0.00',
+        estimatedCompletion: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+        warrantyDuration: warrantyDuration || null,
+        warrantyStartDate: now,
+        warrantyEndDate: warrantyEndDate ?? now,
+        clientId,
+      } as any)
+      .returning();
+
+    await this.updateWarrantyClaimStatus(
+      claimId,
+      'approved',
+      processedBy,
+      {
+        warrantyServiceTicketId: warrantyTicket?.id ?? null,
+      },
+      dbClient
+    );
   }
 
   // Private helper method for processing service warranty claims
