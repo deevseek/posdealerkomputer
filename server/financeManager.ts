@@ -1215,6 +1215,55 @@ export class FinanceManager {
       }
     }
 
+    // Fallback: derive sales revenue and HPP (COGS) directly from POS transaction items
+    // when ledger/financial record data is missing or incomplete.
+    if (totalSalesRevenueValue === 0 || totalCOGSValue === 0) {
+      const salesDateClause = buildWhereClause([
+        startDate ? gte(transactions.createdAt, startDate) : undefined,
+        endDate ? lte(transactions.createdAt, endDate) : undefined,
+      ]);
+
+      const salesItemRows = await db
+        .select({
+          createdAt: transactions.createdAt,
+          quantity: transactionItems.quantity,
+          unitPrice: transactionItems.unitPrice,
+          productAverageCost: products.averageCost,
+          productLastPurchasePrice: products.lastPurchasePrice,
+          productSellingPrice: products.sellingPrice,
+        })
+        .from(transactionItems)
+        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
+        .leftJoin(products, eq(transactionItems.productId, products.id))
+        .where(
+          salesDateClause ? and(eq(transactions.type, 'sale'), salesDateClause) : eq(transactions.type, 'sale')
+        );
+
+      let derivedSales = 0;
+      let derivedCOGS = 0;
+
+      for (const row of salesItemRows) {
+        const quantity = Number(row.quantity ?? 0);
+        const unitPrice = Number(row.unitPrice ?? 0);
+        const costBasis = Number(
+          row.productAverageCost ?? row.productLastPurchasePrice ?? row.productSellingPrice ?? 0
+        );
+
+        derivedSales += quantity * unitPrice;
+        derivedCOGS += quantity * costBasis;
+      }
+
+      if (derivedSales > 0) {
+        totalSalesRevenueValue = Number(Math.max(totalSalesRevenueValue, derivedSales).toFixed(2));
+      }
+
+      if (derivedCOGS > 0) {
+        totalCOGSValue = Number(Math.max(totalCOGSValue, derivedCOGS).toFixed(2));
+      }
+    }
+
+    grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
+
     const refundKeywordCondition = sql`
       (
         LOWER(${financialRecords.category}) LIKE '%refund%' OR
