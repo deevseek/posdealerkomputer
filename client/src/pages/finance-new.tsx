@@ -479,11 +479,12 @@ export default function FinanceNew() {
   const displayExpenseValue = Math.max(rawExpenseValue, 0);
   const totalRefundsValue = Math.max(parseAmount(summary?.totalRefunds), 0);
   const rawNetProfitValue = parseAmount(summary?.netProfit);
-  const safeNetProfitValue = rawNetProfitValue > totalIncomeValue ? totalIncomeValue : rawNetProfitValue;
-  const isNetProfitAdjusted = safeNetProfitValue !== rawNetProfitValue;
+  const grossProfitValue = parseAmount(summary?.grossProfit);
   const totalSalesRevenueValue = parseAmount(summary?.totalSalesRevenue);
   const totalCOGSValue = Math.max(parseAmount(summary?.totalCOGS), 0);
   const inventoryValue = parseAmount(summary?.inventoryValue);
+  const netProfitIsPositive = rawNetProfitValue >= 0;
+  const netProfitTextClass = netProfitIsPositive ? 'text-emerald-600' : 'text-red-600';
 
   const categoriesBreakdown: Record<string, { income: number; expense: number; count: number }> =
     summary?.breakdown?.categories ?? {};
@@ -776,7 +777,7 @@ export default function FinanceNew() {
             </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7"> 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
@@ -828,16 +829,34 @@ export default function FinanceNew() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Laba Kotor</CardTitle>
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">
+              {formatCurrency(grossProfitValue)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              Penjualan bersih: {formatCurrency(totalSalesRevenueValue - totalRefundsValue)}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              HPP: {formatCurrency(totalCOGSValue)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Laba Bersih</CardTitle>
             <DollarSign className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">
-              {formatCurrency(safeNetProfitValue)}
+            <div className={`text-2xl font-bold ${netProfitTextClass}`}>
+              {formatCurrency(rawNetProfitValue)}
             </div>
-            {isNetProfitAdjusted && (
+            {!netProfitIsPositive && (
               <div className="text-xs text-amber-600 mt-1">
-                Nilai laba bersih dikoreksi agar tidak melebihi pendapatan tercatat.
+                Pengeluaran lebih besar dari pemasukan pada periode ini.
               </div>
             )}
             <div className="text-xs text-muted-foreground mt-1">
