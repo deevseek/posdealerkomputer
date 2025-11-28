@@ -728,84 +728,94 @@ export class FinanceManager {
   }> {
     const start = startDate || new Date(new Date().getFullYear(), 0, 1); // Beginning of year
     const end = endDate || new Date();
-    
-    // Get revenue and expense accounts with their activity in the period
-    const revenueAndExpenseAccounts = await db.select({
-      id: accounts.id,
-      code: accounts.code,
-      name: accounts.name,
-      type: accounts.type,
-      subtype: accounts.subtype,
-      normalBalance: accounts.normalBalance
-    })
-    .from(accounts)
-    .where(and(
-      eq(accounts.isActive, true),
-      sql`${accounts.type} IN ('revenue', 'expense')`
-    ))
-    .orderBy(accounts.code);
 
     const revenue: any = {};
     const expenses: any = {};
     let totalRevenue = 0;
     let totalExpenses = 0;
 
-    // Calculate account activity for the period, ONLY for 'confirmed' financial records
-    for (const account of revenueAndExpenseAccounts) {
-      // Get journal entry lines for this account in the period
-      const activityQuery = await db.select({
+    // Pull all posted revenue & expense activity for the period in a single query to avoid
+    // under/over counting and to keep the calculation consistent with ledger data.
+    const ledgerRows = await db
+      .select({
+        accountId: accounts.id,
+        code: accounts.code,
+        name: accounts.name,
+        type: accounts.type,
+        subtype: accounts.subtype,
+        normalBalance: accounts.normalBalance,
         debitAmount: journalEntryLines.debitAmount,
         creditAmount: journalEntryLines.creditAmount
       })
       .from(journalEntryLines)
       .innerJoin(journalEntries, eq(journalEntryLines.journalEntryId, journalEntries.id))
+      .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
       .where(and(
-        eq(journalEntryLines.accountId, account.id),
+        eq(journalEntries.status, 'posted'),
         gte(journalEntries.date, start),
         lte(journalEntries.date, end),
-        eq(journalEntries.status, 'posted')
-      ));
+        eq(accounts.isActive, true),
+        sql`${accounts.type} IN ('revenue', 'expense')`
+      ))
+      .orderBy(accounts.code);
 
-      // Filter only 'confirmed' financial records for this account
-      // ...existing code...
-      let periodActivity = 0;
-      activityQuery.forEach((line) => {
-        const debit = Number(line.debitAmount ?? 0);
-        const credit = Number(line.creditAmount ?? 0);
-        if (account.normalBalance === 'credit') {
-          periodActivity += credit - debit;
-        } else {
-          periodActivity += debit - credit;
-        }
-      });
+    const accountActivity = new Map<string, {
+      name: string;
+      code: string;
+      type: 'revenue' | 'expense';
+      subtype: string | null;
+      normalBalance: 'debit' | 'credit';
+      amount: number;
+    }>();
 
-      // Only include accounts with activity
-      if (Math.abs(periodActivity) > 0.01) {
-        const accountInfo = {
-          name: account.name,
-          amount: periodActivity,
-          code: account.code
-        };
+    ledgerRows.forEach((row) => {
+      const debit = Number(row.debitAmount ?? 0);
+      const credit = Number(row.creditAmount ?? 0);
+      const signedAmount = row.normalBalance === 'credit' ? credit - debit : debit - credit;
 
-        if (account.type === 'revenue') {
-          const category = account.subtype || 'Other Revenue';
-          if (!revenue[category]) {
-            revenue[category] = { accounts: [], total: 0 };
-          }
-          revenue[category].accounts.push(accountInfo);
-          revenue[category].total += periodActivity;
-          totalRevenue += periodActivity;
-        } else if (account.type === 'expense') {
-          const category = account.subtype || 'Other Expenses';
-          if (!expenses[category]) {
-            expenses[category] = { accounts: [], total: 0 };
-          }
-          expenses[category].accounts.push(accountInfo);
-          expenses[category].total += periodActivity;
-          totalExpenses += periodActivity;
-        }
+      const existing = accountActivity.get(row.accountId) ?? {
+        name: row.name,
+        code: row.code,
+        type: row.type as 'revenue' | 'expense',
+        subtype: row.subtype,
+        normalBalance: row.normalBalance as 'debit' | 'credit',
+        amount: 0
+      };
+
+      existing.amount += signedAmount;
+      accountActivity.set(row.accountId, existing);
+    });
+
+    // Summarize per account into the income statement buckets
+    accountActivity.forEach((account) => {
+      if (Math.abs(account.amount) <= 0.01) {
+        return;
       }
-    }
+
+      const accountInfo = {
+        name: account.name,
+        amount: Number(account.amount.toFixed(2)),
+        code: account.code
+      };
+
+      if (account.type === 'revenue') {
+        const category = account.subtype || 'Other Revenue';
+        if (!revenue[category]) {
+          revenue[category] = { accounts: [], total: 0 };
+        }
+        revenue[category].accounts.push(accountInfo);
+        revenue[category].total += accountInfo.amount;
+        totalRevenue += accountInfo.amount;
+      } else if (account.type === 'expense') {
+        const category = account.subtype || 'Other Expenses';
+        if (!expenses[category]) {
+          expenses[category] = { accounts: [], total: 0 };
+        }
+        expenses[category].accounts.push(accountInfo);
+        expenses[category].total += accountInfo.amount;
+        totalExpenses += accountInfo.amount;
+      }
+    });
 
     // Calculate gross profit (Revenue - COGS)
     const cogs = expenses['cost_of_goods_sold']?.total || 0;
