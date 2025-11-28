@@ -500,7 +500,8 @@ export class FinanceManager {
         paymentMethod,
         tags,
         status: 'confirmed',
-        userId: data.userId
+        userId: data.userId,
+        clientId: data.clientId ?? null,
       }).returning();
 
       // Create corresponding journal entries

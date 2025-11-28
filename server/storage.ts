@@ -61,7 +61,7 @@ import {
   type InsertWarrantyClaim,
 } from "@shared/schema";
 import { db, getCurrentTenantContext } from "./db";
-import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt, ne, type SQL } from "drizzle-orm";
+import { eq, desc, asc, and, or, gte, lte, like, ilike, count, sum, sql, isNotNull, isNull, gt, ne, inArray, type SQL } from "drizzle-orm";
 import {
   getCurrentJakartaTime,
   toJakartaTime,
@@ -1487,6 +1487,24 @@ export class DatabaseStorage implements IStorage {
         transactionId: transaction.id,
       }));
       await tx.insert(transactionItems).values(itemsWithTransactionId);
+
+      // Load product cost information for accurate COGS calculation
+      const productIds = [...new Set(items.map((item) => item.productId))];
+      const productsById = new Map<string, any>();
+
+      if (productIds.length > 0) {
+        const productRows = await tx
+          .select({
+            id: products.id,
+            averageCost: products.averageCost,
+            lastPurchasePrice: products.lastPurchasePrice,
+            sellingPrice: products.sellingPrice,
+          })
+          .from(products)
+          .where(inArray(products.id, productIds));
+
+        productRows.forEach((product) => productsById.set(product.id, product));
+      }
       
       // Update stock for sales
       if (transactionData.type === 'sale') {
@@ -1512,45 +1530,50 @@ export class DatabaseStorage implements IStorage {
           });
         }
 
-        // Create financial records via new finance manager
+        // Create journaled financial records via finance manager
         try {
           const { financeManager } = await import('./financeManager');
-          
+
           // Record revenue (income)
-          await financeManager.createTransaction({
+          await financeManager.createTransactionWithJournal({
             type: 'income',
-            category: 'Sales Revenue',
-            subcategory: 'Product Sales',
+            category: 'Product Sales',
+            subcategory: 'Sales',
             amount: transaction.total,
-            description: `Penjualan ${transaction.transactionNumber}`,
-            referenceType: 'sale',
+            description: `POS Sale ${transaction.transactionNumber}`,
+            referenceType: 'pos_sale',
             reference: transaction.id,
             paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
-            userId: transaction.userId
-          });
+            userId: transaction.userId,
+            clientId: transaction.clientId,
+          }, tx);
 
-          // Calculate and record COGS (Cost of Goods Sold) using average purchase price
-          let totalCOGS = 0;
-          for (const item of items) {
-            // Use weighted average purchase price instead of current product price
-            const averagePrice = await this.getAveragePurchasePrice(item.productId);
-            const itemCOGS = averagePrice * item.quantity;
-            totalCOGS += itemCOGS;
-          }
+          // Calculate and record COGS (Cost of Goods Sold)
+          const totalCOGS = items.reduce((sum, item) => {
+            const product = productsById.get(item.productId);
+            const costBasis = Number(
+              (product as any)?.hpp ??
+              product?.averageCost ??
+              product?.lastPurchasePrice ??
+              product?.sellingPrice ??
+              0
+            );
+            return sum + Number(item.quantity) * costBasis;
+          }, 0);
 
-          // Record COGS as expense
           if (totalCOGS > 0) {
-            await financeManager.createTransaction({
+            await financeManager.createTransactionWithJournal({
               type: 'expense',
               category: 'Cost of Goods Sold',
-              subcategory: 'Product Cost',
+              subcategory: 'POS COGS',
               amount: totalCOGS.toString(),
-              description: `COGS - ${transaction.transactionNumber}`,
-              referenceType: 'sale',
+              description: `HPP POS ${transaction.transactionNumber}`,
+              referenceType: 'pos_cogs',
               reference: transaction.id,
-              paymentMethod: 'system',
-              userId: transaction.userId
-            });
+              paymentMethod: 'inventory',
+              userId: transaction.userId,
+              clientId: transaction.clientId,
+            }, tx);
           }
         } catch (error) {
           console.error("Error creating financial records via finance manager:", error);
@@ -1685,6 +1708,8 @@ export class DatabaseStorage implements IStorage {
         await tx.delete(serviceTicketParts).where(eq(serviceTicketParts.serviceTicketId, id));
         
         let totalPartsCost = 0;
+        let totalPartsRevenue = 0;
+        let totalPartsHPP = 0;
         
         // Add new parts and handle stock based on status
         for (const part of parts) {
@@ -1748,8 +1773,17 @@ export class DatabaseStorage implements IStorage {
             //   })
             //   .where(eq(products.id, part.productId));
           }
-          
+
           totalPartsCost += parseFloat(totalPrice);
+          totalPartsRevenue += parseFloat(totalPrice);
+
+          const costBasis = Number(
+            product.averageCost ||
+            product.lastPurchasePrice ||
+            product.sellingPrice ||
+            0
+          );
+          totalPartsHPP += costBasis * part.quantity;
         }
         
         // Update ticket with parts cost
@@ -1772,41 +1806,55 @@ export class DatabaseStorage implements IStorage {
       if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
         try {
           const { financeManager } = await import('./financeManager');
-          
-          // Record labor cost as income if exists
-          if (ticket.laborCost && parseFloat(ticket.laborCost) > 0) {
-            await financeManager.recordLaborCost(
-              ticket.id,
-              ticket.laborCost,
-              `${ticket.ticketNumber}: ${ticket.problem}`,
-              userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
-            );
-          }
-          
-          // Record parts costs and revenue for each part used
-          if (parts && parts.length > 0) {
-            for (const part of parts) {
-              // Get product details to get modal price
-              const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
-              if (product) {
-                // Use best available cost information to avoid zero-cost COGS on services
-                const costPrice = (
-                  product.averageCost ||
-                  product.lastPurchasePrice ||
-                  product.sellingPrice ||
-                  '0'
-                ).toString();
+          const paymentMethod = (ticket as any)?.paymentMethod || 'cash';
 
-                await financeManager.recordPartsCost(
-                  ticket.id,
-                  product.name,
-                  part.quantity,
-                  costPrice,
-                  part.unitPrice, // selling price
-                  userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
-                );
-              }
-            }
+          // Record labor revenue
+          const laborAmount = Number(ticket.laborCost || 0);
+          if (laborAmount > 0) {
+            await financeManager.createTransactionWithJournal({
+              type: 'income',
+              category: 'Service Revenue',
+              subcategory: 'Labor',
+              amount: laborAmount.toString(),
+              description: `Service Labor ${ticket.id}`,
+              referenceType: 'service_labor',
+              reference: ticket.id,
+              paymentMethod,
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+              clientId: ticket.clientId,
+            }, tx);
+          }
+
+          // Record parts revenue
+          if (totalPartsRevenue > 0) {
+            await financeManager.createTransactionWithJournal({
+              type: 'income',
+              category: 'Parts Revenue',
+              subcategory: 'Parts',
+              amount: totalPartsRevenue.toString(),
+              description: `Service Parts ${ticket.id}`,
+              referenceType: 'service_parts',
+              reference: ticket.id,
+              paymentMethod,
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+              clientId: ticket.clientId,
+            }, tx);
+          }
+
+          // Record COGS for spare parts
+          if (totalPartsHPP > 0) {
+            await financeManager.createTransactionWithJournal({
+              type: 'expense',
+              category: 'Cost of Goods Sold',
+              subcategory: 'Service COGS',
+              amount: totalPartsHPP.toString(),
+              description: `HPP Service ${ticket.id}`,
+              referenceType: 'service_cogs',
+              reference: ticket.id,
+              paymentMethod: 'inventory',
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+              clientId: ticket.clientId,
+            }, tx);
           }
         } catch (error) {
           console.error("Error recording service financial transactions:", error);
