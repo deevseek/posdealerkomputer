@@ -14,10 +14,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign, Plus, Tag, Download, Upload, FileSpreadsheet } from "lucide-react";
+import { Search, Package, AlertTriangle, History, TrendingUp, DollarSign, Plus, Tag, Download, Upload, FileSpreadsheet, Trash2 } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -565,6 +576,28 @@ export default function Inventory() {
   // Connect to WebSocket for real-time updates
   const { isConnected } = useWebSocket();
 
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: string) => {
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete product');
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({ title: "Produk dihapus", description: "Produk berhasil dihapus." });
+    },
+    onError: () => {
+      toast({ title: "Gagal", description: "Gagal menghapus produk", variant: "destructive" });
+    },
+  });
+
   // Import/Export handlers
   const handleDownloadTemplate = async () => {
     try {
@@ -908,6 +941,7 @@ export default function Inventory() {
                       <TableBody>
                         {filteredProducts.map((product: any) => {
                           const stockStatus = getStockStatus(product);
+                          const isDeleting = deleteProductMutation.isPending && deleteProductMutation.variables === product.id;
                           return (
                             <TableRow key={product.id}>
                               <TableCell>
@@ -916,18 +950,10 @@ export default function Inventory() {
                                   <p className="text-sm text-muted-foreground">{product.description}</p>
                                 </div>
                               </TableCell>
-                              <TableCell data-testid={`product-sku-${product.id}`}>{product.sku || "-"}</TableCell>
                               <TableCell className="text-right">
                                 <span className={`font-bold text-lg ${stockStatus.color}`} data-testid={`product-stock-${product.id}`}>{stockStatus.stock}</span>
                               </TableCell>
                               <TableCell className="text-right text-muted-foreground">{product.minStock || 5}</TableCell>
-                              <TableCell className="text-right">
-                                <div className="space-y-1">
-                                  <div className="font-medium">Rp {Number(product.averageCost || 0).toLocaleString('id-ID')}</div>
-                                  <div className="text-xs text-muted-foreground">Last: Rp {Number(product.lastPurchasePrice || 0).toLocaleString('id-ID')}</div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}</TableCell>
                               <TableCell><Badge variant={stockStatus.variant}>{stockStatus.text}</Badge></TableCell>
                             </TableRow>
                           );
@@ -1019,11 +1045,13 @@ export default function Inventory() {
                           <TableHead className="text-right">HPP (Harga Pokok)</TableHead>
                           <TableHead className="text-right">Harga Jual</TableHead>
                           <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {filteredProducts.map((product: any) => {
                           const stockStatus = getStockStatus(product);
+                          const isDeleting = deleteProductMutation.isPending && deleteProductMutation.variables === product.id;
                           return (
                             <TableRow key={product.id}>
                               <TableCell>
@@ -1045,6 +1073,38 @@ export default function Inventory() {
                               </TableCell>
                               <TableCell className="text-right">Rp {Number(product.sellingPrice || 0).toLocaleString('id-ID')}</TableCell>
                               <TableCell><Badge variant={stockStatus.variant}>{stockStatus.text}</Badge></TableCell>
+                              <TableCell className="text-right">
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      data-testid={`delete-product-${product.id}`}
+                                      disabled={isDeleting}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      {isDeleting ? 'Menghapus...' : 'Hapus'}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Hapus produk ini?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Produk akan dinonaktifkan dari inventori dan tidak lagi muncul di daftar produk.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Batal</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        className="bg-red-600 hover:bg-red-700"
+                                        onClick={() => deleteProductMutation.mutate(product.id)}
+                                      >
+                                        Konfirmasi Hapus
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </TableCell>
                             </TableRow>
                           );
                         })}
