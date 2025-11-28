@@ -1823,13 +1823,10 @@ export class FinanceManager {
     netExpenseValue = Number(Math.max(netExpenseValue, 0).toFixed(2));
     totalExpenseValue = Number(Math.max(totalExpenseValue, netExpenseValue).toFixed(2));
 
-    const netProfitValue = Number((totalIncomeValue - netExpenseValue).toFixed(2));
-    const normalizedNetProfitValue = Number(Math.min(netProfitValue, totalIncomeValue).toFixed(2));
-
     return {
       totalIncome: totalIncomeValue.toString(),
       totalExpense: totalExpenseValue.toString(),
-      netProfit: normalizedNetProfitValue.toString(),
+      netProfit: Number((totalIncomeValue - netExpenseValue).toFixed(2)).toString(),
       grossProfit: grossProfitValue.toString(),
       totalSalesRevenue: totalSalesRevenueValue.toString(),
       totalCOGS: totalCOGSValue.toString(),
