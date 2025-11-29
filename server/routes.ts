@@ -2542,15 +2542,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/finance/transactions', isAuthenticated, async (req, res) => {
     try {
       const { type, category, startDate, endDate, referenceType } = req.query;
+
+      const now = getCurrentJakartaTime();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
       const filters = {
         type: type as string,
         category: category as string,
         startDate: startDate
           ? getStartOfDayJakarta(parseWithTimezone(startDate as string, false))
-          : getStartOfDayJakarta(),
+          : getStartOfDayJakarta(monthStart),
         endDate: endDate
           ? getEndOfDayJakarta(parseWithTimezone(endDate as string, false))
-          : getEndOfDayJakarta(),
+          : getEndOfDayJakarta(now),
         referenceType: referenceType as string
       };
       const transactions = await financeManager.getTransactions(filters);
@@ -2582,12 +2586,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { startDate, endDate } = req.query;
 
+      const now = getCurrentJakartaTime();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
       const parsedStart = startDate
         ? getStartOfDayJakarta(parseWithTimezone(startDate as string, false))
-        : getStartOfDayJakarta();
+        : getStartOfDayJakarta(monthStart);
       const parsedEnd = endDate
         ? getEndOfDayJakarta(parseWithTimezone(endDate as string, false))
-        : getEndOfDayJakarta();
+        : getEndOfDayJakarta(now);
 
       const summary = await financeManager.getSummary(parsedStart, parsedEnd);
       res.json(summary);
