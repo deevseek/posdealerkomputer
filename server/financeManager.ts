@@ -1255,6 +1255,25 @@ export class FinanceManager {
 
       if (derivedSales > 0) {
         totalSalesRevenueValue = Number(Math.max(totalSalesRevenueValue, derivedSales).toFixed(2));
+        // Ensure total income captures fallback POS revenue when ledger/financial records are missing
+        if (totalIncomeValue === 0) {
+          totalIncomeValue = Number(Math.max(totalIncomeValue, derivedSales).toFixed(2));
+
+          // Seed fallback category and subcategory data so the UI doesn't show empty breakdowns
+          const fallbackCategoryKey = 'Sales Revenue (POS Fallback)';
+          categoryTotals.set(fallbackCategoryKey, {
+            income: derivedSales,
+            expense: 0,
+            entryIds: new Set<string>(['pos-fallback-sales'])
+          });
+
+          const fallbackSubcategoryKey = 'POS Sales (Derived)';
+          subcategoryTotals.set(fallbackSubcategoryKey, {
+            netAmount: derivedSales,
+            accountType: 'revenue',
+            entryIds: new Set<string>(['pos-fallback-sales'])
+          });
+        }
       }
 
       if (derivedCOGS > 0) {
