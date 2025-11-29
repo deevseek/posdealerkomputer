@@ -256,9 +256,11 @@ export default function FinanceNew() {
   });
 
   // Date filters
-  const todayIso = new Date().toISOString().split('T')[0];
+  const today = new Date();
+  const todayIso = today.toISOString().split('T')[0];
+  const monthStartIso = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
   const [dateFilter, setDateFilter] = useState({
-    startDate: todayIso,
+    startDate: monthStartIso,
     endDate: todayIso
   });
 
@@ -750,11 +752,9 @@ export default function FinanceNew() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const now = new Date();
-                      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
                       setDateFilter({
-                        startDate: monthStart.toISOString().split('T')[0],
-                        endDate: now.toISOString().split('T')[0]
+                        startDate: monthStartIso,
+                        endDate: todayIso
                       });
                     }}
                   >
@@ -765,14 +765,14 @@ export default function FinanceNew() {
                     variant="ghost"
                     size="sm"
                     className="gap-2"
-                    onClick={() => setDateFilter({ startDate: todayIso, endDate: todayIso })}
+                    onClick={() => setDateFilter({ startDate: monthStartIso, endDate: todayIso })}
                   >
-                    <RotateCcw className="w-4 h-4" /> Reset ke hari ini
+                    <RotateCcw className="w-4 h-4" /> Reset ke bulan ini
                   </Button>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                Data laporan otomatis difokuskan ke hari ini agar laba rugi tidak tercampur dengan transaksi lama. Gunakan tombol di atas jika ingin melihat rentang lain.
+                Data laporan kini otomatis menggunakan rentang bulan berjalan agar transaksi POS dan servis terbaru langsung terlihat. Gunakan tombol di atas untuk menyesuaikan periode jika diperlukan.
               </p>
             </div>
 
