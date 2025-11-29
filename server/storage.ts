@@ -72,7 +72,7 @@ import {
   createJakartaTimestamp,
   createDatabaseTimestamp
 } from "@shared/utils/timezone";
-import { FinanceManager } from "./financeManager";
+import { financeManager } from "./financeManager";
 
 type WarrantyClaimItemDetail = {
   transactionItemId: string;
@@ -1532,10 +1532,8 @@ export class DatabaseStorage implements IStorage {
 
         // Create journaled financial records via finance manager
         try {
-          const { financeManager } = await import('./financeManager');
-
           // Record revenue (income)
-          await financeManager.createTransactionWithJournal({
+          const saleIncomeResult = await financeManager.createTransactionWithJournal({
             type: 'income',
             category: 'Product Sales',
             subcategory: 'Sales',
@@ -1547,6 +1545,10 @@ export class DatabaseStorage implements IStorage {
             userId: transaction.userId,
             clientId: transaction.clientId,
           }, tx);
+
+          if (!saleIncomeResult.success) {
+            throw new Error(saleIncomeResult.error || 'Failed to record POS sale income');
+          }
 
           // Calculate and record COGS (Cost of Goods Sold)
           const totalCOGS = items.reduce((sum, item) => {
@@ -1562,7 +1564,7 @@ export class DatabaseStorage implements IStorage {
           }, 0);
 
           if (totalCOGS > 0) {
-            await financeManager.createTransactionWithJournal({
+            const cogsResult = await financeManager.createTransactionWithJournal({
               type: 'expense',
               category: 'Cost of Goods Sold',
               subcategory: 'POS COGS',
@@ -1574,9 +1576,14 @@ export class DatabaseStorage implements IStorage {
               userId: transaction.userId,
               clientId: transaction.clientId,
             }, tx);
+
+            if (!cogsResult.success) {
+              throw new Error(cogsResult.error || 'Failed to record POS COGS');
+            }
           }
         } catch (error) {
           console.error("Error creating financial records via finance manager:", error);
+          throw error;
         }
       }
       
@@ -1805,13 +1812,12 @@ export class DatabaseStorage implements IStorage {
       // Auto-record financial transactions for completed services
       if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
         try {
-          const { financeManager } = await import('./financeManager');
           const paymentMethod = (ticket as any)?.paymentMethod || 'cash';
 
           // Record labor revenue
           const laborAmount = Number(ticket.laborCost || 0);
           if (laborAmount > 0) {
-            await financeManager.createTransactionWithJournal({
+            const laborResult = await financeManager.createTransactionWithJournal({
               type: 'income',
               category: 'Service Revenue',
               subcategory: 'Labor',
@@ -1823,11 +1829,15 @@ export class DatabaseStorage implements IStorage {
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
               clientId: ticket.clientId,
             }, tx);
+
+            if (!laborResult.success) {
+              throw new Error(laborResult.error || 'Failed to record service labor income');
+            }
           }
 
           // Record parts revenue
           if (totalPartsRevenue > 0) {
-            await financeManager.createTransactionWithJournal({
+            const partsResult = await financeManager.createTransactionWithJournal({
               type: 'income',
               category: 'Parts Revenue',
               subcategory: 'Parts',
@@ -1839,11 +1849,15 @@ export class DatabaseStorage implements IStorage {
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
               clientId: ticket.clientId,
             }, tx);
+
+            if (!partsResult.success) {
+              throw new Error(partsResult.error || 'Failed to record service parts income');
+            }
           }
 
           // Record COGS for spare parts
           if (totalPartsHPP > 0) {
-            await financeManager.createTransactionWithJournal({
+            const serviceCogsResult = await financeManager.createTransactionWithJournal({
               type: 'expense',
               category: 'Cost of Goods Sold',
               subcategory: 'Service COGS',
@@ -1855,9 +1869,14 @@ export class DatabaseStorage implements IStorage {
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
               clientId: ticket.clientId,
             }, tx);
+
+            if (!serviceCogsResult.success) {
+              throw new Error(serviceCogsResult.error || 'Failed to record service COGS');
+            }
           }
         } catch (error) {
           console.error("Error recording service financial transactions:", error);
+          throw error;
         }
       }
       
