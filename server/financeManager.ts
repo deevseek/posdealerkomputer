@@ -1190,7 +1190,10 @@ export class FinanceManager {
       totalInventoryValue += value;
     }
 
-    const netProfit = totalIncome - totalExpense;
+    // Refunds are recorded as expenses for cash tracking but also reduce income to show net sales.
+    // Without adding them back, net profit would subtract refunds twice (once via income reduction
+    // and once via expense). We adjust the calculation to only impact profit once.
+    const netProfit = totalIncome - totalExpense + totalRefunds;
     const grossProfit = totalSalesRevenue - totalCOGS;
 
     return {
