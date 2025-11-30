@@ -241,16 +241,17 @@ export const transactions = pgTable("transactions", {
   supplierId: varchar("supplier_id").references(() => suppliers.id),
   userId: varchar("user_id").references(() => users.id).notNull(),
   subtotal: decimal("subtotal", { precision: 12, scale: 2 }).notNull(),
-  taxAmount: decimal("tax_amount", { precision: 12, scale: 2 }).default('0.00'),
+  taxAmount: decimal("tax_amount", { precision: 12, scale: 2 }).notNull().default('0.00'),
   discountAmount: decimal("discount_amount", { precision: 12, scale: 2 }).default('0.00'),
   total: decimal("total", { precision: 12, scale: 2 }).notNull(),
+  totalPrice: decimal("total_price", { precision: 12, scale: 2 }).notNull().default('0.00'),
   paymentMethod: paymentMethodEnum("payment_method"),
   notes: text("notes"),
   // Warranty fields
   warrantyDuration: integer("warranty_duration"), // Duration in days
   warrantyStartDate: timestamp("warranty_start_date", { withTimezone: true }).default(sql`now()`),
   warrantyEndDate: timestamp("warranty_end_date", { withTimezone: true }).default(sql`now()`),
-  createdAt: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
 });
 
 // Transaction Items

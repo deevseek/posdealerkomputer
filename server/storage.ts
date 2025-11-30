@@ -1478,13 +1478,22 @@ export class DatabaseStorage implements IStorage {
 
   async createTransaction(transactionData: InsertTransaction, items: InsertTransactionItem[]): Promise<Transaction> {
     return await db.transaction(async (tx) => {
+      const resolvedClientId = this.resolveClientId(transactionData.clientId);
+      const normalizedTransactionData = {
+        ...transactionData,
+        clientId: resolvedClientId,
+        taxAmount: transactionData.taxAmount ?? '0',
+        totalPrice: transactionData.totalPrice ?? transactionData.total ?? transactionData.subtotal,
+      } as InsertTransaction;
+
       // Create transaction
-      const [transaction] = await tx.insert(transactions).values(transactionData as any).returning();
-      
+      const [transaction] = await tx.insert(transactions).values(normalizedTransactionData as any).returning();
+
       // Create transaction items
       const itemsWithTransactionId = items.map(item => ({
         ...item,
         transactionId: transaction.id,
+        clientId: resolvedClientId,
       }));
       await tx.insert(transactionItems).values(itemsWithTransactionId);
 
@@ -1493,6 +1502,10 @@ export class DatabaseStorage implements IStorage {
       const productsById = new Map<string, any>();
 
       if (productIds.length > 0) {
+        const productWhere = resolvedClientId
+          ? and(inArray(products.id, productIds), eq(products.clientId, resolvedClientId))
+          : inArray(products.id, productIds);
+
         const productRows = await tx
           .select({
             id: products.id,
@@ -1501,7 +1514,7 @@ export class DatabaseStorage implements IStorage {
             sellingPrice: products.sellingPrice,
           })
           .from(products)
-          .where(inArray(products.id, productIds));
+          .where(productWhere);
 
         productRows.forEach((product) => productsById.set(product.id, product));
       }
@@ -1509,14 +1522,18 @@ export class DatabaseStorage implements IStorage {
       // Update stock for sales
       if (transactionData.type === 'sale') {
         for (const item of items) {
+          const productWhere = resolvedClientId
+            ? and(eq(products.id, item.productId), eq(products.clientId, resolvedClientId))
+            : eq(products.id, item.productId);
+
           await tx
             .update(products)
-            .set({ 
+            .set({
               stock: sql`${products.stock} - ${item.quantity}`,
               updatedAt: new Date()
             })
-            .where(eq(products.id, item.productId));
-          
+            .where(productWhere);
+
           // Create stock movement record
           await tx.insert(stockMovements).values({
             productId: item.productId,
@@ -1527,6 +1544,7 @@ export class DatabaseStorage implements IStorage {
             referenceType: 'sale',
             notes: `Penjualan - ${transaction.transactionNumber}`,
             userId: transaction.userId,
+            clientId: resolvedClientId,
           });
         }
 
@@ -1737,7 +1755,8 @@ export class DatabaseStorage implements IStorage {
             productId: part.productId,
             quantity: part.quantity,
             unitPrice: unitPrice,
-            totalPrice: totalPrice
+            totalPrice: totalPrice,
+            clientId: ticket.clientId,
           });
           
           // Only update stock and record movement for completed/delivered status
@@ -1767,7 +1786,8 @@ export class DatabaseStorage implements IStorage {
               referenceId: id,
               referenceType: 'service',
               notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
-              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053'
+              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+              clientId: ticket.clientId,
             });
           } else {
             // For non-completed status, just reserve stock (optional - estimate only)
@@ -1843,7 +1863,7 @@ export class DatabaseStorage implements IStorage {
               subcategory: 'Parts',
               amount: totalPartsRevenue.toString(),
               description: `Service Parts ${ticket.id}`,
-              referenceType: 'service_parts',
+              referenceType: 'service_parts_revenue',
               reference: ticket.id,
               paymentMethod,
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
@@ -1863,7 +1883,7 @@ export class DatabaseStorage implements IStorage {
               subcategory: 'Service COGS',
               amount: totalPartsHPP.toString(),
               description: `HPP Service ${ticket.id}`,
-              referenceType: 'service_cogs',
+              referenceType: 'service_parts_cost',
               reference: ticket.id,
               paymentMethod: 'inventory',
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
@@ -1997,7 +2017,8 @@ export class DatabaseStorage implements IStorage {
                   referenceId: id,
                   referenceType: 'service',
                   notes: `Dikembalikan dari pembatalan servis ${ticket.ticketNumber}`,
-                  userId: data.userId
+                  userId: data.userId,
+                  clientId: ticket.clientId,
                 });
               }
             }
@@ -2050,7 +2071,8 @@ export class DatabaseStorage implements IStorage {
                   referenceId: id,
                   referenceType: 'warranty_return',
                   notes: `Retur garansi - kondisi barang normal, dapat dijual kembali. ${ticket.ticketNumber}`,
-                  userId: data.userId
+                  userId: data.userId,
+                  clientId: ticket.clientId,
                 });
 
                 // Setelah barang diambil/tukar untuk klaim, kurangi stok normal
@@ -2069,7 +2091,8 @@ export class DatabaseStorage implements IStorage {
                   referenceId: id,
                   referenceType: 'warranty_exchange',
                   notes: `Barang diambil/tukar untuk klaim garansi. ${ticket.ticketNumber}`,
-                  userId: data.userId
+                  userId: data.userId,
+                  clientId: ticket.clientId,
                 });
               }
             }
@@ -2232,83 +2255,95 @@ export class DatabaseStorage implements IStorage {
     };
     tickets: any[];
   }> {
+    const clientId = this.resolveClientId();
+    const buildWhere = (conditions: any[]) => {
+      const filtered = conditions.filter(Boolean);
+      if (filtered.length === 0) return undefined;
+      if (filtered.length === 1) return filtered[0];
+      return and(...filtered);
+    };
     // Use same method as financeManager for consistency
     try {
       const { financeManager } = await import('./financeManager');
       const summary = await financeManager.getSummary(startDate, endDate);
       
       // Get service-specific financial data
+      const incomeWhere = buildWhere([
+        eq(financialRecords.type, 'income'),
+        or(
+          eq(financialRecords.referenceType, 'service_labor'),
+          eq(financialRecords.referenceType, 'service_parts_revenue')
+        ),
+        eq(financialRecords.status, 'confirmed'),
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        clientId ? eq(financialRecords.clientId, clientId) : undefined
+      ]);
+
       const [serviceIncomeResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'income'),
-            or(
-              eq(financialRecords.referenceType, 'service_labor'),
-              eq(financialRecords.referenceType, 'service_parts_revenue')
-            ),
-            eq(financialRecords.status, 'confirmed'),
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        );
+        .where(incomeWhere ?? undefined);
+
+      const serviceCostWhere = buildWhere([
+        eq(financialRecords.type, 'expense'),
+        or(
+          eq(financialRecords.referenceType, 'service_parts_cost'),
+          eq(financialRecords.referenceType, 'service_cancellation_service_reversal'),
+          eq(financialRecords.referenceType, 'service_cancellation_parts_reversal'),
+          eq(financialRecords.referenceType, 'warranty_labor_reversal'),
+          eq(financialRecords.referenceType, 'warranty_parts_reversal')
+        ),
+        eq(financialRecords.status, 'confirmed'),
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        clientId ? eq(financialRecords.clientId, clientId) : undefined
+      ]);
 
       const [serviceCostResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'expense'),
-            or(
-              eq(financialRecords.referenceType, 'service_parts_cost'),
-              eq(financialRecords.referenceType, 'service_cancellation_service_reversal'),
-              eq(financialRecords.referenceType, 'service_cancellation_parts_reversal'),
-              eq(financialRecords.referenceType, 'warranty_labor_reversal'),
-              eq(financialRecords.referenceType, 'warranty_parts_reversal')
-            ),
-            eq(financialRecords.status, 'confirmed'),
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        );
+        .where(serviceCostWhere ?? undefined);
 
       // Get labor revenue
+      const laborWhere = buildWhere([
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.referenceType, 'service_labor'),
+        eq(financialRecords.status, 'confirmed'),
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        clientId ? eq(financialRecords.clientId, clientId) : undefined
+      ]);
+
       const [laborRevenueResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'income'),
-            eq(financialRecords.referenceType, 'service_labor'),
-            eq(financialRecords.status, 'confirmed'),
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        );
+        .where(laborWhere ?? undefined);
 
       // Get parts revenue
+      const partsWhere = buildWhere([
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.referenceType, 'service_parts_revenue'),
+        eq(financialRecords.status, 'confirmed'),
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        clientId ? eq(financialRecords.clientId, clientId) : undefined
+      ]);
+
       const [partsRevenueResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'income'),
-            eq(financialRecords.referenceType, 'service_parts_revenue'),
-            eq(financialRecords.status, 'confirmed'),
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate)
-          )
-        );
+        .where(partsWhere ?? undefined);
 
       const [totalResult] = await db
         .select({ count: count() })
         .from(serviceTickets)
         .where(
-          and(
+          buildWhere([
             gte(serviceTickets.createdAt, startDate),
-            lte(serviceTickets.createdAt, endDate)
-          )
+            lte(serviceTickets.createdAt, endDate),
+            clientId ? eq(serviceTickets.clientId, clientId) : undefined
+          ]) ?? undefined
         );
 
       const ticketList = await db
@@ -2316,10 +2351,11 @@ export class DatabaseStorage implements IStorage {
         .from(serviceTickets)
         .leftJoin(customers, eq(serviceTickets.customerId, customers.id))
         .where(
-          and(
+          buildWhere([
             gte(serviceTickets.createdAt, startDate),
-            lte(serviceTickets.createdAt, endDate)
-          )
+            lte(serviceTickets.createdAt, endDate),
+            clientId ? eq(serviceTickets.clientId, clientId) : undefined
+          ]) ?? undefined
         )
         .orderBy(desc(serviceTickets.createdAt));
 
@@ -2524,31 +2560,39 @@ export class DatabaseStorage implements IStorage {
         .from(financialRecords)
         .where(expenseWhere);
 
+      const cogsConditions = [
+        eq(financialRecords.type, 'expense'),
+        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        eq(financialRecords.status, 'confirmed'),
+      ];
+
+      if (clientId) {
+        cogsConditions.push(eq(financialRecords.clientId, clientId));
+      }
+
       const [cogsResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'expense'),
-            sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate),
-            eq(financialRecords.status, 'confirmed')
-          )
-        );
+        .where(and(...cogsConditions));
+
+      const salesConditions = [
+        eq(financialRecords.type, 'income'),
+        sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
+        gte(financialRecords.createdAt, startDate),
+        lte(financialRecords.createdAt, endDate),
+        eq(financialRecords.status, 'confirmed'),
+      ];
+
+      if (clientId) {
+        salesConditions.push(eq(financialRecords.clientId, clientId));
+      }
 
       const [salesRevenueResult] = await db
         .select({ total: sum(financialRecords.amount) })
         .from(financialRecords)
-        .where(
-          and(
-            eq(financialRecords.type, 'income'),
-            sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
-            gte(financialRecords.createdAt, startDate),
-            lte(financialRecords.createdAt, endDate),
-            eq(financialRecords.status, 'confirmed')
-          )
-        );
+        .where(and(...salesConditions));
 
       const records = await db
         .select()

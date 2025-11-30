@@ -28,6 +28,7 @@ import {
 } from "@shared/schema";
 import { categoryToAccountMapping } from "./defaultAccounts";
 import { eq, and, gte, lte, desc, sum, count, sql, inArray, isNotNull } from "drizzle-orm";
+import { getCurrentTenantContext } from "./db";
 
 // Default Chart of Accounts codes - Enhanced with Indonesian accounting terminology
 const ACCOUNT_CODES = {
@@ -63,6 +64,15 @@ const ACCOUNT_CODES = {
 };
 
 export class FinanceManager {
+  private resolveClientId(explicitClientId?: string | null) {
+    if (typeof explicitClientId !== 'undefined') {
+      return explicitClientId;
+    }
+
+    const tenantContext = getCurrentTenantContext();
+    return tenantContext?.clientId ?? null;
+  }
+
   // Helper method to get account by code with optional client scoping
   private async getAccountByCode(code: string, clientId?: string | null, tx?: any): Promise<Account | null> {
     const dbClient = tx || db;
@@ -470,6 +480,7 @@ export class FinanceManager {
   ): Promise<{ success: boolean; transaction?: FinancialRecord; error?: string }> {
     const dbClient = tx || db;
     try {
+      const resolvedClientId = this.resolveClientId(data.clientId);
       const amountValue = Math.abs(Number(data.amount));
       if (!Number.isFinite(amountValue) || amountValue <= 0) {
         return { success: false, error: 'Invalid amount for financial transaction' };
@@ -501,7 +512,7 @@ export class FinanceManager {
         tags,
         status: 'confirmed',
         userId: data.userId,
-        clientId: data.clientId ?? null,
+        clientId: resolvedClientId,
       }).returning();
 
       // Create corresponding journal entries
@@ -601,7 +612,7 @@ export class FinanceManager {
           referenceType: 'financial_transaction',
           lines: journalLines,
           userId: data.userId,
-          clientId: data.clientId ?? null
+          clientId: resolvedClientId
         }, tx);
 
         if (!journalResult.success) {
@@ -612,7 +623,7 @@ export class FinanceManager {
           };
 
           if (linkedAccountCode) {
-            const linkedAccount = await this.getAccountByCode(linkedAccountCode, data.clientId ?? null, dbClient);
+            const linkedAccount = await this.getAccountByCode(linkedAccountCode, resolvedClientId, dbClient);
             if (linkedAccount) {
               updateData.accountId = linkedAccount.id;
             }
@@ -657,10 +668,11 @@ export class FinanceManager {
       normalBalance: accounts.normalBalance
     })
     .from(accounts)
-    .where(and(
+    .where(buildWhereClause([
       eq(accounts.isActive, true),
-      sql`${accounts.type} IN ('asset', 'liability', 'equity')`
-    ))
+      sql`${accounts.type} IN ('asset', 'liability', 'equity')`,
+      clientId ? eq(accounts.clientId, clientId) : undefined,
+    ]) ?? undefined)
     .orderBy(accounts.code);
     
     const assets: any = {};
@@ -855,6 +867,7 @@ export class FinanceManager {
       sourceAccount?: string;
       destinationAccount?: string;
       userId: string;
+      clientId?: string | null;
     },
     tx?: any
   ): Promise<FinancialRecord> {
@@ -875,12 +888,15 @@ export class FinanceManager {
     endDate?: Date;
     referenceType?: string;
   }): Promise<FinancialRecord[]> {
+    const clientId = this.resolveClientId();
     const conditions = [];
     if (filters?.type) conditions.push(eq(financialRecords.type, filters.type));
     if (filters?.category) conditions.push(eq(financialRecords.category, filters.category));
     if (filters?.referenceType) conditions.push(eq(financialRecords.referenceType, filters.referenceType));
     if (filters?.startDate) conditions.push(gte(financialRecords.createdAt, filters.startDate));
     if (filters?.endDate) conditions.push(lte(financialRecords.createdAt, filters.endDate));
+    if (clientId) conditions.push(eq(financialRecords.clientId, clientId));
+    conditions.push(eq(financialRecords.status, 'confirmed'));
     
     if (conditions.length > 0) {
       return await db
@@ -922,14 +938,17 @@ export class FinanceManager {
       };
     };
   }> {
+    const clientId = this.resolveClientId();
+
     const buildWhereClause = (clauses: any[]) => {
-      if (clauses.length === 0) {
+      const filteredClauses = clauses.filter(Boolean);
+      if (filteredClauses.length === 0) {
         return undefined;
       }
-      if (clauses.length === 1) {
-        return clauses[0];
+      if (filteredClauses.length === 1) {
+        return filteredClauses[0];
       }
-      return and(...clauses);
+      return and(...filteredClauses);
     };
 
     const dateRangeClauses = [];
@@ -937,6 +956,7 @@ export class FinanceManager {
     if (endDate) dateRangeClauses.push(lte(financialRecords.createdAt, endDate));
 
     const baseRecordClauses = [eq(financialRecords.status, 'confirmed'), ...dateRangeClauses];
+    if (clientId) baseRecordClauses.push(eq(financialRecords.clientId, clientId));
     const baseRecordWhere = buildWhereClause(baseRecordClauses);
     const withRecordClauses = (...extra: any[]) => buildWhereClause([...baseRecordClauses, ...extra]);
 
@@ -944,6 +964,7 @@ export class FinanceManager {
     const journalConditions = [eq(journalEntries.status, 'posted')];
     if (startDate) journalConditions.push(gte(journalEntries.date, startDate));
     if (endDate) journalConditions.push(lte(journalEntries.date, endDate));
+    if (clientId) journalConditions.push(eq(journalEntries.clientId, clientId));
 
     const journalWhere = journalConditions.length > 1 ? and(...journalConditions) : journalConditions[0];
 
@@ -1219,8 +1240,10 @@ export class FinanceManager {
     // when ledger/financial record data is missing or incomplete.
     if (totalSalesRevenueValue === 0 || totalCOGSValue === 0) {
       const salesDateClause = buildWhereClause([
+        eq(transactions.type, 'sale'),
         startDate ? gte(transactions.createdAt, startDate) : undefined,
         endDate ? lte(transactions.createdAt, endDate) : undefined,
+        clientId ? eq(transactions.clientId, clientId) : undefined,
       ]);
 
       const salesItemRows = await db
@@ -1235,9 +1258,7 @@ export class FinanceManager {
         .from(transactionItems)
         .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
         .leftJoin(products, eq(transactionItems.productId, products.id))
-        .where(
-          salesDateClause ? and(eq(transactions.type, 'sale'), salesDateClause) : eq(transactions.type, 'sale')
-        );
+        .where(salesDateClause ?? undefined);
 
       let derivedSales = 0;
       let derivedCOGS = 0;
@@ -1334,6 +1355,10 @@ export class FinanceManager {
       eq(financialRecords.type, 'expense'),
       inArray(financialRecords.referenceType, cancellationExpenseReferenceTypes)
     ];
+
+    if (clientId) {
+      cancellationExpenseConditions.push(eq(financialRecords.clientId, clientId));
+    }
 
     if (startDate) {
       cancellationExpenseConditions.push(gte(financialRecords.createdAt, startDate));
@@ -1559,6 +1584,12 @@ export class FinanceManager {
       : [];
 
     // Inventory value calculation
+    const inventoryWhere = buildWhereClause([
+      eq(products.isActive, true),
+      gte(products.stock, 0),
+      clientId ? eq(products.clientId, clientId) : undefined,
+    ]);
+
     const inventoryBreakdown = await db
       .select({
         id: products.id,
@@ -1577,7 +1608,7 @@ export class FinanceManager {
         totalValue: sql<number>`${products.stock} * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)`,
       })
       .from(products)
-      .where(and(eq(products.isActive, true), gte(products.stock, 0)));
+      .where(inventoryWhere ?? undefined);
 
     type InventoryBreakdownRow = {
       id: string;
@@ -1613,11 +1644,12 @@ export class FinanceManager {
             })
             .from(stockMovements)
             .where(
-              and(
+              buildWhereClause([
                 eq(stockMovements.movementType, 'in'),
                 isNotNull(stockMovements.unitCost),
-                inArray(stockMovements.productId, productIds)
-              )
+                inArray(stockMovements.productId, productIds),
+                clientId ? eq(stockMovements.clientId, clientId) : undefined,
+              ]) ?? undefined
             )
             .groupBy(stockMovements.productId)) as StockMovementCostRow[]);
 
@@ -1763,6 +1795,10 @@ export class FinanceManager {
         cogsConditions.push(lte(financialRecords.createdAt, endDate));
       }
 
+      if (clientId) {
+        cogsConditions.push(eq(financialRecords.clientId, clientId));
+      }
+
       const [cogsFallback] = await db
         .select({
           total: sum(financialRecords.amount),
@@ -1806,6 +1842,10 @@ export class FinanceManager {
 
       if (totalCOGSValue === 0) {
         const transactionConditions = [eq(transactions.type, 'sale')];
+
+        if (clientId) {
+          transactionConditions.push(eq(transactions.clientId, clientId));
+        }
 
         if (startDate) {
           transactionConditions.push(gte(transactions.createdAt, startDate));
@@ -2213,7 +2253,13 @@ export class FinanceManager {
     incomeCategories: string[];
     expenseCategories: string[];
   }> {
-    const records = await db.select().from(financialRecords);
+    const clientId = this.resolveClientId();
+    const whereClause = clientId ? eq(financialRecords.clientId, clientId) : undefined;
+
+    const records = await db
+      .select()
+      .from(financialRecords)
+      .where(whereClause ?? undefined);
     
     const incomeSet = new Set<string>();
     const expenseSet = new Set<string>();

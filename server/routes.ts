@@ -226,10 +226,14 @@ import {
 import { z } from "zod";
 
 // Import service cancellation validation
-import { 
-  serviceCancellationSchema, 
-  validateCancellationBusinessRules 
+import {
+  serviceCancellationSchema,
+  validateCancellationBusinessRules
 } from "@shared/service-cancellation-schema";
+
+const resolveClientIdFromRequest = (req: any): string | null => {
+  return req.tenant?.id || req.tenant?.clientId || req.session?.user?.clientId || null;
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Configure multer for file uploads
@@ -1962,11 +1966,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("- Is warrantyStartDate a Date?", normalizedData.warrantyStartDate instanceof Date);
       console.log("- Is warrantyEndDate a Date?", normalizedData.warrantyEndDate instanceof Date);
       
-      // Add transaction number and user ID to transaction data  
+      // Add transaction number and user ID to transaction data
       const completeTransactionData = {
         ...normalizedData,
         transactionNumber,
-        userId: req.session.user?.id
+        userId: req.session.user?.id,
+        clientId: resolveClientIdFromRequest(req)
       };
       
       const transaction = await storage.createTransaction(
@@ -2027,10 +2032,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Generate ticket number
       const ticketNumber = `SVC-${Date.now()}`;
-      
+
       const ticket = await storage.createServiceTicket({
         ...ticketData,
         ticketNumber,
+        clientId: resolveClientIdFromRequest(req)
       });
       
       // Send WhatsApp notification for new service (async, don't block response)
