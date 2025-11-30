@@ -835,7 +835,14 @@ export const stockMovementsRelations = relations(stockMovements, ({ one }) => ({
 
 // Helper function to transform empty strings to default values for numeric fields
 const transformNumericField = (defaultValue: string = "0") =>
-  z.string().transform((val) => val === "" || val === undefined || val === null ? defaultValue : val);
+  z
+    .union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((val) => {
+      if (val === "" || val === undefined || val === null) {
+        return defaultValue;
+      }
+      return typeof val === "number" ? val.toString() : val;
+    });
 
 const transformNullableDecimalField = () =>
   z.union([z.string(), z.number(), z.null()]).transform((val) => {

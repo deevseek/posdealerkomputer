@@ -1664,7 +1664,16 @@ export class DatabaseStorage implements IStorage {
           }
 
           // Create financial record snapshots for reporting
-          await tx.insert(financialRecords).values([
+          await tx
+            .delete(financialRecords)
+            .where(
+              and(
+                eq(financialRecords.reference, transaction.id),
+                inArray(financialRecords.referenceType, ['pos_sale', 'pos_discount', 'pos_cogs'])
+              )
+            );
+
+          const financialEntries: InsertFinancialRecord[] = [
             {
               type: 'income',
               category: 'Product Sales',
@@ -1693,7 +1702,7 @@ export class DatabaseStorage implements IStorage {
                   status: 'confirmed',
                   userId: transaction.userId,
                   clientId: transaction.clientId,
-                }]
+                } as InsertFinancialRecord]
               : []),
             ...(totalCOGS > 0
               ? [{
@@ -1709,9 +1718,11 @@ export class DatabaseStorage implements IStorage {
                   status: 'confirmed',
                   userId: transaction.userId,
                   clientId: transaction.clientId,
-                }]
+                } as InsertFinancialRecord]
               : []),
-          ]);
+          ];
+
+          await tx.insert(financialRecords).values(financialEntries as any);
         } catch (error) {
           console.error("Error creating financial records via finance manager:", error);
           throw error;

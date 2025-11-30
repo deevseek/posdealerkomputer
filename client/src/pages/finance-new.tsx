@@ -478,12 +478,12 @@ export default function FinanceNew() {
 
   const totalIncomeValue = parseAmount(summary?.totalIncome);
   const rawExpenseValue = parseAmount(summary?.totalExpense);
-  const displayExpenseValue = Math.max(rawExpenseValue, 0);
-  const totalRefundsValue = Math.max(parseAmount(summary?.totalRefunds), 0);
+  const displayExpenseValue = rawExpenseValue;
+  const totalRefundsValue = parseAmount(summary?.totalRefunds);
   const rawNetProfitValue = parseAmount(summary?.netProfit);
   const grossProfitValue = parseAmount(summary?.grossProfit);
   const totalSalesRevenueValue = parseAmount(summary?.totalSalesRevenue);
-  const totalCOGSValue = Math.max(parseAmount(summary?.totalCOGS), 0);
+  const totalCOGSValue = parseAmount(summary?.totalCOGS);
   const inventoryValue = parseAmount(summary?.inventoryValue);
   const netProfitIsPositive = rawNetProfitValue >= 0;
   const netProfitTextClass = netProfitIsPositive ? 'text-emerald-600' : 'text-red-600';
@@ -492,65 +492,14 @@ export default function FinanceNew() {
     summary?.breakdown?.categories ?? {};
   const subcategoriesBreakdown: Record<string, { amount: number; type: string; count: number }> =
     summary?.breakdown?.subcategories ?? {};
-
-  const hasAssetOrPurchaseKeyword = (value?: string | null) => {
-    if (!value) return false;
-    const normalized = value.toLowerCase();
-    return (
-      normalized.includes('inventory') ||
-      normalized.includes('persediaan') ||
-      normalized.includes('stock') ||
-      normalized.includes('asset') ||
-      normalized.includes('aset') ||
-      normalized.includes('purchase') ||
-      normalized.includes('pembelian')
-    );
-  };
-
-  const shouldHideCategory = (name: string, data: { income: number; expense: number }) => {
-    if (!name) return false;
-    if (data.expense <= 0) {
-      return false;
-    }
-    return hasAssetOrPurchaseKeyword(name);
-  };
-
-  const shouldHideSubcategory = (name: string, data: { amount: number; type: string }) => {
-    if (!name) return false;
-    if (data.type === 'income') {
-      return false;
-    }
-    if (data.amount <= 0) {
-      return false;
-    }
-    return hasAssetOrPurchaseKeyword(name);
-  };
-
   const categoryEntries = Object.entries(categoriesBreakdown) as Array<[
     string,
     { income: number; expense: number; count: number }
   ]>;
-  const filteredCategoryEntries = categoryEntries.filter(([name, data]) => !shouldHideCategory(name, data));
   const subcategoryEntries = Object.entries(subcategoriesBreakdown) as Array<[
     string,
     { amount: number; type: string; count: number }
   ]>;
-  const filteredSubcategoryEntries = subcategoryEntries.filter(
-    ([name, data]) => !shouldHideSubcategory(name, data)
-  );
-
-  const hasAssetAdjustments =
-    filteredCategoryEntries.length !== categoryEntries.length ||
-    filteredSubcategoryEntries.length !== subcategoryEntries.length;
-
-  const incomeTransactionCount = filteredCategoryEntries.reduce(
-    (sum, [, data]) => (data.income > 0 ? sum + data.count : sum),
-    0
-  );
-  const expenseTransactionCount = filteredCategoryEntries.reduce(
-    (sum, [, data]) => (data.expense > 0 ? sum + data.count : sum),
-    0
-  );
 
   const resolveAccountLabel = (value?: string) => {
     if (!value) return '-';
@@ -799,16 +748,6 @@ export default function FinanceNew() {
             <div className="text-2xl font-bold text-red-600">
               {formatCurrency(displayExpenseValue)}
             </div>
-            {displayExpenseValue === 0 && totalIncomeValue > 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Tidak ada pengeluaran tercatat pada periode ini setelah normalisasi data.
-              </div>
-            )}
-            {hasAssetAdjustments && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Pembelian persediaan/aset dikeluarkan dari total pengeluaran agar tidak menggandakan HPP.
-              </div>
-            )}
           </CardContent>
         </Card>
 
@@ -901,7 +840,7 @@ export default function FinanceNew() {
               {summary?.transactionCount || 0}
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              {`Income: ${incomeTransactionCount} | Expense: ${expenseTransactionCount}`}
+              Total transaksi finansial terkonfirmasi dalam periode yang dipilih.
             </div>
           </CardContent>
         </Card>
@@ -970,7 +909,7 @@ export default function FinanceNew() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {filteredCategoryEntries.map(([category, data]) => (
+                {categoryEntries.map(([category, data]) => (
                   <div key={category} className="flex flex-col space-y-1">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-medium">{category}</span>
@@ -989,7 +928,7 @@ export default function FinanceNew() {
                     </div>
                   </div>
                 ))}
-                {filteredCategoryEntries.length === 0 && (
+                {categoryEntries.length === 0 && (
                   <div className="text-xs text-muted-foreground">
                     Tidak ada pengeluaran operasional yang perlu ditampilkan.
                   </div>
@@ -1035,7 +974,7 @@ export default function FinanceNew() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {filteredSubcategoryEntries.map(([subcategory, data]) => (
+                {subcategoryEntries.map(([subcategory, data]) => (
                   <div key={subcategory} className="flex justify-between items-center">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{subcategory}</span>
@@ -1067,7 +1006,7 @@ export default function FinanceNew() {
                     </div>
                   </div>
                 ))}
-                {filteredSubcategoryEntries.length === 0 && (
+                {subcategoryEntries.length === 0 && (
                   <div className="text-xs text-muted-foreground">
                     Tidak ada subkategori pengeluaran operasional yang perlu ditampilkan.
                   </div>
