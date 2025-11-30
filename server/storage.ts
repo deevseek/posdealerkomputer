@@ -1727,14 +1727,15 @@ export class DatabaseStorage implements IStorage {
         .where(eq(serviceTickets.id, id))
         .returning();
       
+      // Prepare part totals for financial calculations
+      let totalPartsCost = 0;
+      let totalPartsRevenue = 0;
+      let totalPartsHPP = 0;
+
       // Handle parts if provided
       if (parts && parts.length > 0) {
         // Clear existing parts
         await tx.delete(serviceTicketParts).where(eq(serviceTicketParts.serviceTicketId, id));
-        
-        let totalPartsCost = 0;
-        let totalPartsRevenue = 0;
-        let totalPartsHPP = 0;
         
         // Add new parts and handle stock based on status
         for (const part of parts) {
