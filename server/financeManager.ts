@@ -978,656 +978,128 @@ export class FinanceManager {
     };
   }> {
     const clientId = this.resolveClientId();
+    const conditions = [eq(financialRecords.status, 'confirmed')];
+    if (startDate) conditions.push(gte(financialRecords.createdAt, startDate));
+    if (endDate) conditions.push(lte(financialRecords.createdAt, endDate));
+    if (clientId) conditions.push(eq(financialRecords.clientId, clientId));
 
-    const buildWhereClause = (clauses: any[]) => {
-      const filteredClauses = clauses.filter(Boolean);
-      if (filteredClauses.length === 0) {
-        return undefined;
-      }
-      if (filteredClauses.length === 1) {
-        return filteredClauses[0];
-      }
-      return and(...filteredClauses);
-    };
+    const records = await db
+      .select()
+      .from(financialRecords)
+      .where(and(...conditions));
 
-    const dateRangeClauses = [];
-    if (startDate) dateRangeClauses.push(gte(financialRecords.createdAt, startDate));
-    if (endDate) dateRangeClauses.push(lte(financialRecords.createdAt, endDate));
-
-    const baseRecordClauses = [eq(financialRecords.status, 'confirmed'), ...dateRangeClauses];
-    if (clientId) baseRecordClauses.push(eq(financialRecords.clientId, clientId));
-    const baseRecordWhere = buildWhereClause(baseRecordClauses);
-    const withRecordClauses = (...extra: any[]) => buildWhereClause([...baseRecordClauses, ...extra]);
-
-    // Ledger activity based on posted journal entries (standard accounting)
-    const journalConditions = [eq(journalEntries.status, 'posted')];
-    if (startDate) journalConditions.push(gte(journalEntries.date, startDate));
-    if (endDate) journalConditions.push(lte(journalEntries.date, endDate));
-    if (clientId) journalConditions.push(eq(journalEntries.clientId, clientId));
-
-    const journalWhere = journalConditions.length > 1 ? and(...journalConditions) : journalConditions[0];
-
-    const ledgerLines = await db
-      .select({
-        journalEntryId: journalEntries.id,
-        accountCode: accounts.code,
-        accountName: accounts.name,
-        accountType: accounts.type,
-        accountSubtype: accounts.subtype,
-        normalBalance: accounts.normalBalance,
-        debitAmount: journalEntryLines.debitAmount,
-        creditAmount: journalEntryLines.creditAmount,
-      })
-      .from(journalEntryLines)
-      .innerJoin(journalEntries, eq(journalEntryLines.journalEntryId, journalEntries.id))
-      .innerJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
-      .where(journalWhere);
-
-    type LedgerAggregate = {
-      code: string;
-      name: string;
-      type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
-      subtype: string | null;
-      normalBalance: 'debit' | 'credit';
-      netAmount: number;
-      entryIds: Set<string>;
-    };
-
-    const accountTotals = new Map<string, LedgerAggregate>();
-    const journalEntryIds = new Set<string>();
-
-    for (const line of ledgerLines) {
-      const debit = Number(line.debitAmount ?? 0);
-      const credit = Number(line.creditAmount ?? 0);
-      const normalBalance = line.normalBalance as 'debit' | 'credit';
-      const signedAmount = normalBalance === 'debit' ? debit - credit : credit - debit;
-
-      const existing = accountTotals.get(line.accountCode) ?? {
-        code: line.accountCode,
-        name: line.accountName,
-        type: line.accountType as LedgerAggregate['type'],
-        subtype: line.accountSubtype,
-        normalBalance,
-        netAmount: 0,
-        entryIds: new Set<string>(),
-      };
-
-      existing.netAmount += signedAmount;
-      existing.entryIds.add(line.journalEntryId);
-      accountTotals.set(line.accountCode, existing);
-      journalEntryIds.add(line.journalEntryId);
-    }
-
-    let totalRevenue = 0;
-    let totalExpenseDebits = 0;
-    let totalExpenseCredits = 0;
-    let totalSalesRevenue = 0;
-    let totalCOGS = 0;
-    let totalRefunds = 0;
-    let cogsCountedInExpenses = false;
-
-    const formatCategoryName = (key: string | null) => {
-      if (!key) {
-        return 'Uncategorized';
-      }
-      return key
-        .split('_')
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
+    const parseAmount = (value: unknown) => {
+      const num = Number(value ?? 0);
+      return Number.isFinite(num) ? num : 0;
     };
 
     const hasPurchaseKeyword = (value?: string | null) => {
-      if (!value) {
-        return false;
-      }
-      const normalized = value.toLowerCase();
-      return normalized.includes('purchase') || normalized.includes('pembelian');
-    };
-
-    const hasAssetOrInventoryKeyword = (value?: string | null) => {
-      if (!value) {
-        return false;
-      }
+      if (!value) return false;
       const normalized = value.toLowerCase();
       return (
-        normalized === 'inventory purchase' ||
-        normalized.includes('inventory purchase') ||
+        normalized.includes('purchase') ||
+        normalized.includes('pembelian') ||
         normalized.includes('inventory') ||
         normalized.includes('persediaan') ||
-        normalized.includes('stock') ||
-        normalized.includes('aset') ||
-        normalized.includes('asset')
+        normalized.includes('asset') ||
+        normalized.includes('aset')
       );
     };
 
-    const shouldTreatAsAssetExpense = (category?: string | null, subcategory?: string | null) => {
-      if (hasAssetOrInventoryKeyword(category) || hasAssetOrInventoryKeyword(subcategory)) {
-        return true;
-      }
-      return hasPurchaseKeyword(category) || hasPurchaseKeyword(subcategory);
+    const isExcludedExpense = (record: FinancialRecord) =>
+      record.type === 'expense' && (hasPurchaseKeyword(record.category) || hasPurchaseKeyword(record.subcategory));
+
+    const isRefundExpense = (record: FinancialRecord) => {
+      if (record.type !== 'expense') return false;
+      const category = record.category?.toLowerCase() || '';
+      const subcategory = record.subcategory?.toLowerCase() || '';
+      return (
+        category.includes('refund') ||
+        category.includes('return') ||
+        category.includes('cancellation') ||
+        category.includes('pengembalian') ||
+        subcategory.includes('refund') ||
+        subcategory.includes('return') ||
+        subcategory.includes('cancellation') ||
+        subcategory.includes('pengembalian')
+      );
     };
 
-    const categoryTotals = new Map<string, { income: number; expense: number; entryIds: Set<string> }>();
-    const subcategoryTotals = new Map<string, { netAmount: number; accountType: LedgerAggregate['type']; entryIds: Set<string> }>();
+    const salesReferenceTypes = new Set(['pos_sale', 'service_labor', 'service_parts_revenue']);
+    const cogsReferenceTypes = new Set(['pos_cogs', 'service_parts_cost']);
 
-    accountTotals.forEach((aggregate) => {
-      if (aggregate.type !== 'revenue' && aggregate.type !== 'expense') {
-        return;
-      }
-
-      const categoryKey = formatCategoryName(aggregate.subtype || aggregate.type);
-      const categoryRecord = categoryTotals.get(categoryKey) ?? { income: 0, expense: 0, entryIds: new Set<string>() };
-
-      if (aggregate.type === 'revenue') {
-        totalRevenue += aggregate.netAmount;
-        if (aggregate.netAmount >= 0) {
-          categoryRecord.income += aggregate.netAmount;
-        } else {
-          const refundAmount = Math.abs(aggregate.netAmount);
-          categoryRecord.expense += refundAmount;
-          totalRefunds += refundAmount;
-        }
-        if (aggregate.subtype === 'sales_revenue') {
-          totalSalesRevenue += aggregate.netAmount;
-        }
-      } else {
-        if (aggregate.netAmount >= 0) {
-          totalExpenseDebits += aggregate.netAmount;
-          categoryRecord.expense += aggregate.netAmount;
-        } else {
-          const creditAmount = Math.abs(aggregate.netAmount);
-          totalExpenseCredits += creditAmount;
-          categoryRecord.income += creditAmount;
-        }
-        if (aggregate.subtype === 'cost_of_goods_sold') {
-          totalCOGS += aggregate.netAmount;
-          cogsCountedInExpenses = true;
-        }
-      }
-
-      aggregate.entryIds.forEach((id) => categoryRecord.entryIds.add(id));
-      categoryTotals.set(categoryKey, categoryRecord);
-
-      const subcategoryRecord = subcategoryTotals.get(aggregate.name) ?? {
-        netAmount: 0,
-        accountType: aggregate.type,
-        entryIds: new Set<string>(),
-      };
-      subcategoryRecord.netAmount += aggregate.netAmount;
-      subcategoryRecord.accountType = aggregate.type;
-      aggregate.entryIds.forEach((id) => subcategoryRecord.entryIds.add(id));
-      subcategoryTotals.set(aggregate.name, subcategoryRecord);
-    });
-
-    const hasLedgerIncomeData = totalRevenue !== 0;
-    const hasLedgerExpenseData = totalExpenseDebits !== 0 || totalExpenseCredits !== 0;
-
-    let totalIncomeValue = Number(totalRevenue.toFixed(2));
-    let totalExpenseValue = Number(totalExpenseDebits.toFixed(2));
-    let netExpenseValue = Number((totalExpenseDebits - totalExpenseCredits).toFixed(2));
-    let totalSalesRevenueValue = Number(totalSalesRevenue.toFixed(2));
-    let totalCOGSValue = Number(totalCOGS.toFixed(2));
-    let grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-    let totalRefundsValue = Number(totalRefunds.toFixed(2));
-
-    const recordAggregates = baseRecordWhere
-      ? await db
-          .select({
-            type: financialRecords.type,
-            total: sum(financialRecords.amount),
-            count: count(),
-          })
-          .from(financialRecords)
-          .where(baseRecordWhere)
-          .groupBy(financialRecords.type)
-      : [];
-
-    const totalsByType = new Map<string, { total: number; count: number }>();
-    recordAggregates.forEach((row) => {
-      const typeKey = row.type ?? '';
-      const existing = totalsByType.get(typeKey) ?? { total: 0, count: 0 };
-      const rowTotal = Number(row.total ?? 0);
-      const rowCount = Number(row.count ?? 0);
-      totalsByType.set(typeKey, {
-        total: existing.total + rowTotal,
-        count: existing.count + rowCount,
-      });
-    });
-
-    const expenseWhere = withRecordClauses(eq(financialRecords.type, 'expense'));
-    type LegacyExpenseRow = {
-      category: string | null;
-      subcategory: string | null;
-      amount: string | null;
-    };
-
-    const legacyExpenseRows: LegacyExpenseRow[] = expenseWhere
-      ? await db
-          .select({
-            category: financialRecords.category,
-            subcategory: financialRecords.subcategory,
-            amount: financialRecords.amount,
-          })
-          .from(financialRecords)
-          .where(expenseWhere)
-      : [];
-
-    const filteredLegacyExpenseRows = legacyExpenseRows.filter(
-      (expense) => !shouldTreatAsAssetExpense(expense.category, expense.subcategory)
-    );
-
-    const fallbackIncomeTotal = totalsByType.get('income')?.total ?? 0;
-    const fallbackExpenseTotal = filteredLegacyExpenseRows.reduce(
-      (sumTotal, expense) => sumTotal + Math.abs(Number(expense.amount ?? 0)),
-      0
-    );
-
-    if (fallbackIncomeTotal > 0 && !hasLedgerIncomeData) {
-      totalIncomeValue = Number(fallbackIncomeTotal.toFixed(2));
-    }
-
-    if (fallbackExpenseTotal > 0 && !hasLedgerExpenseData) {
-      totalExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
-      netExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
-    }
-
-    const salesKeywordCondition = sql`
-      (
-        LOWER(${financialRecords.category}) LIKE '%sales%' OR
-        LOWER(${financialRecords.category}) LIKE '%penjualan%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%sales%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%penjualan%' OR
-        LOWER(${financialRecords.referenceType}) LIKE '%sale%' OR
-        LOWER(${financialRecords.description}) LIKE '%penjualan%'
-      )
-    `;
-    const salesWhere = withRecordClauses(eq(financialRecords.type, 'income'), salesKeywordCondition);
-    if (salesWhere) {
-      const [salesRow] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(salesWhere);
-      const fallbackSalesTotal = Number(salesRow?.total ?? 0);
-      if (fallbackSalesTotal > 0) {
-        totalSalesRevenueValue = Number(Math.max(totalSalesRevenueValue, fallbackSalesTotal).toFixed(2));
-      }
-    }
-
-    const cogsKeywordCondition = sql`
-      (
-        LOWER(${financialRecords.category}) LIKE '%cost of goods%' OR
-        LOWER(${financialRecords.category}) LIKE '%hpp%' OR
-        LOWER(${financialRecords.category}) LIKE '%harga pokok%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%cost of goods%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%hpp%' OR
-        LOWER(${financialRecords.description}) LIKE '%harga pokok%'
-      )
-    `;
-    const cogsWhere = withRecordClauses(eq(financialRecords.type, 'expense'), cogsKeywordCondition);
-    if (cogsWhere) {
-      const [cogsRow] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(cogsWhere);
-      const fallbackCOGSTotal = Number(cogsRow?.total ?? 0);
-      if (fallbackCOGSTotal > 0) {
-        totalCOGSValue = Number(Math.max(totalCOGSValue, fallbackCOGSTotal).toFixed(2));
-      }
-    }
-
-    // Fallback: derive sales revenue and HPP (COGS) directly from POS transaction items
-    // when ledger/financial record data is missing or incomplete.
-    if (totalSalesRevenueValue === 0 || totalCOGSValue === 0) {
-      const salesDateClause = buildWhereClause([
-        eq(transactions.type, 'sale'),
-        startDate ? gte(transactions.createdAt, startDate) : undefined,
-        endDate ? lte(transactions.createdAt, endDate) : undefined,
-        clientId ? eq(transactions.clientId, clientId) : undefined,
-      ]);
-
-      const salesItemRows = await db
-        .select({
-          createdAt: transactions.createdAt,
-          quantity: transactionItems.quantity,
-          unitPrice: transactionItems.unitPrice,
-          productAverageCost: products.averageCost,
-          productLastPurchasePrice: products.lastPurchasePrice,
-          productSellingPrice: products.sellingPrice,
-        })
-        .from(transactionItems)
-        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
-        .leftJoin(products, eq(transactionItems.productId, products.id))
-        .where(salesDateClause ?? undefined);
-
-      let derivedSales = 0;
-      let derivedCOGS = 0;
-
-      for (const row of salesItemRows) {
-        const quantity = Number(row.quantity ?? 0);
-        const unitPrice = Number(row.unitPrice ?? 0);
-        const costBasis = Number(
-          row.productAverageCost ?? row.productLastPurchasePrice ?? row.productSellingPrice ?? 0
-        );
-
-        derivedSales += quantity * unitPrice;
-        derivedCOGS += quantity * costBasis;
-      }
-
-      if (derivedSales > 0) {
-        totalSalesRevenueValue = Number(Math.max(totalSalesRevenueValue, derivedSales).toFixed(2));
-        // Ensure total income captures fallback POS revenue when ledger/financial records are missing
-        if (totalIncomeValue === 0) {
-          totalIncomeValue = Number(Math.max(totalIncomeValue, derivedSales).toFixed(2));
-
-          // Seed fallback category and subcategory data so the UI doesn't show empty breakdowns
-          const fallbackCategoryKey = 'Sales Revenue (POS Fallback)';
-          categoryTotals.set(fallbackCategoryKey, {
-            income: derivedSales,
-            expense: 0,
-            entryIds: new Set<string>(['pos-fallback-sales'])
-          });
-
-          const fallbackSubcategoryKey = 'POS Sales (Derived)';
-          subcategoryTotals.set(fallbackSubcategoryKey, {
-            netAmount: derivedSales,
-            accountType: 'revenue',
-            entryIds: new Set<string>(['pos-fallback-sales'])
-          });
-        }
-      }
-
-      if (derivedCOGS > 0) {
-        totalCOGSValue = Number(Math.max(totalCOGSValue, derivedCOGS).toFixed(2));
-      }
-    }
-
-    grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-
-    const refundKeywordCondition = sql`
-      (
-        LOWER(${financialRecords.category}) LIKE '%refund%' OR
-        LOWER(${financialRecords.category}) LIKE '%return%' OR
-        LOWER(${financialRecords.category}) LIKE '%cancel%' OR
-        LOWER(${financialRecords.category}) LIKE '%cancellation%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%refund%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%return%' OR
-        LOWER(${financialRecords.subcategory}) LIKE '%cancel%' OR
-        LOWER(${financialRecords.description}) LIKE '%refund%' OR
-        LOWER(${financialRecords.description}) LIKE '%pengembalian%' OR
-        LOWER(${financialRecords.referenceType}) LIKE '%refund%' OR
-        LOWER(${financialRecords.referenceType}) LIKE '%reversal%' OR
-        LOWER(${financialRecords.referenceType}) LIKE '%cancellation%'
-      )
-    `;
-    const refundWhere = withRecordClauses(eq(financialRecords.type, 'expense'), refundKeywordCondition);
-    if (refundWhere) {
-      const [refundRow] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(refundWhere);
-      const fallbackRefundTotal = Number(refundRow?.total ?? 0);
-      if (fallbackRefundTotal > 0) {
-        totalRefundsValue = Number(Math.max(totalRefundsValue, fallbackRefundTotal).toFixed(2));
-      }
-    }
-
-    const recordTransactionCount = totalsByType.size > 0
-      ? Array.from(totalsByType.values()).reduce((acc, value) => acc + value.count, 0)
-      : 0;
-
-    grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-
-    let fallbackCategoryData:
-      | Array<{ category: string | null; type: string | null; total: string | null; count: number }>
-      | null = null;
-    let fallbackSubcategoryData:
-      | Array<{ subcategory: string | null; type: string | null; total: string | null; count: number }>
-      | null = null;
-
-    const cancellationExpenseReferenceTypes = [
-      'service_cancellation_service_reversal',
-      'service_cancellation_parts_reversal'
-    ];
-
-    const cancellationExpenseConditions = [
-      eq(financialRecords.status, 'confirmed'),
-      eq(financialRecords.type, 'expense'),
-      inArray(financialRecords.referenceType, cancellationExpenseReferenceTypes)
-    ];
-
-    if (clientId) {
-      cancellationExpenseConditions.push(eq(financialRecords.clientId, clientId));
-    }
-
-    if (startDate) {
-      cancellationExpenseConditions.push(gte(financialRecords.createdAt, startDate));
-    }
-
-    if (endDate) {
-      cancellationExpenseConditions.push(lte(financialRecords.createdAt, endDate));
-    }
-
-    const cancellationExpenseRows = await db
-      .select({
-        category: financialRecords.category,
-        subcategory: financialRecords.subcategory,
-        total: sum(financialRecords.amount),
-        count: count()
-      })
-      .from(financialRecords)
-      .where(and(...cancellationExpenseConditions))
-      .groupBy(financialRecords.category, financialRecords.subcategory);
-
-    const cancellationExpenseTotal = cancellationExpenseRows.reduce(
-      (sumTotal, row) => sumTotal + Number(row.total ?? 0),
-      0
-    );
-
-    if (cancellationExpenseTotal > 0) {
-      totalExpenseValue = Number((totalExpenseValue + cancellationExpenseTotal).toFixed(2));
-      netExpenseValue = Number((netExpenseValue + cancellationExpenseTotal).toFixed(2));
-    }
-
-    if (
-      totalIncomeValue === 0 ||
-      totalExpenseValue === 0 ||
-      categoryTotals.size === 0 ||
-      subcategoryTotals.size === 0
-    ) {
-      const needsIncomeFallback = totalIncomeValue === 0;
-      const needsExpenseFallback =
-        totalExpenseValue === 0 || categoryTotals.size === 0 || subcategoryTotals.size === 0;
-
-      if (needsIncomeFallback) {
-        const incomeWhere = withRecordClauses(eq(financialRecords.type, 'income'));
-        const [legacyIncomeRow] = incomeWhere
-          ? await db
-              .select({ total: sum(financialRecords.amount) })
-              .from(financialRecords)
-              .where(incomeWhere)
-          : [];
-
-        const fallbackIncomeTotal = Number(legacyIncomeRow?.total ?? 0);
-        if (fallbackIncomeTotal > 0) {
-          totalIncomeValue = Number(fallbackIncomeTotal.toFixed(2));
-        }
-      }
-
-      if (needsExpenseFallback) {
-        const fallbackExpenseTotal = filteredLegacyExpenseRows.reduce(
-          (sumTotal, expense) => sumTotal + Math.abs(Number(expense.amount ?? 0)),
-          0
-        );
-
-        if (fallbackExpenseTotal > 0) {
-          totalExpenseValue = Number(fallbackExpenseTotal.toFixed(2));
-          netExpenseValue = totalExpenseValue;
-        }
-
-        if (categoryTotals.size === 0 || subcategoryTotals.size === 0) {
-          fallbackCategoryData = baseRecordWhere
-            ? await db
-                .select({
-                  category: financialRecords.category,
-                  type: financialRecords.type,
-                  total: sum(financialRecords.amount),
-                  count: count(),
-                })
-                .from(financialRecords)
-                .where(baseRecordWhere)
-                .groupBy(financialRecords.category, financialRecords.type)
-            : null;
-
-          fallbackSubcategoryData = baseRecordWhere
-            ? await db
-                .select({
-                  subcategory: financialRecords.subcategory,
-                  type: financialRecords.type,
-                  total: sum(financialRecords.amount),
-                  count: count(),
-                })
-                .from(financialRecords)
-                .where(baseRecordWhere)
-                .groupBy(financialRecords.subcategory, financialRecords.type)
-            : null;
-        }
-      }
-    }
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let totalSalesRevenue = 0;
+    let totalCOGS = 0;
+    let totalRefunds = 0;
 
     const categories: { [key: string]: { income: number; expense: number; count: number } } = {};
-    categoryTotals.forEach((value, key) => {
-      categories[key] = {
-        income: Number(value.income.toFixed(2)),
-        expense: Number(value.expense.toFixed(2)),
-        count: value.entryIds.size,
-      };
-    });
-
-    if (fallbackCategoryData) {
-      fallbackCategoryData.forEach((item) => {
-        if (!item.category) {
-          return;
-        }
-        if (shouldTreatAsAssetExpense(item.category, null)) {
-          return;
-        }
-        const key = item.category;
-        const existingCategory = categories[key] ?? { income: 0, expense: 0, count: 0 };
-        const rawAmount = Number(item.total ?? 0);
-
-        if (item.type === 'income') {
-          existingCategory.income = Number((existingCategory.income + rawAmount).toFixed(2));
-        } else if (item.type === 'expense') {
-          const normalizedAmount = Math.abs(rawAmount);
-          existingCategory.expense = Number((existingCategory.expense + normalizedAmount).toFixed(2));
-        }
-
-        existingCategory.count += item.count;
-        categories[key] = existingCategory;
-      });
-    }
-
-    if (cancellationExpenseRows.length > 0) {
-      cancellationExpenseRows.forEach((row, index) => {
-        const amount = Number(row.total ?? 0);
-        if (amount <= 0) {
-          return;
-        }
-
-        const categoryKey = row.category || 'Service Cancellation';
-        const existingCategory = categories[categoryKey] ?? { income: 0, expense: 0, count: 0 };
-        categories[categoryKey] = {
-          income: existingCategory.income,
-          expense: Number((existingCategory.expense + amount).toFixed(2)),
-          count: existingCategory.count + Number(row.count ?? 0)
-        };
-
-        const subcategoryKey = row.subcategory || categoryKey;
-        const existingSubcategory = subcategoryTotals.get(subcategoryKey) ?? {
-          netAmount: 0,
-          accountType: 'expense' as LedgerAggregate['type'],
-          entryIds: new Set<string>(),
-        };
-        existingSubcategory.netAmount += amount;
-        existingSubcategory.accountType = 'expense';
-        existingSubcategory.entryIds.add(`manual-cancellation-${index}`);
-        subcategoryTotals.set(subcategoryKey, existingSubcategory);
-      });
-    }
-
     const subcategories: { [key: string]: { amount: number; type: string; count: number } } = {};
-    subcategoryTotals.forEach((value, name) => {
-      const netAmount = value.netAmount;
-      const amount = Number(Math.abs(netAmount).toFixed(2));
-      let type: 'income' | 'expense';
-      if (value.accountType === 'revenue') {
-        type = netAmount >= 0 ? 'income' : 'expense';
-      } else if (value.accountType === 'expense') {
-        type = netAmount >= 0 ? 'expense' : 'income';
-      } else {
-        type = netAmount >= 0 ? 'income' : 'expense';
+    const paymentMethods: { [key: string]: number } = {};
+    const sources: { [key: string]: { amount: number; count: number } } = {};
+
+    for (const record of records) {
+      if (record.status !== 'confirmed') continue;
+      const amount = parseAmount(record.amount);
+      const isPurchase = isExcludedExpense(record);
+      const isRefund = isRefundExpense(record);
+
+      if (record.type === 'income') {
+        totalIncome += amount;
+      } else if (record.type === 'expense') {
+        if (!isPurchase) {
+          totalExpense += amount;
+          if (isRefund) {
+            totalRefunds += amount;
+            totalIncome -= amount;
+          }
+        }
       }
 
-      subcategories[name] = {
-        amount,
-        type,
-        count: value.entryIds.size,
-      };
-    });
+      if (record.type === 'income' && salesReferenceTypes.has(record.referenceType || '')) {
+        totalSalesRevenue += amount;
+      }
 
-    if (fallbackSubcategoryData) {
-      fallbackSubcategoryData.forEach((item) => {
-        if (!item.subcategory) {
-          return;
-        }
-        if (shouldTreatAsAssetExpense(null, item.subcategory)) {
-          return;
-        }
+      if (record.type === 'expense' && cogsReferenceTypes.has(record.referenceType || '')) {
+        totalCOGS += amount;
+      }
 
-        const fallbackType = item.type ?? 'income';
-        const rawAmount = Number(item.total ?? 0);
-        const normalizedAmount =
-          fallbackType === 'expense' ? Math.abs(rawAmount) : rawAmount;
+      if (record.paymentMethod) {
+        const methodKey = record.paymentMethod.toLowerCase();
+        paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + amount;
+      }
 
-        subcategories[item.subcategory] = {
-          amount: Number(normalizedAmount.toFixed(2)),
-          type: fallbackType,
-          count: item.count,
-        };
-      });
+      // Identify purchase (inventory/stock/asset)
+      if (isPurchase) continue;
+
+      const categoryKey = record.category || 'Uncategorized';
+      const categoryBucket = categories[categoryKey] || { income: 0, expense: 0, count: 0 };
+      if (record.type === 'income') {
+        categoryBucket.income += amount;
+      } else if (record.type === 'expense') {
+        categoryBucket.expense += amount;
+      }
+      categoryBucket.count += 1;
+      categories[categoryKey] = categoryBucket;
+
+      const subcategoryKey = isRefund ? 'Refund / Retur' : record.subcategory || categoryKey;
+      const subcategoryBucket = subcategories[subcategoryKey] || { amount: 0, type: record.type, count: 0 };
+      subcategoryBucket.amount += amount;
+      subcategoryBucket.type = record.type;
+      subcategoryBucket.count += 1;
+      subcategories[subcategoryKey] = subcategoryBucket;
+
+      const sourceKey = record.referenceType || 'other';
+      const signedAmount = record.type === 'expense' ? -amount : amount;
+      const sourceBucket = sources[sourceKey] || { amount: 0, count: 0 };
+      sourceBucket.amount += signedAmount;
+      sourceBucket.count += 1;
+      sources[sourceKey] = sourceBucket;
     }
 
-    // Breakdown by payment method
-    const paymentBreakdown = baseRecordWhere
-      ? await db
-          .select({
-            paymentMethod: financialRecords.paymentMethod,
-            total: sum(financialRecords.amount)
-          })
-          .from(financialRecords)
-          .where(baseRecordWhere)
-          .groupBy(financialRecords.paymentMethod)
-      : [];
-
-    // Breakdown by source/reference type
-    const sourceBreakdown = baseRecordWhere
-      ? await db
-          .select({
-            referenceType: financialRecords.referenceType,
-            total: sum(financialRecords.amount),
-            count: count()
-          })
-          .from(financialRecords)
-          .where(baseRecordWhere)
-          .groupBy(financialRecords.referenceType)
-      : [];
-
-    // Inventory value calculation
-    const inventoryWhere = buildWhereClause([
-      eq(products.isActive, true),
-      gte(products.stock, 0),
-      clientId ? eq(products.clientId, clientId) : undefined,
-    ]);
+    const inventoryConditions = [eq(products.isActive, true), gte(products.stock, 0)];
+    if (clientId) inventoryConditions.push(eq(products.clientId, clientId));
 
     const inventoryBreakdown = await db
       .select({
@@ -1637,7 +1109,7 @@ export class FinanceManager {
         averageCost: products.averageCost,
         lastPurchasePrice: products.lastPurchasePrice,
         sellingPrice: products.sellingPrice,
-        effectiveCost: sql<number>`COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)`,
+        effectiveCost: sql<number>`COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)` ,
         costSource: sql<string>`CASE
           WHEN ${products.averageCost} IS NOT NULL THEN 'averageCost'
           WHEN ${products.lastPurchasePrice} IS NOT NULL THEN 'lastPurchasePrice'
@@ -1647,149 +1119,8 @@ export class FinanceManager {
         totalValue: sql<number>`${products.stock} * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, ${products.sellingPrice}, 0)`,
       })
       .from(products)
-      .where(inventoryWhere ?? undefined);
+      .where(and(...inventoryConditions));
 
-    type InventoryBreakdownRow = {
-      id: string;
-      name: string | null;
-      stock: number | null;
-      averageCost: string | null;
-      lastPurchasePrice: string | null;
-      sellingPrice: string | null;
-      effectiveCost: number | null;
-      costSource: string | null;
-      totalValue: number | null;
-    };
-
-    const inventoryBreakdownRows = inventoryBreakdown as InventoryBreakdownRow[];
-    type StockMovementCostRow = {
-      productId: string;
-      totalCost: string | number | null;
-      totalQuantity: string | number | null;
-      latestCost: string | number | null;
-    };
-
-    const productIds = inventoryBreakdownRows.map((row) => row.id);
-
-    const stockMovementCostRows: StockMovementCostRow[] =
-      productIds.length === 0
-        ? []
-        : ((await db
-            .select({
-              productId: stockMovements.productId,
-              totalCost: sql<string>`COALESCE(SUM(${stockMovements.quantity}::numeric * ${stockMovements.unitCost}::numeric), 0)`,
-              totalQuantity: sql<string>`COALESCE(SUM(${stockMovements.quantity}), 0)`,
-              latestCost: sql<string | null>`MAX(${stockMovements.unitCost})`
-            })
-            .from(stockMovements)
-            .where(
-              buildWhereClause([
-                eq(stockMovements.movementType, 'in'),
-                isNotNull(stockMovements.unitCost),
-                inArray(stockMovements.productId, productIds),
-                clientId ? eq(stockMovements.clientId, clientId) : undefined,
-              ]) ?? undefined
-            )
-            .groupBy(stockMovements.productId)) as StockMovementCostRow[]);
-
-    const parseNumeric = (value: unknown) => {
-      const numeric = Number(value ?? 0);
-      return Number.isFinite(numeric) ? numeric : 0;
-    };
-
-    const stockMovementCostMap = new Map<string, { avgCost: number; latestCost: number }>();
-    stockMovementCostRows.forEach((row) => {
-      const totalQuantity = parseNumeric(row.totalQuantity);
-      const totalCost = parseNumeric(row.totalCost);
-      const latestCost = parseNumeric(row.latestCost);
-      const avgCost = totalQuantity > 0 ? totalCost / totalQuantity : 0;
-
-      if (avgCost > 0 || latestCost > 0) {
-        stockMovementCostMap.set(row.productId, {
-          avgCost: Number(avgCost.toFixed(2)),
-          latestCost: Number(latestCost.toFixed(2))
-        });
-      }
-    });
-
-    type ProcessedInventoryRow = {
-      id: string;
-      name: string | null;
-      stock: number;
-      unitCost: number;
-      value: number;
-      costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
-    };
-
-    const processedInventoryRows: ProcessedInventoryRow[] = inventoryBreakdownRows.map((item) => {
-      const productId = item.id;
-      const normalizedStock = Math.max(parseNumeric(item.stock), 0);
-
-      let costSource = (item.costSource ?? 'none') as ProcessedInventoryRow['costSource'];
-      let unitCost = parseNumeric(
-        item.effectiveCost ?? item.averageCost ?? item.lastPurchasePrice ?? item.sellingPrice
-      );
-
-      const movementFallback = stockMovementCostMap.get(productId);
-
-      if ((unitCost <= 0 || !Number.isFinite(unitCost)) && movementFallback) {
-        const fallbackCost = movementFallback.avgCost > 0 ? movementFallback.avgCost : movementFallback.latestCost;
-        if (fallbackCost > 0) {
-          unitCost = fallbackCost;
-          costSource = 'stockMovement';
-        }
-      }
-
-      let value = parseNumeric(item.totalValue);
-      if (value <= 0 && normalizedStock > 0) {
-        value = unitCost * normalizedStock;
-      }
-
-      if ((value <= 0 || !Number.isFinite(value)) && movementFallback && normalizedStock > 0) {
-        const fallbackCost = movementFallback.avgCost > 0 ? movementFallback.avgCost : movementFallback.latestCost;
-        if (fallbackCost > 0) {
-          value = fallbackCost * normalizedStock;
-          if (unitCost <= 0) {
-            unitCost = fallbackCost;
-          }
-          costSource = 'stockMovement';
-        }
-      }
-
-      return {
-        id: productId,
-        name: item.name,
-        stock: normalizedStock,
-        unitCost: Number(unitCost.toFixed(2)),
-        value: Number(Math.max(value, 0).toFixed(2)),
-        costSource
-      };
-    });
-
-    const totalInventoryValue = processedInventoryRows.reduce((total, item) => total + item.value, 0);
-
-    const totalInventoryCount = processedInventoryRows.reduce((total, item) => total + item.stock, 0);
-
-    // Process payment method breakdown
-    const paymentMethods: { [key: string]: number } = {};
-    paymentBreakdown.forEach((item) => {
-      if (item.paymentMethod) {
-        paymentMethods[item.paymentMethod] = Number(item.total ?? 0);
-      }
-    });
-
-    // Process source breakdown
-    const sources: { [key: string]: { amount: number; count: number } } = {};
-    sourceBreakdown.forEach((item) => {
-      if (item.referenceType) {
-        sources[item.referenceType] = {
-          amount: Number(item.total ?? 0),
-          count: item.count
-        };
-      }
-    });
-
-    // Process inventory breakdown
     const inventory: {
       [key: string]: {
         value: number;
@@ -1798,201 +1129,74 @@ export class FinanceManager {
         costSource: 'averageCost' | 'lastPurchasePrice' | 'sellingPrice' | 'stockMovement' | 'none';
       };
     } = {};
-    processedInventoryRows.forEach((item) => {
-      if (!item.name) {
-        return;
-      }
+    let totalInventoryValue = 0;
+    let inventoryCount = 0;
 
-      inventory[item.name] = {
-        value: Number(item.value.toFixed(2)),
-        stock: Number(item.stock.toFixed(2)),
-        avgCost: Number(item.unitCost.toFixed(2)),
-        costSource: item.costSource
+    for (const item of inventoryBreakdown) {
+      const name = item.name || 'Unnamed Product';
+      const stock = Number(item.stock || 0);
+      const cost = Number(item.effectiveCost || 0);
+      const value = Number(item.totalValue || 0);
+
+      inventory[name] = {
+        value: Number(value.toFixed(2)),
+        stock: Number(stock.toFixed(0)),
+        avgCost: Number(cost.toFixed(2)),
+        costSource: (item.costSource as any) || 'none',
       };
-    });
 
-    // Fallback to financial records when ledger-based COGS is missing (e.g. legacy data without journal entries)
-    if (totalCOGSValue === 0) {
-      const cogsConditions = [
-        eq(financialRecords.status, 'confirmed'),
-        eq(financialRecords.type, 'expense'),
-        sql`(
-          LOWER(${financialRecords.category}) LIKE '%cost of goods%' OR
-          LOWER(${financialRecords.category}) LIKE '%hpp%' OR
-          LOWER(${financialRecords.category}) LIKE '%harga pokok%' OR
-          LOWER(${financialRecords.subcategory}) LIKE '%cost of goods%' OR
-          LOWER(${financialRecords.subcategory}) LIKE '%hpp%' OR
-          LOWER(${financialRecords.description}) LIKE '%harga pokok%'
-        )`
-      ];
-
-      if (startDate) {
-        cogsConditions.push(gte(financialRecords.createdAt, startDate));
+      if (stock > 0 || value > 0) {
+        inventoryCount += 1;
       }
 
-      if (endDate) {
-        cogsConditions.push(lte(financialRecords.createdAt, endDate));
-      }
-
-      if (clientId) {
-        cogsConditions.push(eq(financialRecords.clientId, clientId));
-      }
-
-      const [cogsFallback] = await db
-        .select({
-          total: sum(financialRecords.amount),
-          count: count()
-        })
-        .from(financialRecords)
-        .where(and(...cogsConditions));
-
-      const fallbackCOGSTotal = Number(cogsFallback?.total ?? 0);
-
-      if (fallbackCOGSTotal > 0) {
-        const previousCOGSValue = totalCOGSValue;
-        const resolvedCOGSValue = Number(Math.max(previousCOGSValue, fallbackCOGSTotal).toFixed(2));
-        const cogsDelta = Number((resolvedCOGSValue - previousCOGSValue).toFixed(2));
-
-        totalCOGSValue = resolvedCOGSValue;
-        grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-
-        if (cogsDelta > 0) {
-          totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
-          netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
-          cogsCountedInExpenses = true;
-
-          const cogsCategoryKey = 'Cost Of Goods Sold';
-          const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
-          categories[cogsCategoryKey] = {
-            income: existingCategory.income,
-            expense: Number((existingCategory.expense + cogsDelta).toFixed(2)),
-            count: existingCategory.count + Number(cogsFallback?.count ?? 0)
-          };
-
-          const fallbackSubcategoryKey = 'Cost Of Goods Sold (Fallback)';
-          const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
-          subcategories[fallbackSubcategoryKey] = {
-            amount: Number((existingSubcategory.amount + cogsDelta).toFixed(2)),
-            type: 'expense',
-            count: existingSubcategory.count + Number(cogsFallback?.count ?? 0)
-          };
-        }
-      }
-
-      if (totalCOGSValue === 0) {
-        const transactionConditions = [eq(transactions.type, 'sale')];
-
-        if (clientId) {
-          transactionConditions.push(eq(transactions.clientId, clientId));
-        }
-
-        if (startDate) {
-          transactionConditions.push(gte(transactions.createdAt, startDate));
-        }
-
-        if (endDate) {
-          transactionConditions.push(lte(transactions.createdAt, endDate));
-        }
-
-        const whereSales = transactionConditions.length > 1
-          ? and(...transactionConditions)
-          : transactionConditions[0];
-
-        const [posSummary] = await db
-          .select({
-            totalSales: sql<number>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
-            totalCOGS: sql<number>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, ${products.lastPurchasePrice}, 0)::numeric), 0)`
-          })
-          .from(transactionItems)
-          .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
-          .innerJoin(products, eq(transactionItems.productId, products.id))
-          .where(whereSales);
-
-        const posCOGSTotal = Number(posSummary?.totalCOGS ?? 0);
-        const posSalesTotal = Number(posSummary?.totalSales ?? 0);
-
-        // Always anchor sales revenue to the POS gross sales so the revenue card
-        // isn't understated (e.g. when sales are recorded net of HPP elsewhere).
-        const alignedSalesRevenue = Math.max(totalSalesRevenueValue, posSalesTotal);
-        if (alignedSalesRevenue > totalSalesRevenueValue) {
-          const revenueDelta = Number((alignedSalesRevenue - totalSalesRevenueValue).toFixed(2));
-          totalSalesRevenueValue = alignedSalesRevenue;
-          totalIncomeValue = Number((totalIncomeValue + revenueDelta).toFixed(2));
-          grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-        }
-
-        if (posCOGSTotal > 0) {
-          const previousCOGSValue = totalCOGSValue;
-          const resolvedCOGSValue = Number(Math.max(previousCOGSValue, posCOGSTotal).toFixed(2));
-          const cogsDelta = Number((resolvedCOGSValue - previousCOGSValue).toFixed(2));
-
-          totalCOGSValue = resolvedCOGSValue;
-
-          if (totalSalesRevenueValue === 0 && posSalesTotal > 0) {
-            totalSalesRevenueValue = Number(posSalesTotal.toFixed(2));
-          }
-
-          grossProfitValue = Number((totalSalesRevenueValue - totalCOGSValue).toFixed(2));
-
-          if (cogsDelta > 0) {
-            totalExpenseValue = Number((totalExpenseValue + cogsDelta).toFixed(2));
-            netExpenseValue = Number((netExpenseValue + cogsDelta).toFixed(2));
-            cogsCountedInExpenses = true;
-
-            const cogsCategoryKey = 'Cost Of Goods Sold';
-            const existingCategory = categories[cogsCategoryKey] ?? { income: 0, expense: 0, count: 0 };
-            categories[cogsCategoryKey] = {
-              income: existingCategory.income,
-              expense: Number((existingCategory.expense + cogsDelta).toFixed(2)),
-              count: existingCategory.count + 1
-            };
-
-            const fallbackSubcategoryKey = 'Cost Of Goods Sold (POS Fallback)';
-            const existingSubcategory = subcategories[fallbackSubcategoryKey] ?? { amount: 0, type: 'expense', count: 0 };
-            subcategories[fallbackSubcategoryKey] = {
-              amount: Number((existingSubcategory.amount + cogsDelta).toFixed(2)),
-              type: 'expense',
-              count: existingSubcategory.count + 1
-            };
-          }
-        }
-      }
+      totalInventoryValue += value;
     }
 
-    // If we successfully derived COGS but don't have any other expense data,
-    // treat COGS as the minimum expense baseline so net profit isn't inflated
-    // by missing expense rows.
-    if (totalCOGSValue > 0 && !cogsCountedInExpenses) {
-      totalExpenseValue = Number((totalExpenseValue + totalCOGSValue).toFixed(2));
-      netExpenseValue = Number((netExpenseValue + totalCOGSValue).toFixed(2));
-      cogsCountedInExpenses = true;
-    }
-
-    netExpenseValue = Number(Math.max(netExpenseValue, 0).toFixed(2));
-    totalExpenseValue = Number(Math.max(totalExpenseValue, netExpenseValue).toFixed(2));
+    const netProfit = totalIncome - totalExpense;
+    const grossProfit = totalSalesRevenue - totalCOGS;
 
     return {
-      totalIncome: totalIncomeValue.toString(),
-      totalExpense: totalExpenseValue.toString(),
-      netProfit: Number((totalIncomeValue - netExpenseValue).toFixed(2)).toString(),
-      grossProfit: grossProfitValue.toString(),
-      totalSalesRevenue: totalSalesRevenueValue.toString(),
-      totalCOGS: totalCOGSValue.toString(),
-      totalRefunds: totalRefundsValue.toString(),
-      transactionCount: Math.max(journalEntryIds.size, recordTransactionCount),
-      inventoryValue: totalInventoryValue.toString(),
-      inventoryCount: totalInventoryCount,
+      totalIncome: totalIncome.toFixed(2),
+      totalExpense: totalExpense.toFixed(2),
+      netProfit: netProfit.toFixed(2),
+      grossProfit: grossProfit.toFixed(2),
+      totalSalesRevenue: totalSalesRevenue.toFixed(2),
+      totalCOGS: totalCOGS.toFixed(2),
+      totalRefunds: totalRefunds.toFixed(2),
+      transactionCount: records.length,
+      inventoryValue: Number(totalInventoryValue.toFixed(2)).toFixed(2),
+      inventoryCount,
       breakdown: {
-        categories,
-        paymentMethods,
-        sources,
-        subcategories,
-        inventory
-      }
+        categories: Object.fromEntries(
+          Object.entries(categories).map(([key, value]) => [
+            key,
+            {
+              income: Number(value.income.toFixed(2)),
+              expense: Number(value.expense.toFixed(2)),
+              count: value.count,
+            },
+          ])
+        ),
+        paymentMethods: Object.fromEntries(
+          Object.entries(paymentMethods).map(([key, value]) => [key, Number(value.toFixed(2))])
+        ),
+        sources: Object.fromEntries(
+          Object.entries(sources).map(([key, value]) => [
+            key,
+            { amount: Number(value.amount.toFixed(2)), count: value.count },
+          ])
+        ),
+        subcategories: Object.fromEntries(
+          Object.entries(subcategories).map(([key, value]) => [
+            key,
+            { amount: Number(value.amount.toFixed(2)), type: value.type, count: value.count },
+          ])
+        ),
+        inventory,
+      },
     };
   }
 
-  // Employee Management
   async createEmployee(data: InsertEmployee): Promise<Employee> {
     const employeeNumber = `EMP${Date.now().toString().slice(-6)}`;
     
