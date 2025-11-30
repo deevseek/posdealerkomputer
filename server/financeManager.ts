@@ -1009,8 +1009,7 @@ export class FinanceManager {
     const isExcludedExpense = (record: FinancialRecord) =>
       record.type === 'expense' && (hasPurchaseKeyword(record.category) || hasPurchaseKeyword(record.subcategory));
 
-    const isRefundExpense = (record: FinancialRecord) => {
-      if (record.type !== 'expense') return false;
+    const hasRefundKeywords = (record: FinancialRecord) => {
       const category = record.category?.toLowerCase() || '';
       const subcategory = record.subcategory?.toLowerCase() || '';
       return (
@@ -1024,6 +1023,8 @@ export class FinanceManager {
         subcategory.includes('pengembalian')
       );
     };
+
+    const isRefundExpense = (record: FinancialRecord) => record.type === 'expense' && hasRefundKeywords(record);
 
     const salesReferenceTypes = new Set(['pos_sale', 'service_labor', 'service_parts_revenue']);
     const cogsReferenceTypes = new Set(['pos_cogs', 'service_parts_cost']);
@@ -1043,25 +1044,28 @@ export class FinanceManager {
       if (record.status !== 'confirmed') continue;
       const amount = parseAmount(record.amount);
       const isPurchase = isExcludedExpense(record);
+      const hasRefundTag = hasRefundKeywords(record);
       const isRefund = isRefundExpense(record);
+      const isIncome = record.type === 'income';
+      const isExpense = record.type === 'expense';
 
-      if (record.type === 'income') {
+      if (isIncome && !hasRefundTag) {
         totalIncome += amount;
-      } else if (record.type === 'expense') {
-        if (!isPurchase) {
-          totalExpense += amount;
-          if (isRefund) {
-            totalRefunds += amount;
-            totalIncome -= amount;
-          }
+      }
+
+      if (isExpense && (!isPurchase || isRefund)) {
+        totalExpense += amount;
+        if (isRefund) {
+          totalRefunds += amount;
+          totalIncome -= amount;
         }
       }
 
-      if (record.type === 'income' && salesReferenceTypes.has(record.referenceType || '')) {
+      if (isIncome && !hasRefundTag && salesReferenceTypes.has(record.referenceType || '')) {
         totalSalesRevenue += amount;
       }
 
-      if (record.type === 'expense' && cogsReferenceTypes.has(record.referenceType || '')) {
+      if (isExpense && cogsReferenceTypes.has(record.referenceType || '')) {
         totalCOGS += amount;
       }
 
@@ -1070,14 +1074,13 @@ export class FinanceManager {
         paymentMethods[methodKey] = (paymentMethods[methodKey] || 0) + amount;
       }
 
-      // Identify purchase (inventory/stock/asset)
-      if (isPurchase) continue;
+      if (isPurchase && !isRefund) continue;
 
       const categoryKey = record.category || 'Uncategorized';
       const categoryBucket = categories[categoryKey] || { income: 0, expense: 0, count: 0 };
-      if (record.type === 'income') {
+      if (isIncome) {
         categoryBucket.income += amount;
-      } else if (record.type === 'expense') {
+      } else if (isExpense) {
         categoryBucket.expense += amount;
       }
       categoryBucket.count += 1;
@@ -1091,11 +1094,46 @@ export class FinanceManager {
       subcategories[subcategoryKey] = subcategoryBucket;
 
       const sourceKey = record.referenceType || 'other';
-      const signedAmount = record.type === 'expense' ? -amount : amount;
+      const signedAmount = isExpense ? -amount : amount;
       const sourceBucket = sources[sourceKey] || { amount: 0, count: 0 };
       sourceBucket.amount += signedAmount;
       sourceBucket.count += 1;
       sources[sourceKey] = sourceBucket;
+    }
+
+    const expectedSalesRevenue = records
+      .filter(
+        (record) =>
+          record.status === 'confirmed' &&
+          record.type === 'income' &&
+          !hasRefundKeywords(record) &&
+          salesReferenceTypes.has(record.referenceType || '')
+      )
+      .reduce((sum, record) => sum + parseAmount(record.amount), 0);
+
+    const expectedCOGS = records
+      .filter(
+        (record) =>
+          record.status === 'confirmed' &&
+          record.type === 'expense' &&
+          cogsReferenceTypes.has(record.referenceType || '')
+      )
+      .reduce((sum, record) => sum + parseAmount(record.amount), 0);
+
+    const posSaleExists = records.some(
+      (record) => record.status === 'confirmed' && record.referenceType === 'pos_sale'
+    );
+
+    const posCogsExists = records.some(
+      (record) => record.status === 'confirmed' && record.referenceType === 'pos_cogs'
+    );
+
+    if (posSaleExists && Number(totalSalesRevenue.toFixed(2)) !== Number(expectedSalesRevenue.toFixed(2))) {
+      totalSalesRevenue = Number(expectedSalesRevenue.toFixed(2));
+    }
+
+    if (posCogsExists && Number(totalCOGS.toFixed(2)) !== Number(expectedCOGS.toFixed(2))) {
+      totalCOGS = Number(expectedCOGS.toFixed(2));
     }
 
     const inventoryConditions = [eq(products.isActive, true), gte(products.stock, 0)];
