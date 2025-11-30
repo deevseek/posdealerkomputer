@@ -1479,20 +1479,56 @@ export class DatabaseStorage implements IStorage {
   async createTransaction(transactionData: InsertTransaction, items: InsertTransactionItem[]): Promise<Transaction> {
     return await db.transaction(async (tx) => {
       const resolvedClientId = this.resolveClientId(transactionData.clientId);
+      // Normalize item level totals to ensure we always have gross, discount, and net values
+      const normalizedItems = items.map((item) => {
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unitPrice);
+        const providedTotal = Number(item.totalPrice ?? 0);
+
+        // Gross before discount
+        const gross = unitPrice * quantity;
+        // If caller provided totalPrice, treat it as net after discount; otherwise use gross
+        const net = providedTotal > 0 ? providedTotal : gross;
+        const discountValue = gross - net;
+
+        return {
+          ...item,
+          quantity,
+          unitPrice: unitPrice.toFixed(2),
+          totalPrice: net.toFixed(2),
+          // Keep computed fields for aggregate calculations (not persisted because columns do not exist)
+          __gross: gross,
+          __discount: discountValue,
+          clientId: resolvedClientId,
+        };
+      });
+
+      const grossSubtotal = normalizedItems.reduce((sum, item) => sum + (item.__gross ?? 0), 0);
+      const discountFromItems = normalizedItems.reduce((sum, item) => sum + (item.__discount ?? 0), 0);
+      const netSubtotal = normalizedItems.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+      const taxAmount = Number(transactionData.taxAmount ?? 0);
+
       const normalizedTransactionData = {
         ...transactionData,
         clientId: resolvedClientId,
-        taxAmount: transactionData.taxAmount ?? '0',
-        totalPrice: transactionData.totalPrice ?? transactionData.total ?? transactionData.subtotal,
+        subtotal: grossSubtotal.toFixed(2),
+        discountAmount: (Number(transactionData.discountAmount ?? 0) + discountFromItems).toFixed(2),
+        totalPrice: netSubtotal.toFixed(2),
+        taxAmount: taxAmount.toFixed(2),
+        // Final total is net after discount plus tax
+        total: (netSubtotal + taxAmount).toFixed(2),
       } as InsertTransaction;
 
       // Create transaction
       const [transaction] = await tx.insert(transactions).values(normalizedTransactionData as any).returning();
 
       // Create transaction items
-      const itemsWithTransactionId = items.map(item => ({
-        ...item,
+      const itemsWithTransactionId = normalizedItems.map(item => ({
         transactionId: transaction.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
         clientId: resolvedClientId,
       }));
       await tx.insert(transactionItems).values(itemsWithTransactionId);
@@ -1534,12 +1570,20 @@ export class DatabaseStorage implements IStorage {
             })
             .where(productWhere);
 
-          // Create stock movement record
+          // Create stock movement record using cost basis (averageCost preferred)
+          const productCost = productsById.get(item.productId);
+          const movementCost = Number(
+            productCost?.averageCost ??
+            productCost?.lastPurchasePrice ??
+            productCost?.sellingPrice ??
+            0
+          ).toFixed(2);
+
           await tx.insert(stockMovements).values({
             productId: item.productId,
             movementType: 'out',
             quantity: item.quantity,
-            unitCost: item.unitPrice, // Record sale price for profit tracking
+            unitCost: movementCost,
             referenceId: transaction.id,
             referenceType: 'sale',
             notes: `Penjualan - ${transaction.transactionNumber}`,
@@ -1550,29 +1594,10 @@ export class DatabaseStorage implements IStorage {
 
         // Create journaled financial records via finance manager
         try {
-          // Record revenue (income)
-          const saleIncomeResult = await financeManager.createTransactionWithJournal({
-            type: 'income',
-            category: 'Product Sales',
-            subcategory: 'Sales',
-            amount: transaction.total,
-            description: `POS Sale ${transaction.transactionNumber}`,
-            referenceType: 'pos_sale',
-            reference: transaction.id,
-            paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
-            userId: transaction.userId,
-            clientId: transaction.clientId,
-          }, tx);
-
-          if (!saleIncomeResult.success) {
-            throw new Error(saleIncomeResult.error || 'Failed to record POS sale income');
-          }
-
           // Calculate and record COGS (Cost of Goods Sold)
-          const totalCOGS = items.reduce((sum, item) => {
+          const totalCOGS = normalizedItems.reduce((sum, item) => {
             const product = productsById.get(item.productId);
             const costBasis = Number(
-              (product as any)?.hpp ??
               product?.averageCost ??
               product?.lastPurchasePrice ??
               product?.sellingPrice ??
@@ -1581,24 +1606,112 @@ export class DatabaseStorage implements IStorage {
             return sum + Number(item.quantity) * costBasis;
           }, 0);
 
+          // Build double-entry journal that captures revenue, discount (contra), and COGS in one entry
+          const grossRevenue = grossSubtotal;
+          const discountAmount = Number(normalizedTransactionData.discountAmount || 0);
+          const netCash = netSubtotal;
+
+          const journalLines: any[] = [
+            {
+              accountCode: financeManager.resolveSettlementAccount(transaction.paymentMethod?.toLowerCase() || 'cash'),
+              description: `Pembayaran POS ${transaction.transactionNumber}`,
+              debitAmount: netCash.toFixed(2),
+            },
+            {
+              accountCode: '4110',
+              description: `Pendapatan penjualan ${transaction.transactionNumber}`,
+              creditAmount: grossRevenue.toFixed(2),
+            },
+          ];
+
+          if (discountAmount > 0) {
+            journalLines.push({
+              accountCode: '4110',
+              description: `Diskon penjualan ${transaction.transactionNumber}`,
+              debitAmount: discountAmount.toFixed(2), // Debit revenue account to act as contra revenue
+            });
+          }
+
           if (totalCOGS > 0) {
-            const cogsResult = await financeManager.createTransactionWithJournal({
-              type: 'expense',
-              category: 'Cost of Goods Sold',
-              subcategory: 'POS COGS',
-              amount: totalCOGS.toString(),
-              description: `HPP POS ${transaction.transactionNumber}`,
-              referenceType: 'pos_cogs',
+            journalLines.push(
+              {
+                accountCode: '5110',
+                description: `HPP POS ${transaction.transactionNumber}`,
+                debitAmount: totalCOGS.toFixed(2),
+              },
+              {
+                accountCode: '1130',
+                description: `Pengurangan persediaan ${transaction.transactionNumber}`,
+                creditAmount: totalCOGS.toFixed(2),
+              }
+            );
+          }
+
+          const journalResult = await financeManager.createJournalEntry({
+            description: `POS ${transaction.transactionNumber}`,
+            date: new Date(),
+            status: 'posted',
+            reference: transaction.id,
+            referenceType: 'pos_sale',
+            tags: ['pos', transaction.transactionNumber],
+            lines: journalLines,
+            userId: transaction.userId,
+            clientId: transaction.clientId,
+          }, tx);
+
+          if (!journalResult.success) {
+            throw new Error(journalResult.error || 'Failed to record POS journal');
+          }
+
+          // Create financial record snapshots for reporting
+          await tx.insert(financialRecords).values([
+            {
+              type: 'income',
+              category: 'Product Sales',
+              subcategory: 'Sales',
+              amount: (grossRevenue - discountAmount).toFixed(2),
+              description: `POS Sale ${transaction.transactionNumber}`,
               reference: transaction.id,
-              paymentMethod: 'inventory',
+              referenceType: 'pos_sale',
+              paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
+              tags: ['pos'],
+              status: 'confirmed',
               userId: transaction.userId,
               clientId: transaction.clientId,
-            }, tx);
-
-            if (!cogsResult.success) {
-              throw new Error(cogsResult.error || 'Failed to record POS COGS');
-            }
-          }
+            },
+            ...(discountAmount > 0
+              ? [{
+                  type: 'expense',
+                  category: 'Sales Discount',
+                  subcategory: 'POS Discount',
+                  amount: discountAmount.toFixed(2),
+                  description: `Diskon POS ${transaction.transactionNumber}`,
+                  reference: transaction.id,
+                  referenceType: 'pos_discount',
+                  paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
+                  tags: ['pos', 'discount'],
+                  status: 'confirmed',
+                  userId: transaction.userId,
+                  clientId: transaction.clientId,
+                }]
+              : []),
+            ...(totalCOGS > 0
+              ? [{
+                  type: 'expense',
+                  category: 'Cost of Goods Sold',
+                  subcategory: 'POS COGS',
+                  amount: totalCOGS.toFixed(2),
+                  description: `HPP POS ${transaction.transactionNumber}`,
+                  reference: transaction.id,
+                  referenceType: 'pos_cogs',
+                  paymentMethod: 'inventory',
+                  tags: ['pos', 'cogs'],
+                  status: 'confirmed',
+                  userId: transaction.userId,
+                  clientId: transaction.clientId,
+                }]
+              : []),
+          ]);
         } catch (error) {
           console.error("Error creating financial records via finance manager:", error);
           throw error;
@@ -1728,7 +1841,6 @@ export class DatabaseStorage implements IStorage {
         .returning();
       
       // Prepare part totals for financial calculations
-      let totalPartsCost = 0;
       let totalPartsRevenue = 0;
       let totalPartsHPP = 0;
 
@@ -1741,15 +1853,21 @@ export class DatabaseStorage implements IStorage {
         for (const part of parts) {
           // Check if product exists
           const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
-          
+
           if (!product) {
             throw new Error(`Product dengan ID ${part.productId} tidak ditemukan`);
           }
-          
-          // Use product selling price as default
+
+          // Use product selling price as default for revenue recognition
           const unitPrice = part.unitPrice || product.sellingPrice || '0';
           const totalPrice = (parseFloat(unitPrice) * part.quantity).toString();
-          
+
+          const costBasis = Number(
+            product.averageCost ??
+            product.lastPurchasePrice ??
+            0
+          );
+
           // Insert service ticket part
           await tx.insert(serviceTicketParts).values({
             serviceTicketId: id,
@@ -1784,6 +1902,7 @@ export class DatabaseStorage implements IStorage {
               productId: part.productId,
               movementType: 'out',
               quantity: part.quantity,
+              unitCost: costBasis.toString(),
               referenceId: id,
               referenceType: 'service',
               notes: `Digunakan untuk servis ${ticket.ticketNumber}`,
@@ -1802,31 +1921,23 @@ export class DatabaseStorage implements IStorage {
             //   .where(eq(products.id, part.productId));
           }
 
-          totalPartsCost += parseFloat(totalPrice);
-          totalPartsRevenue += parseFloat(totalPrice);
-
-          const costBasis = Number(
-            product.averageCost ||
-            product.lastPurchasePrice ||
-            product.sellingPrice ||
-            0
-          );
-          totalPartsHPP += costBasis * part.quantity;
+          totalPartsRevenue += parseFloat(totalPrice); // penjualan parts
+          totalPartsHPP += costBasis * part.quantity; // HPP parts
         }
 
         // Update ticket with parts cost
         const currentLaborCost = parseFloat(ticket.laborCost || '0');
-        const newActualCost = (currentLaborCost + totalPartsCost).toString();
+        const newActualCost = (currentLaborCost + totalPartsHPP).toString();
 
         await tx.update(serviceTickets)
           .set({
-            partsCost: totalPartsCost.toString(),
+            partsCost: totalPartsHPP.toString(),
             actualCost: newActualCost,
             updatedAt: new Date()
           })
           .where(eq(serviceTickets.id, id));
 
-        ticket.partsCost = totalPartsCost.toString();
+        ticket.partsCost = totalPartsHPP.toString();
         ticket.actualCost = newActualCost;
       } else {
         // When no parts are passed, use existing parts to ensure financial records can be created
@@ -1840,86 +1951,172 @@ export class DatabaseStorage implements IStorage {
           .where(eq(serviceTicketParts.serviceTicketId, id));
 
         for (const part of existingParts) {
-          const partTotal = parseFloat(part.totalPrice || '0');
-          totalPartsCost += partTotal;
-          totalPartsRevenue += partTotal;
+          const partRevenue = parseFloat(part.totalPrice || '0');
+          totalPartsRevenue += partRevenue;
 
           const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
           if (product) {
             const costBasis = Number(
-              product.averageCost ||
-              product.lastPurchasePrice ||
-              product.sellingPrice ||
+              product.averageCost ??
+              product.lastPurchasePrice ??
               0
             );
-            totalPartsHPP += costBasis * part.quantity;
+            const partCost = costBasis * part.quantity;
+            totalPartsHPP += partCost;
           }
         }
+
+        // Keep parts cost and actual cost in sync with computed HPP when only existing parts are used
+        const currentLaborCost = parseFloat(ticket.laborCost || '0');
+        const newActualCost = (currentLaborCost + totalPartsHPP).toString();
+
+        await tx.update(serviceTickets)
+          .set({
+            partsCost: totalPartsHPP.toString(),
+            actualCost: newActualCost,
+            updatedAt: new Date()
+          })
+          .where(eq(serviceTickets.id, id));
+
+        ticket.partsCost = totalPartsHPP.toString();
+        ticket.actualCost = newActualCost;
       }
       
       // Auto-record financial transactions for completed services
       if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
         try {
           const paymentMethod = (ticket as any)?.paymentMethod || 'cash';
+          const paymentStatus = (ticketData as any)?.paymentStatus ?? (ticket as any)?.paymentStatus;
+          const isPaid = paymentStatus ? paymentStatus === 'paid' || paymentStatus === true : true;
+          const settlementAlias = isPaid ? paymentMethod : 'accounts_receivable';
+          const settlementAccount = financeManager.resolveSettlementAccount(settlementAlias);
+          const settlementMethod = isPaid ? paymentMethod : 'accounts_receivable';
+          const clientId = ticket.clientId;
 
-          // Record labor revenue
           const laborAmount = Number(ticket.laborCost || 0);
-          if (laborAmount > 0) {
-            const laborResult = await financeManager.createTransactionWithJournal({
-              type: 'income',
-              category: 'Service Revenue',
-              subcategory: 'Labor',
-              amount: laborAmount.toString(),
-              description: `Service Labor ${ticket.id}`,
-              referenceType: 'service_labor',
-              reference: ticket.id,
-              paymentMethod,
-              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-              clientId: ticket.clientId,
-            }, tx);
+          const partsRevenue = Number(totalPartsRevenue || 0);
+          const totalRevenue = laborAmount + partsRevenue;
 
-            if (!laborResult.success) {
-              throw new Error(laborResult.error || 'Failed to record service labor income');
+          // Refresh financial records to avoid duplicates and ensure corrected values
+          await tx
+            .delete(financialRecords)
+            .where(and(
+              eq(financialRecords.reference, ticket.id),
+              inArray(financialRecords.referenceType, [
+                'service_labor',
+                'service_parts_revenue',
+                'service_parts_cost'
+              ])
+            ));
+
+          if (totalRevenue > 0 || totalPartsHPP > 0) {
+            const journalLines: Array<{ accountCode: string; description: string; debitAmount?: string; creditAmount?: string }> = [];
+
+            if (totalRevenue > 0) {
+              journalLines.push({
+                accountCode: settlementAccount,
+                description: `Penerimaan servis ${ticket.ticketNumber}`,
+                debitAmount: totalRevenue.toFixed(2),
+              });
             }
-          }
 
-          // Record parts revenue
-          if (totalPartsRevenue > 0) {
-            const partsResult = await financeManager.createTransactionWithJournal({
-              type: 'income',
-              category: 'Parts Revenue',
-              subcategory: 'Parts',
-              amount: totalPartsRevenue.toString(),
-              description: `Service Parts ${ticket.id}`,
-              referenceType: 'service_parts_revenue',
-              reference: ticket.id,
-              paymentMethod,
-              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-              clientId: ticket.clientId,
-            }, tx);
-
-            if (!partsResult.success) {
-              throw new Error(partsResult.error || 'Failed to record service parts income');
+            if (partsRevenue > 0) {
+              journalLines.push({
+                accountCode: '4110',
+                description: `Pendapatan sparepart servis ${ticket.ticketNumber}`,
+                creditAmount: partsRevenue.toFixed(2),
+              });
             }
-          }
 
-          // Record COGS for spare parts
-          if (totalPartsHPP > 0) {
-            const serviceCogsResult = await financeManager.createTransactionWithJournal({
-              type: 'expense',
-              category: 'Cost of Goods Sold',
-              subcategory: 'Service COGS',
-              amount: totalPartsHPP.toString(),
-              description: `HPP Service ${ticket.id}`,
-              referenceType: 'service_parts_cost',
+            if (laborAmount > 0) {
+              journalLines.push({
+                accountCode: '4210',
+                description: `Pendapatan jasa servis ${ticket.ticketNumber}`,
+                creditAmount: laborAmount.toFixed(2),
+              });
+            }
+
+            if (totalPartsHPP > 0) {
+              journalLines.push(
+                {
+                  accountCode: '5110',
+                  description: `HPP sparepart servis ${ticket.ticketNumber}`,
+                  debitAmount: totalPartsHPP.toFixed(2),
+                },
+                {
+                  accountCode: '1130',
+                  description: `Pengurangan persediaan servis ${ticket.ticketNumber}`,
+                  creditAmount: totalPartsHPP.toFixed(2),
+                }
+              );
+            }
+
+            const journalResult = await financeManager.createCombinedJournal({
+              description: `Service ${ticket.ticketNumber}`,
               reference: ticket.id,
-              paymentMethod: 'inventory',
+              referenceType: 'service_ticket',
+              tags: ['service', ticket.ticketNumber],
+              lines: journalLines,
               userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-              clientId: ticket.clientId,
+              clientId,
             }, tx);
 
-            if (!serviceCogsResult.success) {
-              throw new Error(serviceCogsResult.error || 'Failed to record service COGS');
+            if (!journalResult.success) {
+              throw new Error(journalResult.error || 'Failed to record service journal');
+            }
+
+            const financialEntries: InsertFinancialRecord[] = [] as any;
+
+            if (laborAmount > 0) {
+              financialEntries.push({
+                type: 'income',
+                category: 'Service - Labor',
+                subcategory: 'Labor',
+                amount: laborAmount.toFixed(2),
+                description: `Service Labor ${ticket.ticketNumber}`,
+                referenceType: 'service_labor',
+                reference: ticket.id,
+                paymentMethod: settlementMethod,
+                status: 'confirmed',
+                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+                clientId,
+              });
+            }
+
+            if (partsRevenue > 0) {
+              financialEntries.push({
+                type: 'income',
+                category: 'Sales Revenue - Parts',
+                subcategory: 'Parts',
+                amount: partsRevenue.toFixed(2),
+                description: `Service Parts ${ticket.ticketNumber}`,
+                referenceType: 'service_parts_revenue',
+                reference: ticket.id,
+                paymentMethod: settlementMethod,
+                status: 'confirmed',
+                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+                clientId,
+              });
+            }
+
+            if (totalPartsHPP > 0) {
+              financialEntries.push({
+                type: 'expense',
+                category: 'Cost of Goods Sold',
+                subcategory: 'Service Parts',
+                amount: totalPartsHPP.toFixed(2),
+                description: `HPP Service ${ticket.ticketNumber}`,
+                referenceType: 'service_parts_cost',
+                reference: ticket.id,
+                paymentMethod: 'inventory',
+                status: 'confirmed',
+                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
+                clientId,
+              });
+            }
+
+            if (financialEntries.length > 0) {
+              await tx.insert(financialRecords).values(financialEntries as any);
             }
           }
         } catch (error) {
@@ -2725,39 +2922,55 @@ export class DatabaseStorage implements IStorage {
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const now = new Date();
 
-    // Today's product sales (POS transactions only)
-    const todaySalesWhere = clientId
-      ? and(
-          eq(transactions.type, 'sale'),
-          gte(transactions.createdAt, today),
-          eq(transactions.clientId, clientId)
-        )
-      : and(
-          eq(transactions.type, 'sale'),
-          gte(transactions.createdAt, today)
-        );
+    const buildFinancialConditions = (start: Date, end?: Date, extras: SQL[] = []) => {
+      const conditions: SQL[] = [eq(financialRecords.status, 'confirmed'), gte(financialRecords.createdAt, start)];
+      if (end) {
+        conditions.push(lte(financialRecords.createdAt, end));
+      }
+      if (clientId) {
+        conditions.push(eq(financialRecords.clientId, clientId));
+      }
+      conditions.push(...extras);
+      return and(...conditions);
+    };
 
     const [todayProductSalesResult] = await db
-      .select({ total: sum(transactions.total) })
-      .from(transactions)
-      .where(todaySalesWhere);
-
-    // Today's total revenue (all income including services)
-    const todayRevenueWhere = clientId
-      ? and(
-          eq(financialRecords.type, 'income'),
-          gte(financialRecords.createdAt, today),
-          eq(financialRecords.clientId, clientId)
-        )
-      : and(
-          eq(financialRecords.type, 'income'),
-          gte(financialRecords.createdAt, today)
-        );
-
-    const [todayRevenueResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
-      .where(todayRevenueWhere);
+      .where(buildFinancialConditions(today, now, [
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.category, 'Product Sales'),
+      ]));
+
+    const [todayLaborResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(today, now, [
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.category, 'Service - Labor'),
+      ]));
+
+    const [todayPartsResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(today, now, [
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.category, 'Sales Revenue - Parts'),
+      ]));
+
+    const [todayDiscountResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(today, now, [
+        eq(financialRecords.type, 'expense'),
+        eq(financialRecords.category, 'Sales Discount'),
+      ]));
+
+    const todayProductSales = Number(todayProductSalesResult?.total || 0);
+    const todayLabor = Number(todayLaborResult?.total || 0);
+    const todayParts = Number(todayPartsResult?.total || 0);
+    const todayDiscount = Number(todayDiscountResult?.total || 0);
+    const todayRevenueValue = todayProductSales + todayLabor + todayParts - todayDiscount;
 
     // Active services
     const activeServicesWhere = clientId
@@ -2795,250 +3008,81 @@ export class DatabaseStorage implements IStorage {
       .from(products)
       .where(lowStockWhere);
 
-    // Monthly profit calculated from POS transactions (harga jual - HPP)
-    let monthlySalesRevenueValue = 0;
-    let monthlyCOGSValue = 0;
-    let monthlySalesProfit = 0;
-    let monthlyProfit = 0;
-
-    try {
-      const monthlySalesWhere = clientId
-        ? and(
-            eq(transactions.type, 'sale'),
-            gte(transactions.createdAt, startOfMonth),
-            lte(transactions.createdAt, now),
-            eq(transactions.clientId, clientId)
-          )
-        : and(
-            eq(transactions.type, 'sale'),
-            gte(transactions.createdAt, startOfMonth),
-            lte(transactions.createdAt, now)
-          );
-
-      const [monthlyPosSummary] = await db
-        .select({
-          totalSales: sql<string>`COALESCE(SUM(${transactionItems.totalPrice}), 0)`,
-          totalCOGS: sql<string>`COALESCE(SUM(${transactionItems.quantity}::numeric * COALESCE(${products.averageCost}, 0)::numeric), 0)`
-        })
-        .from(transactionItems)
-        .innerJoin(transactions, eq(transactionItems.transactionId, transactions.id))
-        .innerJoin(products, eq(transactionItems.productId, products.id))
-        .where(monthlySalesWhere);
-
-      if (monthlyPosSummary) {
-        monthlySalesRevenueValue = Number(monthlyPosSummary.totalSales ?? 0);
-        monthlyCOGSValue = Number(monthlyPosSummary.totalCOGS ?? 0);
-      }
-    } catch (error) {
-      console.error("Error calculating monthly POS profit from transactions:", error);
-    }
-
-    const fallbackGrossProfit = Number((monthlySalesRevenueValue - monthlyCOGSValue).toFixed(2));
-
-    try {
-      const { financeManager } = await import('./financeManager');
-      const summary = await financeManager.getSummary(startOfMonth, now);
-
-      const summarySalesRevenueValue = Number(summary.totalSalesRevenue ?? 0);
-      const resolvedSalesRevenueValue =
-        summarySalesRevenueValue !== 0 ? summarySalesRevenueValue : monthlySalesRevenueValue;
-
-      const summaryCOGSValue = Number(summary.totalCOGS ?? 0);
-      const resolvedCOGSValue = summaryCOGSValue !== 0 ? summaryCOGSValue : monthlyCOGSValue;
-
-      const fallbackSummaryGrossProfitValue = Number(
-        (resolvedSalesRevenueValue - resolvedCOGSValue).toFixed(2)
-      );
-
-      const summaryGrossProfitValue = Number(summary.grossProfit ?? 0);
-      const resolvedGrossProfitValue =
-        summaryGrossProfitValue !== 0
-          ? summaryGrossProfitValue
-          : fallbackSummaryGrossProfitValue !== 0
-            ? fallbackSummaryGrossProfitValue
-            : summaryGrossProfitValue;
-
-      const summaryNetProfitValue =
-        summary.netProfit !== undefined && summary.netProfit !== null
-          ? Number(summary.netProfit)
-          : null;
-
-      const resolvedNetProfitValue =
-        summaryNetProfitValue !== null && !Number.isNaN(summaryNetProfitValue) && summaryNetProfitValue !== 0
-          ? summaryNetProfitValue
-          : summaryGrossProfitValue !== 0
-            ? summaryGrossProfitValue
-            : resolvedGrossProfitValue;
-
-      monthlySalesProfit = resolvedGrossProfitValue;
-      monthlyProfit = resolvedNetProfitValue;
-    } catch (error) {
-      console.error("Error getting monthly profit from finance manager:", error);
-    }
-
-    if (monthlySalesProfit === 0 && fallbackGrossProfit !== 0) {
-      monthlySalesProfit = fallbackGrossProfit;
-    }
-
-    if (monthlyProfit === 0) {
-      try {
-        // Fallback to simplified financial record calculation (harga jual - HPP)
-        const confirmedCondition = eq(financialRecords.status, 'confirmed');
-        const saleIncomeConditions = [
-          eq(financialRecords.type, 'income'),
-          eq(financialRecords.referenceType, 'sale'),
-          gte(financialRecords.createdAt, startOfMonth),
-          confirmedCondition
-        ];
-        const saleExpenseConditions = [
-          eq(financialRecords.type, 'expense'),
-          eq(financialRecords.referenceType, 'sale'),
-          gte(financialRecords.createdAt, startOfMonth),
-          confirmedCondition
-        ];
-
-        if (clientId) {
-          saleIncomeConditions.push(eq(financialRecords.clientId, clientId));
-          saleExpenseConditions.push(eq(financialRecords.clientId, clientId));
-        }
-
-        const monthlyIncomeWhere = and(...saleIncomeConditions);
-        const monthlyCogsWhere = and(...saleExpenseConditions);
-
-        const [monthlyIncomeResult] = await db
-          .select({ total: sum(financialRecords.amount) })
-          .from(financialRecords)
-          .where(monthlyIncomeWhere);
-
-        const [monthlyCogsResult] = await db
-          .select({ total: sum(financialRecords.amount) })
-          .from(financialRecords)
-          .where(monthlyCogsWhere);
-
-        const monthlyIncome = Number(monthlyIncomeResult.total || 0);
-        const monthlyCOGS = Number(monthlyCogsResult.total || 0);
-        const fallbackProfitValue = Number((monthlyIncome - monthlyCOGS).toFixed(2));
-
-        if (monthlySalesProfit === 0) {
-          monthlySalesProfit = fallbackProfitValue;
-        }
-
-        if (monthlyProfit === 0) {
-          const incomeConditions = [
-            eq(financialRecords.type, 'income'),
-            gte(financialRecords.createdAt, startOfMonth),
-            lte(financialRecords.createdAt, now),
-            confirmedCondition
-          ];
-
-          const expenseConditions = [
-            eq(financialRecords.type, 'expense'),
-            gte(financialRecords.createdAt, startOfMonth),
-            lte(financialRecords.createdAt, now),
-            confirmedCondition
-          ];
-
-          if (clientId) {
-            incomeConditions.push(eq(financialRecords.clientId, clientId));
-            expenseConditions.push(eq(financialRecords.clientId, clientId));
-          }
-
-          const [allIncomeResult] = await db
-            .select({ total: sum(financialRecords.amount) })
-            .from(financialRecords)
-            .where(and(...incomeConditions));
-
-          const [allExpenseResult] = await db
-            .select({ total: sum(financialRecords.amount) })
-            .from(financialRecords)
-            .where(and(...expenseConditions));
-
-          const totalIncome = Number(allIncomeResult.total || 0);
-          const totalExpense = Number(allExpenseResult.total || 0);
-          const fallbackNetProfit = Number((totalIncome - totalExpense).toFixed(2));
-
-          if (!Number.isNaN(fallbackNetProfit)) {
-            monthlyProfit = fallbackNetProfit;
-          }
-
-          if (monthlyProfit === 0 && fallbackProfitValue !== 0) {
-            monthlyProfit = fallbackProfitValue;
-          }
-        }
-      } catch (fallbackError) {
-        console.error("Error calculating monthly profit from financial records:", fallbackError);
-      }
-    }
-
-    let monthlyServiceProfit = 0;
-
-    try {
-      const confirmedCondition = eq(financialRecords.status, 'confirmed');
-      const serviceIncomeConditions = [
+    // Monthly profit derived purely from financial records
+    const [monthlyProductResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
         eq(financialRecords.type, 'income'),
-        or(
-          eq(financialRecords.referenceType, 'service_labor'),
-          eq(financialRecords.referenceType, 'service_parts_revenue')
-        ),
-        gte(financialRecords.createdAt, startOfMonth),
-        lte(financialRecords.createdAt, now),
-        confirmedCondition
-      ];
+        eq(financialRecords.category, 'Product Sales'),
+      ]));
 
-      const serviceCostConditions = [
+    const [monthlyLaborResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.category, 'Service - Labor'),
+      ]));
+
+    const [monthlyPartsIncomeResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
+        eq(financialRecords.type, 'income'),
+        eq(financialRecords.category, 'Sales Revenue - Parts'),
+      ]));
+
+    const [monthlyDiscountResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
         eq(financialRecords.type, 'expense'),
-        or(
-          eq(financialRecords.referenceType, 'service_parts_cost'),
-          eq(financialRecords.referenceType, 'service_cancellation_service_reversal'),
-          eq(financialRecords.referenceType, 'service_cancellation_parts_reversal'),
-          eq(financialRecords.referenceType, 'warranty_labor_reversal'),
-          eq(financialRecords.referenceType, 'warranty_parts_reversal')
-        ),
-        gte(financialRecords.createdAt, startOfMonth),
-        lte(financialRecords.createdAt, now),
-        confirmedCondition
-      ];
+        eq(financialRecords.category, 'Sales Discount'),
+      ]));
 
-      if (clientId) {
-        serviceIncomeConditions.push(eq(financialRecords.clientId, clientId));
-        serviceCostConditions.push(eq(financialRecords.clientId, clientId));
-      }
+    const [monthlyPosCogsResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
+        eq(financialRecords.type, 'expense'),
+        eq(financialRecords.referenceType, 'pos_cogs'),
+      ]));
 
-      const [serviceIncomeResult] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(and(...serviceIncomeConditions));
+    const [monthlyServiceCogsResult] = await db
+      .select({ total: sum(financialRecords.amount) })
+      .from(financialRecords)
+      .where(buildFinancialConditions(startOfMonth, now, [
+        eq(financialRecords.type, 'expense'),
+        eq(financialRecords.referenceType, 'service_parts_cost'),
+      ]));
 
-      const [serviceCostResult] = await db
-        .select({ total: sum(financialRecords.amount) })
-        .from(financialRecords)
-        .where(and(...serviceCostConditions));
+    const monthlyProductIncome = Number(monthlyProductResult?.total || 0);
+    const monthlyLaborIncome = Number(monthlyLaborResult?.total || 0);
+    const monthlyPartsIncome = Number(monthlyPartsIncomeResult?.total || 0);
+    const monthlyDiscount = Number(monthlyDiscountResult?.total || 0);
+    const monthlyPosCogs = Number(monthlyPosCogsResult?.total || 0);
+    const monthlyServiceCogs = Number(monthlyServiceCogsResult?.total || 0);
 
-      const serviceIncomeTotal = Number(serviceIncomeResult.total || 0);
-      const serviceCostTotal = Number(serviceCostResult.total || 0);
-      monthlyServiceProfit = Number((serviceIncomeTotal - serviceCostTotal).toFixed(2));
-    } catch (error) {
-      console.error("Error calculating monthly service profit:", error);
-    }
+    const monthlySalesProfit = Number((monthlyProductIncome - monthlyPosCogs).toFixed(2));
+    const monthlyServiceProfit = Number(((monthlyLaborIncome + monthlyPartsIncome) - monthlyServiceCogs).toFixed(2));
 
-    const combinedOperationalProfit = Number((monthlySalesProfit + monthlyServiceProfit).toFixed(2));
-
-    if (monthlyProfit === 0 && combinedOperationalProfit !== 0) {
-      monthlyProfit = combinedOperationalProfit;
-    }
+    const totalIncome = monthlyProductIncome + monthlyLaborIncome + monthlyPartsIncome;
+    const totalExpense = monthlyPosCogs + monthlyServiceCogs + monthlyDiscount;
+    const monthlyProfit = Number((totalIncome - totalExpense).toFixed(2));
 
     // Get WhatsApp connection status from store config
     const storeConfig = await this.getStoreConfig();
     const whatsappConnected = storeConfig?.whatsappConnected || false;
 
     return {
-      todaySales: todayProductSalesResult?.total || '0',
-      todayRevenue: todayRevenueResult?.total || '0',
+      todaySales: todayProductSales.toFixed(2),
+      todayRevenue: todayRevenueValue.toFixed(2),
       activeServices: activeServicesResult?.count || 0,
       lowStockCount: lowStockResult?.count || 0,
-      monthlyProfit: monthlyProfit.toString(),
-      monthlySalesProfit: monthlySalesProfit.toString(),
-      monthlyServiceProfit: monthlyServiceProfit.toString(),
+      monthlyProfit: monthlyProfit.toFixed(2),
+      monthlySalesProfit: monthlySalesProfit.toFixed(2),
+      monthlyServiceProfit: monthlyServiceProfit.toFixed(2),
       whatsappConnected,
     };
   }

@@ -135,6 +135,11 @@ export class FinanceManager {
     }
   }
 
+  // Expose a safe helper for other modules that need the mapped settlement account
+  public resolveSettlementAccount(paymentMethod?: string | null): string {
+    return this.resolvePaymentAccount(paymentMethod);
+  }
+
   private resolveAccountAlias(alias?: string | null): string {
     const normalized = this.normalizeText(alias);
 
@@ -460,6 +465,40 @@ export class FinanceManager {
   }
   
   // Enhanced transaction creation with automatic journal entries
+  async createCombinedJournal(
+    data: {
+      description: string;
+      reference?: string;
+      referenceType?: string;
+      tags?: string[];
+      lines: Array<{ accountCode: string; description: string; debitAmount?: string; creditAmount?: string }>;
+      userId: string;
+      clientId?: string | null;
+      date?: Date;
+    },
+    tx?: any
+  ): Promise<{ success: boolean; journalEntry?: any; error?: string }> {
+    const totalDebit = data.lines.reduce((sum, line) => sum + Number(line.debitAmount || 0), 0);
+    const totalCredit = data.lines.reduce((sum, line) => sum + Number(line.creditAmount || 0), 0);
+
+    // Ensure the journal entry stays balanced
+    if (Number(totalDebit.toFixed(2)) !== Number(totalCredit.toFixed(2))) {
+      return { success: false, error: 'Journal entry is not balanced' };
+    }
+
+    return this.createJournalEntry({
+      description: data.description,
+      date: data.date ?? new Date(),
+      status: 'posted',
+      reference: data.reference,
+      referenceType: data.referenceType,
+      tags: data.tags,
+      lines: data.lines,
+      userId: data.userId,
+      clientId: this.resolveClientId(data.clientId),
+    }, tx);
+  }
+
   async createTransactionWithJournal(
     data: {
       type: 'income' | 'expense' | 'transfer';
