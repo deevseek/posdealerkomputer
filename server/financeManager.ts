@@ -64,6 +64,156 @@ const ACCOUNT_CODES = {
 };
 
 export class FinanceManager {
+  /**
+   * Insert a journal entry with debit/credit balance validation.
+   * This helper ensures the entry is always balanced before hitting the database.
+   */
+  public async insertJournalEntry(
+    type: string,
+    lines: Array<{ accountCode: string; description?: string; debitAmount?: number | string; creditAmount?: number | string }>,
+    options?: { description?: string; reference?: string; referenceType?: string; clientId?: string | null; userId?: string | null },
+    tx?: any,
+  ) {
+    const dbClient = tx || db;
+    const debitTotal = lines.reduce((sum, line) => sum + Number(line.debitAmount || 0), 0);
+    const creditTotal = lines.reduce((sum, line) => sum + Number(line.creditAmount || 0), 0);
+
+    if (Number(debitTotal.toFixed(2)) !== Number(creditTotal.toFixed(2))) {
+      throw new Error(`Journal entry for ${type} must be balanced. Debit ${debitTotal} != Credit ${creditTotal}`);
+    }
+
+    const journalResult = await this.createJournalEntry(
+      {
+        description: options?.description || type,
+        reference: options?.reference || null,
+        referenceType: options?.referenceType || null,
+        status: 'posted',
+        lines: lines.map((line) => ({
+          accountCode: line.accountCode,
+          description: line.description || options?.description || type,
+          debitAmount: line.debitAmount?.toString(),
+          creditAmount: line.creditAmount?.toString(),
+        })),
+        userId: options?.userId || null,
+        clientId: this.resolveClientId(options?.clientId),
+      },
+      dbClient,
+    );
+
+    if (!journalResult.success) {
+      throw new Error(journalResult.error || 'Failed to create journal entry');
+    }
+
+    return journalResult;
+  }
+
+  /** Insert a normalized financial record snapshot */
+  public async insertFinancialRecord(record: InsertFinancialRecord, tx?: any) {
+    const dbClient = tx || db;
+    const payload = {
+      ...record,
+      clientId: this.resolveClientId(record.clientId),
+      status: record.status || 'confirmed',
+    } as InsertFinancialRecord;
+
+    await dbClient.insert(financialRecords).values(payload as any);
+    return payload;
+  }
+
+  /**
+   * Calculate finance impact for POS transaction with proper accounting entries.
+   * Revenue uses sales totals, COGS strictly uses purchase prices (averageCost/lastPurchasePrice).
+   */
+  public async calculatePOSFinance(
+    data: {
+      transaction: any;
+      items: Array<{ productId: string; quantity: number; totalPrice: any }>;
+    },
+    tx?: any,
+  ) {
+    const dbClient = tx || db;
+    const clientId = this.resolveClientId(data.transaction?.clientId);
+    const productIds = [...new Set(data.items.map((item) => item.productId))];
+
+    const productsById = new Map<string, any>();
+    if (productIds.length) {
+      const rows = await dbClient
+        .select({ id: products.id, lastPurchasePrice: products.lastPurchasePrice, averageCost: products.averageCost })
+        .from(products)
+        .where(clientId ? and(inArray(products.id, productIds), eq(products.clientId, clientId)) : inArray(products.id, productIds));
+      rows.forEach((row) => productsById.set(row.id, row));
+    }
+
+    let revenue = 0;
+    let cogs = 0;
+
+    for (const item of data.items) {
+      const net = Number(item.totalPrice || 0);
+      revenue += net;
+
+      const product = productsById.get(item.productId);
+      const purchasePrice = Number(product?.averageCost ?? product?.lastPurchasePrice ?? 0);
+      cogs += Number(item.quantity) * (Number.isFinite(purchasePrice) ? purchasePrice : 0);
+    }
+
+    const settlementAccount = this.resolveSettlementAccount(data.transaction?.paymentMethod || 'cash');
+
+    await this.insertJournalEntry(
+      'pos_sale',
+      [
+        { accountCode: settlementAccount, debitAmount: revenue },
+        { accountCode: ACCOUNT_CODES.SALES_REVENUE, creditAmount: revenue },
+        ...(cogs > 0
+          ? [
+              { accountCode: ACCOUNT_CODES.COST_OF_GOODS_SOLD, debitAmount: cogs },
+              { accountCode: ACCOUNT_CODES.INVENTORY, creditAmount: cogs },
+            ]
+          : []),
+      ],
+      {
+        description: `POS ${data.transaction?.transactionNumber || data.transaction?.id}`,
+        reference: data.transaction?.id,
+        referenceType: 'pos_sale',
+        clientId,
+        userId: data.transaction?.userId || null,
+      },
+      dbClient,
+    );
+
+    await this.insertFinancialRecord(
+      {
+        type: 'income',
+        category: 'Product Sales',
+        amount: revenue.toFixed(2),
+        description: `Pendapatan POS ${data.transaction?.transactionNumber || ''}`.trim(),
+        reference: data.transaction?.id,
+        referenceType: 'pos_sale',
+        paymentMethod: data.transaction?.paymentMethod || 'cash',
+        clientId,
+        userId: data.transaction?.userId || null,
+      },
+      dbClient,
+    );
+
+    if (cogs > 0) {
+      await this.insertFinancialRecord(
+        {
+          type: 'expense',
+          category: 'COGS',
+          amount: cogs.toFixed(2),
+          description: `HPP POS ${data.transaction?.transactionNumber || ''}`.trim(),
+          reference: data.transaction?.id,
+          referenceType: 'pos_cogs',
+          paymentMethod: 'inventory',
+          clientId,
+          userId: data.transaction?.userId || null,
+        },
+        dbClient,
+      );
+    }
+
+    return { revenue, cogs, grossProfit: revenue - cogs };
+  }
   private resolveClientId(explicitClientId?: string | null) {
     if (typeof explicitClientId !== 'undefined') {
       return explicitClientId;

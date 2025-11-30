@@ -1611,136 +1611,18 @@ export class DatabaseStorage implements IStorage {
           });
         }
 
-        // Create journaled financial records via finance manager
-        try {
-          // Calculate and record COGS (Cost of Goods Sold)
-          let totalCOGS = 0;
-          for (const item of normalizedItems) {
-            const costBasis = await resolveProductCost(item.productId);
-            totalCOGS += Number(item.quantity) * costBasis;
-          }
-
-          // Build double-entry journal that captures revenue, discount (contra), and COGS in one entry
-          const grossRevenue = grossSubtotal;
-          const discountAmount = Number(normalizedTransactionData.discountAmount || 0);
-          const netCash = netSubtotal;
-
-          const journalLines: any[] = [
-            {
-              accountCode: financeManager.resolveSettlementAccount(transaction.paymentMethod?.toLowerCase() || 'cash'),
-              description: `Pembayaran POS ${transaction.transactionNumber}`,
-              debitAmount: netCash.toFixed(2),
-            },
-            {
-              accountCode: '4110',
-              description: `Pendapatan penjualan ${transaction.transactionNumber}`,
-              creditAmount: grossRevenue.toFixed(2),
-            },
-          ];
-
-          if (discountAmount > 0) {
-            journalLines.push({
-              accountCode: '4110',
-              description: `Diskon penjualan ${transaction.transactionNumber}`,
-              debitAmount: discountAmount.toFixed(2), // Debit revenue account to act as contra revenue
-            });
-          }
-
-          if (totalCOGS > 0) {
-            journalLines.push(
-              {
-                accountCode: '5110',
-                description: `HPP POS ${transaction.transactionNumber}`,
-                debitAmount: totalCOGS.toFixed(2),
-              },
-              {
-                accountCode: '1130',
-                description: `Pengurangan persediaan ${transaction.transactionNumber}`,
-                creditAmount: totalCOGS.toFixed(2),
-              }
-            );
-          }
-
-          const journalResult = await financeManager.createJournalEntry({
-            description: `POS ${transaction.transactionNumber}`,
-            date: new Date(),
-            status: 'posted',
-            reference: transaction.id,
-            referenceType: 'pos_sale',
-            tags: ['pos', transaction.transactionNumber],
-            lines: journalLines,
-            userId: transaction.userId,
-            clientId: transaction.clientId,
-          }, tx);
-
-          if (!journalResult.success) {
-            throw new Error(journalResult.error || 'Failed to record POS journal');
-          }
-
-          // Create financial record snapshots for reporting
-          await tx
-            .delete(financialRecords)
-            .where(
-              and(
-                eq(financialRecords.reference, transaction.id),
-                inArray(financialRecords.referenceType, ['pos_sale', 'pos_discount', 'pos_cogs'])
-              )
-            );
-
-          const financialEntries: InsertFinancialRecord[] = [
-            {
-              type: 'income',
-              category: 'Product Sales',
-              subcategory: 'Sales',
-              amount: (grossRevenue - discountAmount).toFixed(2),
-              description: `POS Sale ${transaction.transactionNumber}`,
-              reference: transaction.id,
-              referenceType: 'pos_sale',
-              paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
-              tags: ['pos'],
-              status: 'confirmed',
-              userId: transaction.userId,
-              clientId: transaction.clientId,
-            },
-            ...(discountAmount > 0
-              ? [{
-                  type: 'expense',
-                  category: 'Sales Discount',
-                  subcategory: 'POS Discount',
-                  amount: discountAmount.toFixed(2),
-                  description: `Diskon POS ${transaction.transactionNumber}`,
-                  reference: transaction.id,
-                  referenceType: 'pos_discount',
-                  paymentMethod: transaction.paymentMethod?.toLowerCase() || 'cash',
-                  tags: ['pos', 'discount'],
-                  status: 'confirmed',
-                  userId: transaction.userId,
-                  clientId: transaction.clientId,
-                } as InsertFinancialRecord]
-              : []),
-            ...(totalCOGS > 0
-              ? [{
-                  type: 'expense',
-                  category: 'Cost of Goods Sold',
-                  subcategory: 'POS COGS',
-                  amount: totalCOGS.toFixed(2),
-                  description: `HPP POS ${transaction.transactionNumber}`,
-                  reference: transaction.id,
-                  referenceType: 'pos_cogs',
-                  paymentMethod: 'inventory',
-                  tags: ['pos', 'cogs'],
-                  status: 'confirmed',
-                  userId: transaction.userId,
-                  clientId: transaction.clientId,
-                } as InsertFinancialRecord]
-              : []),
-          ];
-
-          await tx.insert(financialRecords).values(financialEntries as any);
-        } catch (error) {
-          console.error("Error creating financial records via finance manager:", error);
-          throw error;
-        }
+        // Create balanced finance records with new engine (no duplicate/double counting)
+        await financeManager.calculatePOSFinance(
+          {
+            transaction,
+            items: normalizedItems.map((item) => ({
+              productId: item.productId,
+              quantity: Number(item.quantity),
+              totalPrice: item.totalPrice,
+            })),
+          },
+          tx,
+        );
       }
       
       // Fetch complete transaction with items for receipt
