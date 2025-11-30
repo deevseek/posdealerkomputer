@@ -1813,21 +1813,48 @@ export class DatabaseStorage implements IStorage {
           );
           totalPartsHPP += costBasis * part.quantity;
         }
-        
+
         // Update ticket with parts cost
         const currentLaborCost = parseFloat(ticket.laborCost || '0');
         const newActualCost = (currentLaborCost + totalPartsCost).toString();
-        
+
         await tx.update(serviceTickets)
-          .set({ 
+          .set({
             partsCost: totalPartsCost.toString(),
             actualCost: newActualCost,
             updatedAt: new Date()
           })
           .where(eq(serviceTickets.id, id));
-          
+
         ticket.partsCost = totalPartsCost.toString();
         ticket.actualCost = newActualCost;
+      } else {
+        // When no parts are passed, use existing parts to ensure financial records can be created
+        const existingParts = await tx
+          .select({
+            productId: serviceTicketParts.productId,
+            quantity: serviceTicketParts.quantity,
+            totalPrice: serviceTicketParts.totalPrice,
+          })
+          .from(serviceTicketParts)
+          .where(eq(serviceTicketParts.serviceTicketId, id));
+
+        for (const part of existingParts) {
+          const partTotal = parseFloat(part.totalPrice || '0');
+          totalPartsCost += partTotal;
+          totalPartsRevenue += partTotal;
+
+          const [product] = await tx.select().from(products).where(eq(products.id, part.productId));
+          if (product) {
+            const costBasis = Number(
+              product.averageCost ||
+              product.lastPurchasePrice ||
+              product.sellingPrice ||
+              0
+            );
+            totalPartsHPP += costBasis * part.quantity;
+          }
+        }
       }
       
       // Auto-record financial transactions for completed services
