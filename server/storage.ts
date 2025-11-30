@@ -1555,6 +1555,30 @@ export class DatabaseStorage implements IStorage {
         productRows.forEach((product) => productsById.set(product.id, product));
       }
       
+      // Helper to resolve product cost (HPP) consistently for POS calculations
+      const productCostCache = new Map<string, number>();
+      const resolveProductCost = async (productId: string): Promise<number> => {
+        if (productCostCache.has(productId)) {
+          return productCostCache.get(productId) as number;
+        }
+
+        const product = productsById.get(productId);
+        let cost = Number(product?.averageCost ?? product?.lastPurchasePrice ?? NaN);
+
+        // If no explicit HPP is recorded on the product, fall back to the
+        // weighted average purchase price from stock movements (not selling price)
+        if (!Number.isFinite(cost) || cost <= 0) {
+          cost = await this.getAveragePurchasePrice(productId, resolvedClientId);
+        }
+
+        if (!Number.isFinite(cost) || cost < 0) {
+          cost = 0;
+        }
+
+        productCostCache.set(productId, cost);
+        return cost;
+      };
+
       // Update stock for sales
       if (transactionData.type === 'sale') {
         for (const item of items) {
@@ -1571,13 +1595,8 @@ export class DatabaseStorage implements IStorage {
             .where(productWhere);
 
           // Create stock movement record using cost basis (averageCost preferred)
-          const productCost = productsById.get(item.productId);
-          const movementCost = Number(
-            productCost?.averageCost ??
-            productCost?.lastPurchasePrice ??
-            productCost?.sellingPrice ??
-            0
-          ).toFixed(2);
+          const productCost = await resolveProductCost(item.productId);
+          const movementCost = Number(productCost).toFixed(2);
 
           await tx.insert(stockMovements).values({
             productId: item.productId,
@@ -1595,16 +1614,11 @@ export class DatabaseStorage implements IStorage {
         // Create journaled financial records via finance manager
         try {
           // Calculate and record COGS (Cost of Goods Sold)
-          const totalCOGS = normalizedItems.reduce((sum, item) => {
-            const product = productsById.get(item.productId);
-            const costBasis = Number(
-              product?.averageCost ??
-              product?.lastPurchasePrice ??
-              product?.sellingPrice ??
-              0
-            );
-            return sum + Number(item.quantity) * costBasis;
-          }, 0);
+          let totalCOGS = 0;
+          for (const item of normalizedItems) {
+            const costBasis = await resolveProductCost(item.productId);
+            totalCOGS += Number(item.quantity) * costBasis;
+          }
 
           // Build double-entry journal that captures revenue, discount (contra), and COGS in one entry
           const grossRevenue = grossSubtotal;
