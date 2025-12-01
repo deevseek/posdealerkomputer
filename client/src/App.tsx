@@ -30,6 +30,7 @@ import AdminSaaS from "@/pages/admin-saas";
 import ClientOnboarding from "@/pages/client-onboarding";
 import TopUpPage from "@/pages/topup";
 import Warranty from "@/pages/warranty";
+import FinancePage from "@/pages/finance";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -89,6 +90,8 @@ function Router() {
           <Route path="/purchasing" component={Purchasing} />
           <Route path="/customers" component={Customers} />
           <Route path="/suppliers" component={Suppliers} />
+          <Route path="/finance" component={FinancePage} />
+          <Route path="/admin/finance" component={FinancePage} />
           <Route path="/financial" component={Financial} />
           <Route path="/finance-new" component={FinanceNew} />
           <Route path="/users" component={UsersPage} />
