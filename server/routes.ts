@@ -2561,10 +2561,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate: endDate
           ? getEndOfDayJakarta(parseWithTimezone(endDate as string, false))
           : getEndOfDayJakarta(now),
-        referenceType: referenceType as string
+        referenceType: referenceType as string,
       };
       const transactions = await financeManager.getTransactions(filters);
-      res.json(transactions);
+      const normalized = transactions.map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        category: tx.category,
+        subcategory: tx.subcategory,
+        amount: Number((tx as any).amount || 0),
+        paymentMethod: (tx as any).paymentMethod,
+        createdAt: (tx as any).createdAt instanceof Date ? (tx as any).createdAt.toISOString() : (tx as any).createdAt,
+        reference: (tx as any).reference,
+        referenceType: (tx as any).referenceType,
+        journalId: (tx as any).journalEntryId || (tx as any).journalId || null,
+      }));
+      res.json(normalized);
     } catch (error) {
       console.error("Error fetching transactions:", error);
       res.status(500).json({ message: "Failed to fetch transactions" });
@@ -2607,6 +2619,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching summary:", error);
       res.status(500).json({ message: "Failed to fetch summary" });
+    }
+  });
+
+  app.get('/api/finance/journal/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const entry = await financeManager.getJournalEntry(id);
+      if (!entry) {
+        return res.status(404).json({ message: "Journal entry not found" });
+      }
+      res.json(entry);
+    } catch (error) {
+      console.error("Error fetching journal entry:", error);
+      res.status(500).json({ message: "Failed to fetch journal entry" });
     }
   });
 

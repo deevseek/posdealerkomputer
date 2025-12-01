@@ -11,7 +11,7 @@ export function useFinanceSummary({ startDate, endDate }: FinanceDateRange) {
     queryFn: () =>
       apiRequest(
         "GET",
-        `/api/finance/summary?start=${encodeURIComponent(formatDateParam(startDate))}&end=${encodeURIComponent(formatDateParam(endDate))}`,
+        `/api/finance/summary?startDate=${encodeURIComponent(formatDateParam(startDate))}&endDate=${encodeURIComponent(formatDateParam(endDate))}`,
       ),
   });
 }
@@ -22,7 +22,7 @@ export function useFinanceTransactions({ startDate, endDate }: FinanceDateRange)
     queryFn: () =>
       apiRequest(
         "GET",
-        `/api/finance/transactions?start=${encodeURIComponent(formatDateParam(startDate))}&end=${encodeURIComponent(formatDateParam(endDate))}`,
+        `/api/finance/transactions?startDate=${encodeURIComponent(formatDateParam(startDate))}&endDate=${encodeURIComponent(formatDateParam(endDate))}`,
       ),
   });
 }
