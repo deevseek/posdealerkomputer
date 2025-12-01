@@ -1057,12 +1057,13 @@ export class DatabaseStorage implements IStorage {
         }
 
         // Also create the simple financial record for backward compatibility
-        // IMPORTANT: Refunds should NOT be counted as income for accounting accuracy
-        const recordType = item.outstandingStatus === 'refunded' ? 'refund_recovery' : 'expense';
-        const recordDescription = item.outstandingStatus === 'refunded' 
+        // Mark purchases as assets (inventory) instead of expenses so they don't reduce profit until sold
+        const isRefundRecovery = item.outstandingStatus === 'refunded';
+        const recordType = 'asset';
+        const recordDescription = isRefundRecovery
           ? `Refund Recovery: ${receivedQuantity} units received`
           : `Purchase: ${receivedQuantity} units received`;
-        const recordCategory = item.outstandingStatus === 'refunded' 
+        const recordCategory = isRefundRecovery
           ? 'Returns and Allowances'
           : 'Inventory Purchase';
           
@@ -1078,10 +1079,10 @@ export class DatabaseStorage implements IStorage {
         });
       } catch (error) {
         console.error("Error creating journal entry for purchase:", error);
-        // Fallback to simple financial record
+        // Fallback to simple financial record (still recorded as asset)
         await db.insert(financialRecords).values({
           clientId: resolvedClientId,
-          type: 'expense',
+          type: 'asset',
           amount: totalCost.toString(),
           description: `Purchase: ${receivedQuantity} units received`,
           category: 'Inventory Purchase',

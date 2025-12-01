@@ -203,7 +203,8 @@ export async function processPOSTransaction(
       amount: cogs.toFixed(2),
       description: `HPP POS ${data.transaction?.transactionNumber || ""}`.trim(),
       reference: data.transaction?.id,
-      referenceType: "pos_sale_cogs",
+      // Mark COGS as an expense tied to POS so dashboards pick it up correctly
+      referenceType: "pos_cogs",
       paymentMethod: "inventory",
       userId: data.transaction?.userId || null,
       clientId,
@@ -310,7 +311,8 @@ export async function processServiceTransaction(
         amount: partsCost.toFixed(2),
         description: `HPP sparepart ${data.ticket?.ticketNumber || ""}`.trim(),
         reference: data.ticket?.id,
-        referenceType: "service_cogs",
+        // Ensure service part costs are treated as expenses from HPP
+        referenceType: "service_parts_cost",
         paymentMethod: "inventory",
         userId: data.userId || data.ticket?.userId || null,
         clientId,
