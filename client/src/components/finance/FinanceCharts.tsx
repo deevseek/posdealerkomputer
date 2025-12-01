@@ -33,7 +33,7 @@ function buildLineSeries(transactions: FinancialRecord[] = []) {
     }
     if (tx.type === "income") {
       grouped[date].income += tx.amount;
-    } else {
+    } else if (tx.type === "expense") {
       grouped[date].expense += tx.amount;
     }
   });

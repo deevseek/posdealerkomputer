@@ -1242,7 +1242,7 @@ export class DatabaseStorage implements IStorage {
     // CREATE FINANCE TRANSACTION for stock movements that have cost impact
     if (movement.unitCost && parseFloat(movement.unitCost) > 0) {
       const totalCost = parseFloat(movement.unitCost) * movement.quantity;
-      let transactionType: 'income' | 'expense' = 'expense';
+      let transactionType: 'income' | 'expense' | 'asset' = 'expense';
       let description = `Stock movement: ${movement.movementType}`;
       
       if (movement.movementType === 'out') {
@@ -1252,9 +1252,9 @@ export class DatabaseStorage implements IStorage {
           `Sale: ${movement.quantity} units` : 
           `Stock out: ${movement.quantity} units`;
       } else {
-        // When stock comes in, it's usually a purchase (expense)
-        transactionType = 'expense';
-        description = `Stock in: ${movement.quantity} units`;
+        // When stock comes in, it's an inventory asset increase (not an expense)
+        transactionType = 'asset';
+        description = `Stock in: ${movement.quantity} units added to inventory`;
       }
       
       await db.insert(financialRecords).values({

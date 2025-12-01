@@ -12,7 +12,7 @@ export default function Financial() {
   useEffect(() => {
     // Auto redirect to new finance system after 3 seconds
     const timer = setTimeout(() => {
-      setLocation('/finance-new');
+      setLocation('/finance');
     }, 3000);
 
     return () => clearTimeout(timer);
@@ -85,11 +85,11 @@ export default function Financial() {
                 </div>
 
                 <Button 
-                  onClick={() => setLocation('/finance-new')}
+                  onClick={() => setLocation('/finance')}
                   size="lg"
                   className="w-full max-w-md"
                 >
-                  Buka Sistem Keuangan Baru
+                  Buka Sistem Keuangan
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>

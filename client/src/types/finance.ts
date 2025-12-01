@@ -1,8 +1,4 @@
-export type FinanceCategory =
-  | "sales_revenue"
-  | "service_revenue"
-  | "cogs"
-  | "expense";
+export type FinanceCategory = string;
 
 export interface FinanceSummary {
   totalIncome: number;
@@ -18,7 +14,7 @@ export interface FinanceSummary {
 
 export interface FinancialRecord {
   id: string;
-  type: "income" | "expense";
+  type: "income" | "expense" | "transfer" | "asset";
   category: FinanceCategory;
   subcategory?: string | null;
   amount: number;
