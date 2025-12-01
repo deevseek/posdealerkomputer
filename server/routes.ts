@@ -2,6 +2,7 @@ import type { Express, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { realtimeService } from "./realtime";
 import { storage } from "./storage";
+import { recordInventoryPurchase } from "./finance";
 import { whatsappService } from "./whatsappService";
 import QRCode from 'qrcode';
 // Conditional auth import based on environment
@@ -1418,7 +1419,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       console.log("Receiving items:", { itemId, receivedQuantity, userId });
-      await storage.receivePurchaseOrderItem(itemId, parseInt(receivedQuantity), userId);
+      const purchaseResult = await storage.receivePurchaseOrderItem(
+        itemId,
+        parseInt(receivedQuantity),
+        userId,
+      );
+
+      if (purchaseResult?.totalCost > 0) {
+        await recordInventoryPurchase({
+          purchaseId: purchaseResult.purchaseOrderId,
+          supplier: purchaseResult.supplier,
+          totalCost: purchaseResult.totalCost,
+          paymentMethod: purchaseResult.paymentMethod || 'cash',
+          userId,
+          clientId: purchaseResult.clientId,
+        });
+      }
       
       // Emit real-time update for stock changes
       realtimeService.broadcast({

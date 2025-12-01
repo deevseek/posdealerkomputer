@@ -151,7 +151,17 @@ export interface IStorage {
   updatePurchaseOrderItem(id: string, item: Partial<InsertPurchaseOrderItem>): Promise<PurchaseOrderItem>;
   deletePurchaseOrderItem(id: string): Promise<void>;
   recalculatePurchaseOrderTotal(poId: string): Promise<void>;
-  receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void>;
+  receivePurchaseOrderItem(
+    itemId: string,
+    receivedQuantity: number,
+    userId: string,
+  ): Promise<{
+    purchaseOrderId: string;
+    totalCost: number;
+    supplier?: string | null;
+    paymentMethod?: string | null;
+    clientId?: string | null;
+  }>;
   
   // Inventory Adjustments
   getInventoryAdjustments(): Promise<InventoryAdjustment[]>;
@@ -963,7 +973,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(purchaseOrderItems.id, itemId));
   }
 
-  async receivePurchaseOrderItem(itemId: string, receivedQuantity: number, userId: string): Promise<void> {
+  async receivePurchaseOrderItem(
+    itemId: string,
+    receivedQuantity: number,
+    userId: string,
+  ): Promise<{
+    purchaseOrderId: string;
+    totalCost: number;
+    supplier?: string | null;
+    paymentMethod?: string | null;
+    clientId?: string | null;
+  }> {
     // Get item details with select all - no complex field selection
     const [item] = await db
       .select()
@@ -972,7 +992,19 @@ export class DatabaseStorage implements IStorage {
 
     if (!item) throw new Error("Purchase order item not found");
 
-    const resolvedClientId = this.resolveClientId(item.clientId);
+    const [purchaseOrder] = await db
+      .select({
+        id: purchaseOrders.id,
+        supplierName: suppliers.name,
+        supplierId: purchaseOrders.supplierId,
+        paymentMethod: purchaseOrders.paymentTerms,
+        clientId: purchaseOrders.clientId,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(eq(purchaseOrders.id, item.purchaseOrderId));
+
+    const resolvedClientId = this.resolveClientId(item.clientId || purchaseOrder?.clientId);
 
     const newReceivedQuantity = (item.receivedQuantity || 0) + receivedQuantity;
     const newOutstandingQuantity = item.quantity - newReceivedQuantity;
@@ -1008,90 +1040,6 @@ export class DatabaseStorage implements IStorage {
 
     // CREATE PROPER JOURNAL ENTRY for purchase (inventory in, cash/accounts payable out)
     const totalCost = parseFloat(item.unitCost || item.unitPrice || '0') * receivedQuantity;
-    if (totalCost > 0) {
-      try {
-        const { FinanceManager } = await import('./financeManager');
-        const financeManager = new FinanceManager();
-        
-        // Create different journal entries for refunded vs normal items
-        if (item.outstandingStatus === 'refunded') {
-          // For refunded items: Debit Inventory, Credit Refund Recovery
-          await financeManager.createJournalEntry({
-            description: `Refund recovery - ${receivedQuantity} units received`,
-            reference: item.purchaseOrderId,
-            referenceType: 'purchase_refund',
-            lines: [
-              {
-                accountCode: '1300', // Inventory asset account
-                description: `Inventory increase - Refund Recovery`,
-                debitAmount: totalCost.toString()
-              },
-              {
-                accountCode: '1200', // Accounts Receivable or Refund Recovery
-                description: `Refund recovery - Supplier returned goods`,
-                creditAmount: totalCost.toString()
-              }
-            ],
-            userId: userId
-          });
-        } else {
-          // Normal purchase: Debit Inventory, Credit Accounts Payable
-          await financeManager.createJournalEntry({
-            description: `Inventory purchase - ${receivedQuantity} units received`,
-            reference: item.purchaseOrderId,
-            referenceType: 'purchase_order',
-            lines: [
-              {
-                accountCode: '1300', // Inventory asset account
-                description: `Inventory increase - Purchase`,
-                debitAmount: totalCost.toString()
-              },
-              {
-                accountCode: '2000', // Accounts Payable (or could be cash if paid immediately)
-                description: `Purchase liability - PO payment due`,
-                creditAmount: totalCost.toString()
-              }
-            ],
-            userId: userId
-          });
-        }
-
-        // Also create the simple financial record for backward compatibility
-        // Mark purchases as assets (inventory) instead of expenses so they don't reduce profit until sold
-        const isRefundRecovery = item.outstandingStatus === 'refunded';
-        const recordType = 'asset';
-        const recordDescription = isRefundRecovery
-          ? `Refund Recovery: ${receivedQuantity} units received`
-          : `Purchase: ${receivedQuantity} units received`;
-        const recordCategory = isRefundRecovery
-          ? 'Returns and Allowances'
-          : 'Inventory Purchase';
-          
-        await db.insert(financialRecords).values({
-          clientId: resolvedClientId,
-          type: recordType,
-          amount: totalCost.toString(),
-          description: recordDescription,
-          category: recordCategory,
-          reference: item.purchaseOrderId,
-          referenceType: item.outstandingStatus === 'refunded' ? 'refund_recovery' : 'purchase_order',
-          userId: userId,
-        });
-      } catch (error) {
-        console.error("Error creating journal entry for purchase:", error);
-        // Fallback to simple financial record (still recorded as asset)
-        await db.insert(financialRecords).values({
-          clientId: resolvedClientId,
-          type: 'asset',
-          amount: totalCost.toString(),
-          description: `Purchase: ${receivedQuantity} units received`,
-          category: 'Inventory Purchase',
-          reference: item.purchaseOrderId,
-          referenceType: 'purchase_order',
-          userId: userId,
-        });
-      }
-    }
 
     // DIRECT UPDATE: Use SQL arithmetic to ensure stock update works
     await db
@@ -1115,6 +1063,14 @@ export class DatabaseStorage implements IStorage {
 
     // Check if PO should be updated to received status
     await this.updatePurchaseOrderStatus(item.purchaseOrderId);
+
+    return {
+      purchaseOrderId: item.purchaseOrderId,
+      totalCost,
+      supplier: purchaseOrder?.supplierName || purchaseOrder?.supplierId,
+      paymentMethod: purchaseOrder?.paymentMethod,
+      clientId: resolvedClientId,
+    };
   }
 
   async updatePurchaseOrderStatus(poId: string): Promise<void> {
