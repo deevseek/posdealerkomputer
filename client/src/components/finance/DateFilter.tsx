@@ -39,7 +39,11 @@ export function DateFilter({ startDate, endDate, onChange, onApply }: DateFilter
             />
           </div>
         </div>
-        <Button onClick={onApply} className="w-full sm:w-auto">
+        <Button
+          type="button"
+          onClick={() => onApply?.()}
+          className="w-full sm:w-auto"
+        >
           <CalendarSearch className="mr-2 h-4 w-4" />
           Terapkan
         </Button>
