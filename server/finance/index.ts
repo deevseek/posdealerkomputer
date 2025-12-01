@@ -35,6 +35,8 @@ const FINANCIAL_CATEGORIES = {
   SERVICE_REVENUE: "service_revenue",
   COGS: "cogs",
   EXPENSE: "expense",
+  INVENTORY: "inventory",
+  INVENTORY_PURCHASE: "inventory_purchase",
 } as const;
 
 type SettlementMethod = "cash" | "bank_transfer" | "credit_card" | "accounts_receivable" | string;
@@ -322,6 +324,62 @@ export async function processServiceTransaction(
   }
 
   return { revenue: totalRevenue, cogs: partsCost };
+}
+
+export async function recordInventoryPurchase(
+  data: {
+    purchaseId: string;
+    supplier?: string | null;
+    totalCost: number;
+    paymentMethod?: SettlementMethod;
+    userId?: string | null;
+    clientId?: string | null;
+  },
+  tx?: any,
+) {
+  const executor = tx || db;
+  const clientId = resolveClientId(data.clientId);
+  const settlementAccount = resolveSettlementAccount(data.paymentMethod || "cash");
+  const amount = Number(data.totalCost || 0);
+
+  if (amount <= 0) return null;
+
+  await createJournalEntry(
+    "inventory_purchase",
+    [
+      { accountCode: ACCOUNT_CODES.INVENTORY, debitAmount: amount },
+      { accountCode: settlementAccount, creditAmount: amount },
+    ],
+    {
+      description: data.supplier
+        ? `Inventory purchase from ${data.supplier}`
+        : "Inventory purchase",
+      reference: data.purchaseId,
+      referenceType: "inventory_purchase",
+      userId: data.userId || null,
+      clientId,
+      tx: executor,
+    },
+  );
+
+  await recordFinancialEvent(
+    {
+      type: "asset",
+      category: FINANCIAL_CATEGORIES.INVENTORY,
+      amount: amount.toFixed(2),
+      description: data.supplier
+        ? `Inventory purchase from ${data.supplier}`
+        : "Inventory purchase",
+      reference: data.purchaseId,
+      referenceType: "inventory_purchase",
+      paymentMethod: data.paymentMethod || "cash",
+      userId: data.userId || null,
+      clientId,
+    },
+    executor,
+  );
+
+  return { amount };
 }
 
 export async function getFinancialSummary(startDate: Date, endDate: Date, tx?: any) {
