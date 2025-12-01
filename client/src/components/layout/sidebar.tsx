@@ -34,7 +34,7 @@ const navigation = [
   { name: "Servis", href: "/service", icon: Wrench, roles: ["admin", "teknisi", "owner"] },
   { name: "Inventori", href: "/inventory", icon: Package, roles: ["admin", "purchasing", "owner"] },
   { name: "Pembelian", href: "/purchasing", icon: ShoppingCart, roles: ["admin", "purchasing", "owner"] },
-  { name: "Keuangan & Gaji", href: "/finance-new", icon: PieChart, roles: ["admin", "finance", "owner"] },
+  { name: "Keuangan & Gaji", href: "/finance", icon: PieChart, roles: ["admin", "finance", "owner"] },
   { name: "Pelanggan", href: "/customers", icon: Users, roles: ["admin", "kasir", "teknisi", "purchasing", "finance", "owner"] },
   { name: "Supplier", href: "/suppliers", icon: Truck, roles: ["admin", "purchasing", "owner"] },
   { name: "Pengguna", href: "/users", icon: UserCog, roles: ["admin", "owner"] },

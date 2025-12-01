@@ -19,7 +19,7 @@ import Header from "@/components/layout/header";
 
 interface FinancialTransaction {
   id: string;
-  type: 'income' | 'expense' | 'transfer';
+  type: 'income' | 'expense' | 'transfer' | 'asset';
   category: string;
   subcategory?: string;
   amount: string;
@@ -110,7 +110,7 @@ interface TransactionFormState {
 }
 
 interface CreateTransactionPayload {
-  type: 'income' | 'expense' | 'transfer';
+  type: 'income' | 'expense' | 'transfer' | 'asset';
   category: string;
   subcategory?: string;
   amount: string;
@@ -600,7 +600,7 @@ export default function FinanceNew() {
         label: 'Refund/Retur'
       };
     }
-    
+
     if (transaction.type === 'income') {
       return {
         sign: '+',
@@ -608,9 +608,18 @@ export default function FinanceNew() {
         badge: 'default',
         label: 'Pemasukan'
       };
+    }
+
+    if (transaction.type === 'asset') {
+      return {
+        sign: '+',
+        color: 'text-blue-600',
+        badge: 'secondary',
+        label: 'Aset/Persediaan'
+      };
     } else {
       // Cek apakah ini transaksi aset atau expense berdasarkan kategori dan deskripsi
-      const isAsset = 
+      const isAsset =
         // Deteksi langsung berdasarkan kategori exact match
         transaction.category === 'Cost of Goods Sold' ||
         transaction.category === 'Inventory Purchase' ||

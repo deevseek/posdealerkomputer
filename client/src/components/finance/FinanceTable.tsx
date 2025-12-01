@@ -98,11 +98,22 @@ export function FinanceTable({ data = [], isLoading, onSelectJournal }: FinanceT
                   return (
                     <TableRow key={item.id}>
                       <TableCell className="whitespace-nowrap text-slate-700">{formattedDate}</TableCell>
-                      <TableCell>
-                        <Badge variant={item.type === "income" ? "default" : "destructive"} className="capitalize">
-                          {item.type}
-                        </Badge>
-                      </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        item.type === "income"
+                          ? "default"
+                          : item.type === "asset"
+                            ? "secondary"
+                            : item.type === "transfer"
+                              ? "outline"
+                              : "destructive"
+                      }
+                      className="capitalize"
+                    >
+                      {item.type}
+                    </Badge>
+                  </TableCell>
                       <TableCell className="capitalize">{item.category.replace("_", " ")}</TableCell>
                       <TableCell className="capitalize">{item.subcategory || "-"}</TableCell>
                       <TableCell className="whitespace-nowrap font-semibold text-slate-900">
