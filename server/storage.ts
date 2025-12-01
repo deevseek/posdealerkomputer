@@ -1611,14 +1611,13 @@ export class DatabaseStorage implements IStorage {
           });
         }
 
-        // Create balanced finance records with new engine (no duplicate/double counting)
-        await financeManager.calculatePOSFinance(
+        await financeManager.processPOSTransaction(
           {
             transaction,
             items: normalizedItems.map((item) => ({
               productId: item.productId,
               quantity: Number(item.quantity),
-              totalPrice: item.totalPrice,
+              totalPrice: Number(item.totalPrice),
             })),
           },
           tx,
@@ -1889,147 +1888,20 @@ export class DatabaseStorage implements IStorage {
         ticket.actualCost = newActualCost;
       }
       
-      // Auto-record financial transactions for completed services
       if (ticket && (ticket.status === 'completed' || ticket.status === 'delivered')) {
-        try {
-          const paymentMethod = (ticket as any)?.paymentMethod || 'cash';
-          const paymentStatus = (ticketData as any)?.paymentStatus ?? (ticket as any)?.paymentStatus;
-          const isPaid = paymentStatus ? paymentStatus === 'paid' || paymentStatus === true : true;
-          const settlementAlias = isPaid ? paymentMethod : 'accounts_receivable';
-          const settlementAccount = financeManager.resolveSettlementAccount(settlementAlias);
-          const settlementMethod = isPaid ? paymentMethod : 'accounts_receivable';
-          const clientId = ticket.clientId;
+        await tx
+          .delete(financialRecords)
+          .where(eq(financialRecords.reference, ticket.id));
 
-          const laborAmount = Number(ticket.laborCost || 0);
-          const partsRevenue = Number(totalPartsRevenue || 0);
-          const totalRevenue = laborAmount + partsRevenue;
-
-          // Refresh financial records to avoid duplicates and ensure corrected values
-          await tx
-            .delete(financialRecords)
-            .where(and(
-              eq(financialRecords.reference, ticket.id),
-              inArray(financialRecords.referenceType, [
-                'service_labor',
-                'service_parts_revenue',
-                'service_parts_cost'
-              ])
-            ));
-
-          if (totalRevenue > 0 || totalPartsHPP > 0) {
-            const journalLines: Array<{ accountCode: string; description: string; debitAmount?: string; creditAmount?: string }> = [];
-
-            if (totalRevenue > 0) {
-              journalLines.push({
-                accountCode: settlementAccount,
-                description: `Penerimaan servis ${ticket.ticketNumber}`,
-                debitAmount: totalRevenue.toFixed(2),
-              });
-            }
-
-            if (partsRevenue > 0) {
-              journalLines.push({
-                accountCode: '4110',
-                description: `Pendapatan sparepart servis ${ticket.ticketNumber}`,
-                creditAmount: partsRevenue.toFixed(2),
-              });
-            }
-
-            if (laborAmount > 0) {
-              journalLines.push({
-                accountCode: '4210',
-                description: `Pendapatan jasa servis ${ticket.ticketNumber}`,
-                creditAmount: laborAmount.toFixed(2),
-              });
-            }
-
-            if (totalPartsHPP > 0) {
-              journalLines.push(
-                {
-                  accountCode: '5110',
-                  description: `HPP sparepart servis ${ticket.ticketNumber}`,
-                  debitAmount: totalPartsHPP.toFixed(2),
-                },
-                {
-                  accountCode: '1130',
-                  description: `Pengurangan persediaan servis ${ticket.ticketNumber}`,
-                  creditAmount: totalPartsHPP.toFixed(2),
-                }
-              );
-            }
-
-            const journalResult = await financeManager.createCombinedJournal({
-              description: `Service ${ticket.ticketNumber}`,
-              reference: ticket.id,
-              referenceType: 'service_ticket',
-              tags: ['service', ticket.ticketNumber],
-              lines: journalLines,
-              userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-              clientId,
-            }, tx);
-
-            if (!journalResult.success) {
-              throw new Error(journalResult.error || 'Failed to record service journal');
-            }
-
-            const financialEntries: InsertFinancialRecord[] = [] as any;
-
-            if (laborAmount > 0) {
-              financialEntries.push({
-                type: 'income',
-                category: 'Service - Labor',
-                subcategory: 'Labor',
-                amount: laborAmount.toFixed(2),
-                description: `Service Labor ${ticket.ticketNumber}`,
-                referenceType: 'service_labor',
-                reference: ticket.id,
-                paymentMethod: settlementMethod,
-                status: 'confirmed',
-                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-                clientId,
-              });
-            }
-
-            if (partsRevenue > 0) {
-              financialEntries.push({
-                type: 'income',
-                category: 'Sales Revenue - Parts',
-                subcategory: 'Parts',
-                amount: partsRevenue.toFixed(2),
-                description: `Service Parts ${ticket.ticketNumber}`,
-                referenceType: 'service_parts_revenue',
-                reference: ticket.id,
-                paymentMethod: settlementMethod,
-                status: 'confirmed',
-                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-                clientId,
-              });
-            }
-
-            if (totalPartsHPP > 0) {
-              financialEntries.push({
-                type: 'expense',
-                category: 'Cost of Goods Sold',
-                subcategory: 'Service Parts',
-                amount: totalPartsHPP.toFixed(2),
-                description: `HPP Service ${ticket.ticketNumber}`,
-                referenceType: 'service_parts_cost',
-                reference: ticket.id,
-                paymentMethod: 'inventory',
-                status: 'confirmed',
-                userId: userId || 'a4fb9372-ec01-4825-b035-81de75a18053',
-                clientId,
-              });
-            }
-
-            if (financialEntries.length > 0) {
-              await tx.insert(financialRecords).values(financialEntries as any);
-            }
-          }
-        } catch (error) {
-          console.error("Error recording service financial transactions:", error);
-          throw error;
-        }
+        await financeManager.processServiceTransaction(
+          {
+            ticket: { ...ticket, paymentMethod: (ticket as any)?.paymentMethod || 'cash' },
+            partsCost: totalPartsHPP,
+            partsRevenue: totalPartsRevenue,
+            userId,
+          },
+          tx,
+        );
       }
       
       return ticket;
