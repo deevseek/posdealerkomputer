@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db, getCurrentTenantContext } from "./db";
 import {
   createJournalEntry,
   processPOSTransaction,
@@ -8,15 +8,11 @@ import {
   FinanceConstants,
 } from "./finance";
 import { accounts, financialRecords, journalEntries } from "@shared/schema";
-import { and, desc, eq, gte, lte, or, ilike, sql, sum } from "drizzle-orm";
+import { and, desc, eq, gte, lte, sql, sum } from "drizzle-orm";
 
 export class FinanceManager {
   async processPOSTransaction(data: Parameters<typeof processPOSTransaction>[0], tx?: any) {
     return processPOSTransaction(data, tx);
-  }
-
-  async calculatePOSFinance(data: Parameters<typeof processPOSTransaction>[0], tx?: any) {
-    return this.processPOSTransaction(data, tx);
   }
 
   async processServiceTransaction(data: Parameters<typeof processServiceTransaction>[0], tx?: any) {
@@ -47,14 +43,16 @@ export class FinanceManager {
   }
 
   async getTransactions(filters: { type?: string; category?: string; startDate?: Date; endDate?: Date; referenceType?: string }) {
-    const whereClauses = [] as any[];
+    const tenantId = getCurrentTenantContext()?.clientId;
+    const whereClauses = [eq(financialRecords.status, "confirmed")] as any[];
     if (filters.startDate) whereClauses.push(gte(financialRecords.createdAt, filters.startDate));
     if (filters.endDate) whereClauses.push(lte(financialRecords.createdAt, filters.endDate));
     if (filters.type) whereClauses.push(eq(financialRecords.type, filters.type));
     if (filters.category) whereClauses.push(eq(financialRecords.category, filters.category));
     if (filters.referenceType) whereClauses.push(eq(financialRecords.referenceType, filters.referenceType));
+    if (tenantId) whereClauses.push(eq(financialRecords.clientId, tenantId));
 
-    const where = whereClauses.length ? and(...whereClauses) : undefined;
+    const where = and(...whereClauses);
 
     return db
       .select()
@@ -68,55 +66,56 @@ export class FinanceManager {
   }
 
   async getSummary(startDate: Date, endDate: Date) {
-    const dateConditions = [gte(financialRecords.createdAt, startDate), lte(financialRecords.createdAt, endDate)];
+    const tenantId = getCurrentTenantContext()?.clientId;
+    const conditions = [
+      gte(financialRecords.createdAt, startDate),
+      lte(financialRecords.createdAt, endDate),
+      eq(financialRecords.status, "confirmed"),
+    ] as any[];
 
-    const cogsCategoryCondition = or(
-      eq(financialRecords.category, FinanceConstants.FINANCIAL_CATEGORIES.COGS),
-      ilike(financialRecords.category, "%hpp%"),
-      ilike(financialRecords.category, "%harga pokok%"),
-      eq(financialRecords.referenceType, "pos_cogs"),
-      eq(financialRecords.referenceType, "service_parts_cost")
-    );
+    if (tenantId) conditions.push(eq(financialRecords.clientId, tenantId));
 
-    const [incomeResult] = await db
-      .select({ total: sum(financialRecords.amount) })
+    const where = and(...conditions);
+
+    const groupedTotals = await db
+      .select({
+        type: financialRecords.type,
+        category: financialRecords.category,
+        total: sum(financialRecords.amount),
+      })
       .from(financialRecords)
-      .where(and(eq(financialRecords.type, "income"), ...dateConditions));
+      .where(where)
+      .groupBy(financialRecords.type, financialRecords.category);
 
-    const [expenseResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .where(and(eq(financialRecords.type, "expense"), ...dateConditions));
+    const getTotalByType = (type: string) =>
+      groupedTotals
+        .filter((row) => row.type === type)
+        .reduce((acc, row) => acc + Number(row.total || 0), 0);
 
-    const [salesRevenueResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .where(and(eq(financialRecords.category, FinanceConstants.FINANCIAL_CATEGORIES.SALES_REVENUE), ...dateConditions));
-
-    const [cogsResult] = await db
-      .select({ total: sum(financialRecords.amount) })
-      .from(financialRecords)
-      .where(and(eq(financialRecords.type, "expense"), cogsCategoryCondition, ...dateConditions));
+    const getTotalByCategory = (category: string) =>
+      groupedTotals
+        .filter((row) => row.category === category)
+        .reduce((acc, row) => acc + Number(row.total || 0), 0);
 
     const [refundResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
-      .where(and(eq(financialRecords.referenceType, "refund"), ...dateConditions));
+      .where(and(where, eq(financialRecords.referenceType, "refund")));
 
     const [transactionCount] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(financialRecords)
-      .where(and(...dateConditions));
+      .where(where);
 
     const [inventorySummary] = await db
       .select({ totalValue: sql<number>`SUM(COALESCE(${accounts.balance}, 0))` })
       .from(accounts)
-      .where(eq(accounts.type, "asset"));
+      .where(tenantId ? and(eq(accounts.type, "asset"), eq(accounts.clientId, tenantId)) : eq(accounts.type, "asset"));
 
-    const totalIncome = Number(incomeResult?.total || 0);
-    const totalExpense = Number(expenseResult?.total || 0);
-    const totalSalesRevenue = Number(salesRevenueResult?.total || 0);
-    const totalCOGS = Number(cogsResult?.total || 0);
+    const totalIncome = getTotalByType("income");
+    const totalExpense = getTotalByType("expense");
+    const totalSalesRevenue = getTotalByCategory(FinanceConstants.FINANCIAL_CATEGORIES.SALES_REVENUE);
+    const totalCOGS = getTotalByCategory(FinanceConstants.FINANCIAL_CATEGORIES.COGS);
     const totalRefunds = Number(refundResult?.total || 0);
     const grossProfit = totalSalesRevenue - totalCOGS;
     const netProfit = totalIncome - totalExpense;
