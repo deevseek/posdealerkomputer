@@ -58,23 +58,15 @@ export function resolveSettlementAccount(method?: SettlementMethod): string {
 async function findAccountsByCode(codes: string[], clientId?: string | null, tx?: any) {
   if (!codes.length) return new Map<string, typeof accounts.$inferSelect>();
   const executor = tx || db;
-
-  const rows = clientId
-    ? await executor
-        .select()
-        .from(accounts)
-        .where(and(eq(accounts.clientId, clientId), inArray(accounts.code, codes)))
-    : [];
-
-  const found = new Map(rows.map((row) => [row.code, row]));
-  const missing = codes.filter((code) => !found.has(code));
-
-  if (missing.length) {
-    const globalRows = await executor.select().from(accounts).where(inArray(accounts.code, missing));
-    globalRows.forEach((row) => found.set(row.code, row));
-  }
-
-  return found;
+  const rows = await executor
+    .select()
+    .from(accounts)
+    .where(
+      clientId
+        ? and(eq(accounts.clientId, clientId), inArray(accounts.code, codes))
+        : inArray(accounts.code, codes),
+    );
+  return new Map(rows.map((row) => [row.code, row]));
 }
 
 async function ensureDefaultAccounts(codes: string[], clientId?: string | null, tx?: any) {
