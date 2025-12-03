@@ -8,7 +8,7 @@ import {
   FinanceConstants,
 } from "./finance";
 import { accounts, financialRecords, journalEntries } from "@shared/schema";
-import { and, desc, eq, gte, lte, sql, sum } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or, ilike, sql, sum } from "drizzle-orm";
 
 export class FinanceManager {
   async processPOSTransaction(data: Parameters<typeof processPOSTransaction>[0], tx?: any) {
@@ -70,6 +70,14 @@ export class FinanceManager {
   async getSummary(startDate: Date, endDate: Date) {
     const dateConditions = [gte(financialRecords.createdAt, startDate), lte(financialRecords.createdAt, endDate)];
 
+    const cogsCategoryCondition = or(
+      eq(financialRecords.category, FinanceConstants.FINANCIAL_CATEGORIES.COGS),
+      ilike(financialRecords.category, "%hpp%"),
+      ilike(financialRecords.category, "%harga pokok%"),
+      eq(financialRecords.referenceType, "pos_cogs"),
+      eq(financialRecords.referenceType, "service_parts_cost")
+    );
+
     const [incomeResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
@@ -88,7 +96,7 @@ export class FinanceManager {
     const [cogsResult] = await db
       .select({ total: sum(financialRecords.amount) })
       .from(financialRecords)
-      .where(and(eq(financialRecords.category, FinanceConstants.FINANCIAL_CATEGORIES.COGS), ...dateConditions));
+      .where(and(eq(financialRecords.type, "expense"), cogsCategoryCondition, ...dateConditions));
 
     const [refundResult] = await db
       .select({ total: sum(financialRecords.amount) })

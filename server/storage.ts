@@ -2521,9 +2521,18 @@ export class DatabaseStorage implements IStorage {
         .from(financialRecords)
         .where(expenseWhere);
 
+      const cogsCategoryCondition = or(
+        eq(financialRecords.category, 'cogs'),
+        ilike(financialRecords.category, '%hpp%'),
+        ilike(financialRecords.category, '%harga pokok%'),
+        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+        eq(financialRecords.referenceType, 'pos_cogs'),
+        eq(financialRecords.referenceType, 'service_parts_cost')
+      );
+
       const cogsConditions = [
         eq(financialRecords.type, 'expense'),
-        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+        cogsCategoryCondition,
         gte(financialRecords.createdAt, startDate),
         lte(financialRecords.createdAt, endDate),
         eq(financialRecords.status, 'confirmed'),
@@ -2538,9 +2547,14 @@ export class DatabaseStorage implements IStorage {
         .from(financialRecords)
         .where(and(...cogsConditions));
 
+      const salesCategoryCondition = or(
+        eq(financialRecords.category, 'sales_revenue'),
+        sql`LOWER(${financialRecords.category}) = 'sales revenue'`
+      );
+
       const salesConditions = [
         eq(financialRecords.type, 'income'),
-        sql`LOWER(${financialRecords.category}) = 'sales revenue'`,
+        salesCategoryCondition,
         gte(financialRecords.createdAt, startDate),
         lte(financialRecords.createdAt, endDate),
         eq(financialRecords.status, 'confirmed'),
