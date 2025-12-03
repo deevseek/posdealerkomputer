@@ -12,6 +12,7 @@ import {
   type InsertJournalEntryLine,
   type JournalEntry,
 } from "@shared/schema";
+import { defaultAccounts } from "../defaultAccounts";
 
 export type JournalLineInput = {
   accountCode: string;
@@ -54,10 +55,60 @@ export function resolveSettlementAccount(method?: SettlementMethod): string {
   return ACCOUNT_CODES.CASH;
 }
 
-async function findAccountsByCode(codes: string[]) {
+async function findAccountsByCode(codes: string[], clientId?: string | null, tx?: any) {
   if (!codes.length) return new Map<string, typeof accounts.$inferSelect>();
-  const rows = await db.select().from(accounts).where(inArray(accounts.code, codes));
+  const executor = tx || db;
+  const rows = await executor
+    .select()
+    .from(accounts)
+    .where(
+      clientId
+        ? and(eq(accounts.clientId, clientId), inArray(accounts.code, codes))
+        : inArray(accounts.code, codes),
+    );
   return new Map(rows.map((row) => [row.code, row]));
+}
+
+async function ensureDefaultAccounts(codes: string[], clientId?: string | null, tx?: any) {
+  const executor = tx || db;
+  const defaultsByCode = new Map(defaultAccounts.map((acc) => [acc.code, acc]));
+  const requiredCodes = new Set<string>();
+
+  codes.forEach((code) => {
+    let current = defaultsByCode.get(code);
+    while (current) {
+      requiredCodes.add(current.code);
+      if (!current.parentCode) break;
+      current = defaultsByCode.get(current.parentCode);
+    }
+  });
+
+  if (!requiredCodes.size) return;
+
+  const requiredList = Array.from(requiredCodes);
+  const existingRows = await findAccountsByCode(requiredList, clientId, executor);
+  const created = new Map(existingRows);
+
+  for (const account of defaultAccounts) {
+    if (!requiredCodes.has(account.code) || created.has(account.code)) continue;
+
+    const parentId = account.parentCode ? created.get(account.parentCode)?.id || null : null;
+    const [row] = await executor
+      .insert(accounts)
+      .values({
+        code: account.code,
+        name: account.name,
+        type: account.type,
+        subtype: account.subtype,
+        normalBalance: account.normalBalance,
+        parentId,
+        description: account.description || null,
+        clientId: clientId || null,
+      })
+      .returning();
+
+    created.set(account.code, row);
+  }
 }
 
 export async function createJournalEntry(
@@ -80,7 +131,10 @@ export async function createJournalEntry(
     throw new Error(`Journal entry for ${type} must be balanced. Debit ${debitTotal} != Credit ${creditTotal}`);
   }
 
-  const accountMap = await findAccountsByCode(lines.map((l) => l.accountCode));
+  const clientId = resolveClientId(options?.clientId);
+
+  await ensureDefaultAccounts(lines.map((l) => l.accountCode), clientId, tx);
+  const accountMap = await findAccountsByCode(lines.map((l) => l.accountCode), clientId, tx);
   lines.forEach((line) => {
     if (!accountMap.has(line.accountCode)) {
       throw new Error(`Account with code ${line.accountCode} not found`);
@@ -88,7 +142,6 @@ export async function createJournalEntry(
   });
 
   const journalNumber = `JRN-${Date.now()}`;
-  const clientId = resolveClientId(options?.clientId);
 
   const [entry] = await tx
     .insert(journalEntries)
