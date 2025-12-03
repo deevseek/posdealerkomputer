@@ -2523,11 +2523,13 @@ export class DatabaseStorage implements IStorage {
 
       const cogsCategoryCondition = or(
         eq(financialRecords.category, 'cogs'),
-        ilike(financialRecords.category, '%hpp%'),
-        ilike(financialRecords.category, '%harga pokok%'),
-        sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
-        eq(financialRecords.referenceType, 'pos_cogs'),
-        eq(financialRecords.referenceType, 'service_parts_cost')
+        or(
+          sql`LOWER(${financialRecords.category}) = 'cost of goods sold'`,
+          or(
+            eq(financialRecords.referenceType, 'pos_cogs'),
+            eq(financialRecords.referenceType, 'service_parts_cost')
+          )
+        )
       );
 
       const cogsConditions = [
